@@ -51,6 +51,22 @@ language sql immutable as $$
     else 'other' end
 $$;
 
+-- Payer from the names on a letter: the insurer if it can be told, else the TPA.
+-- Matches on the payer's first distinctive word ("The" is skipped), as a whole word.
+create or replace function clm_match_payer(p_payer text, p_tpa text, p_tenant uuid) returns uuid
+language sql stable set search_path = public as $$
+  select id from (
+    select id, type, upper(split_part(regexp_replace(name, '^(the|m/s\.?)\s+', '', 'i'), ' ', 1)) as w
+    from clm_payers where (tenant_id is null or tenant_id = p_tenant) and is_active
+  ) x
+  where length(w) >= 3
+    and (' ' || upper(regexp_replace(coalesce(p_payer, ''), '[^A-Za-z0-9]+', ' ', 'g')) || ' ' like '% ' || w || ' %'
+      or ' ' || upper(regexp_replace(coalesce(p_tpa, ''), '[^A-Za-z0-9]+', ' ', 'g')) || ' ' like '% ' || w || ' %')
+  order by (' ' || upper(regexp_replace(coalesce(p_payer, ''), '[^A-Za-z0-9]+', ' ', 'g')) || ' ' like '% ' || w || ' %') desc,
+           (type in ('insurer','psu','government')) desc
+  limit 1
+$$;
+
 -- ─── Apply one upload ────────────────────────────────────────────────
 -- p_lines: [{source: 'pmjay'|'letter', payer_name, tpa_name, claim_ref, bill_no,
 --            patient_name, ip_no, uhid, doctor_name, bill_date, claimed_amount,
@@ -111,12 +127,8 @@ begin
         dtype := 'government';
       else
         p := null;
-        select * into p from clm_payers
-        where (tenant_id is null or tenant_id = t)
-          and length(split_part(name, ' ', 1)) >= 3
-          and (upper(coalesce(l->>'payer_name', '')) like '%' || upper(split_part(name, ' ', 1)) || '%'
-               or upper(coalesce(l->>'tpa_name', '')) like '%' || upper(split_part(name, ' ', 1)) || '%')
-        order by (type = 'insurer') desc limit 1;
+        p.id := clm_match_payer(l->>'payer_name', l->>'tpa_name', t);
+        if p.id is not null then select * into p from clm_payers where id = p.id; end if;
         dtype := case p.type when 'government' then 'government' when 'corporate' then 'corporate' when 'tpa' then 'tpa' else 'insurer' end;
       end if;
       insert into clm_receivables (tenant_id, centre_id, debtor_type, payer_id, debtor_name, bill_no, ip_no, uhid, claim_ref,

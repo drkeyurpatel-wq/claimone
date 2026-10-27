@@ -114,9 +114,58 @@ export function parseLetterSheet(rows: string[][], payerName: string | null): { 
   };
 }
 
+export function isBillsMaster(rows: string[][]): boolean {
+  return findHeader(rows, ['Bill no', 'Approved', 'Received from payer']) >= 0;
+}
+
+/**
+ * The Health1 Credit Master "Bills" tab (one-time load, or catching up):
+ * every TPA / insurer bill with what was approved and what came in.
+ * Patient / doctor dues rows are left out — they are not payer payments.
+ */
+export function parseBillsMaster(rows: string[][]): { rows: PaymentLine[]; skipped: number } {
+  const h = findHeader(rows, ['Bill no', 'Approved', 'Received from payer']);
+  if (h < 0) throw new Error('This is not the Bills tab of the credit master.');
+  const H = rows[h].map(norm);
+  const at = (...names: string[]) => { for (const n of names) { const i = H.indexOf(norm(n)); if (i >= 0) return i; } return -1; };
+  const c = {
+    cat: at('Payer category'), uhid: at('UHID'), ip: at('IP no'), name: at('Patient name', 'Patient'), doc: at('Treating doctor', 'Doctor'),
+    bill: at('Bill no'), bdate: at('Bill date'), dis: at('Discharge date', 'Discharge'), payer: at('Insurer / payer', 'Insurer'), tpa: at('TPA'),
+    claim: at('Claim no', 'Claim no / case ID'), billed: at('Total bill'), appr: at('Approved'), recv: at('Received from payer', 'Received'),
+    pdate: at('Payment date'), utr: at('UTR'), tds: at('TDS'), why: at('Short-pay reason'),
+  };
+  const get = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
+  const out: PaymentLine[] = [];
+  let skipped = 0;
+  for (const r of rows.slice(h + 1)) {
+    const bill = get(r, c.bill);
+    const claim = get(r, c.claim).replace(/\.0+$/, '');
+    if (!bill && !claim) { if (r.some((v) => String(v).trim())) skipped++; continue; }
+    if (/patient|doctor/i.test(get(r, c.cat))) { skipped++; continue; }
+    const approved = parseAmount(get(r, c.appr));
+    const net = parseAmount(get(r, c.recv)) ?? 0;
+    const tds = parseAmount(get(r, c.tds)) ?? 0;
+    const why = get(r, c.why) || null;
+    const gap = approved != null && net > 0 ? round2(approved - net - tds) : 0;
+    out.push({
+      source: 'letter', payer_name: get(r, c.payer) || null, tpa_name: get(r, c.tpa) || null,
+      claim_ref: claim || null, bill_no: bill || null, patient_name: get(r, c.name) || null, ip_no: get(r, c.ip) || null,
+      uhid: get(r, c.uhid) || null, doctor_name: get(r, c.doc) || null,
+      bill_date: parseDate(get(r, c.bdate)) ?? parseDate(get(r, c.dis)),
+      claimed_amount: null, approved_amount: approved ?? parseAmount(get(r, c.billed)),
+      tds_amount: round2(tds), deduction_amount: gap > 1 && why ? gap : 0, deduction_reason: gap > 1 ? why : null,
+      net_amount: round2(net), utr: net > 0 ? get(r, c.utr) || null : null,
+      payment_date: net > 0 ? parseDate(get(r, c.pdate)) : null,
+    });
+  }
+  return { rows: out, skipped };
+}
+
 /** Pick the right reader for a spreadsheet. */
 export function parsePaymentSheet(rows: string[][], payerName: string | null = null) {
-  return isPmjaySheet(rows) ? parsePmjay(rows) : parseLetterSheet(rows, payerName);
+  if (isPmjaySheet(rows)) return parsePmjay(rows);
+  if (isBillsMaster(rows)) return parseBillsMaster(rows);
+  return parseLetterSheet(rows, payerName);
 }
 
 /** Lines Claude read off a letter: fill gaps, drop what can't be matched. */

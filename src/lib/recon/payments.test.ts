@@ -38,6 +38,21 @@ describe('PMJAY settlement sheet', () => {
   });
 });
 
+describe('credit master Bills tab', () => {
+  const rows = cellsToRows([
+    ['Sr', 'Payer category', 'UHID', 'IP no', 'Patient name', 'Treating doctor', 'Bill no', 'Bill date', 'Insurer / payer', 'TPA', 'Claim no', 'Approved', 'Received from payer', 'Payment date', 'UTR', 'TDS', 'Short-pay reason'],
+    [1, 'TPA / Insurance', '', 'IPS1', 'Test D', 'Dr Z', 'IPB125/4867', '03/03/2026', 'New India Assurance', 'GENINS INDIA', '', 320534, 300000, '14/03/2026', 'AXISCN1', null, 'Room rent'],
+    [2, 'TPA / Insurance', '', 'IPS2', 'Test E', 'Dr Z', 'IPB125/4868', '04/03/2026', 'Tata AIG', 'TATA AIG', 'CL9', 90000, null, null, null, null, null],
+    [3, 'Patient / doctor due', '', 'IPS3', 'Test F', 'Dr Z', 'CR-1', '04/03/2026', '', '', '', 5000, null, null, null, null, null],
+  ]);
+  it('reads paid, short-with-reason and unpaid bills; leaves out patient dues', () => {
+    const r = parsePaymentSheet(rows);
+    expect(r.skipped).toBe(1);
+    expect(r.rows[0]).toMatchObject({ bill_no: 'IPB125/4867', approved_amount: 320534, net_amount: 300000, deduction_amount: 20534, deduction_reason: 'Room rent', payment_date: '2026-03-14' });
+    expect(r.rows[1]).toMatchObject({ claim_ref: 'CL9', net_amount: 0, utr: null, approved_amount: 90000 });
+  });
+});
+
 describe('lines read off a letter', () => {
   it('fills net from approved − TDS and drops lines with no claim or bill no', () => {
     const out = cleanLetterLines([

@@ -70,6 +70,10 @@ select t.check((select unallocated = 0 from clm_v_receipt_balance where referenc
                and (select count(*) = 0 from clm_receipts where source = 'advice' and upper(reference) = 'BULKUTR1'),
                'bulk bank credit is used for both bills; no extra receipts');
 
+select t.check((select name = 'The Oriental Insurance' from clm_payers where id = clm_match_payer('Oriental Insurance Co. Ltd', 'Medi Assist TPA', null)), 'payer: insurer over TPA, "The" skipped');
+select t.check((select name = 'Medi Assist TPA' from clm_payers where id = clm_match_payer(null, 'MEDI ASSIST INDIA TPA PVT LTD', null)), 'payer: TPA when no insurer named');
+select t.check(clm_match_payer('Thermo corp', null, null) is null, 'payer: no false match on partial words');
+
 -- ─── 5. Lines with no reference are skipped; read-only users blocked ─
 select t.check((select (r->>'skipped')::int = 1 from (select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'x', '[{"net_amount":10}]') r) x),
                'line with no claim or bill no is skipped');
