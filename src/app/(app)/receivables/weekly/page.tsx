@@ -185,7 +185,7 @@ export default function WeeklyUpload() {
               <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                 <p className="flex items-center gap-2 font-semibold"><CheckCircle2 className="h-4 w-4" /> Done. {result.matched.toLocaleString('en-IN')} payments matched to bills.</p>
                 <p className="mt-1 text-emerald-800">
-                  {result.created > 0 && <>{result.created.toLocaleString('en-IN')} bills were not on file and were added from the letters. </>}
+                  {result.created > 0 && <>{result.created.toLocaleString('en-IN')} new bills were added (not on file before). </>}
                   {result.duplicate > 0 && <>{result.duplicate.toLocaleString('en-IN')} were already uploaded before (skipped). </>}
                   {result.unpaid > 0 && <>{result.unpaid.toLocaleString('en-IN')} lines show no payment yet. </>}
                   Anything that does not add up is listed below.

@@ -13,6 +13,10 @@ const Line = z.object({
   ip_no: str, uhid: str, doctor_name: str, bill_date: date, claimed_amount: money.nullable(), approved_amount: money.nullable(),
   tds_amount: money.nonnegative(), deduction_amount: money.nonnegative(), deduction_reason: str, net_amount: money.nonnegative(),
   utr: str, payment_date: date,
+  bills: z.array(z.object({
+    bill_no: z.string().trim().min(1).max(300), bill_date: date, ip_no: str, uhid: str, patient_name: str, doctor_name: str,
+    claimed_amount: money.nullable(),
+  })).max(60).optional(),
 });
 const Body = z.object({ centre_id: uuid, file_name: z.string().trim().max(300), lines: z.array(Line).min(1).max(6000) });
 

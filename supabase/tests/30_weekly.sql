@@ -74,6 +74,26 @@ select t.check((select name = 'The Oriental Insurance' from clm_payers where id 
 select t.check((select name = 'Medi Assist TPA' from clm_payers where id = clm_match_payer(null, 'MEDI ASSIST INDIA TPA PVT LTD', null)), 'payer: TPA when no insurer named');
 select t.check(clm_match_payer('Thermo corp', null, null) is null, 'payer: no false match on partial words');
 
+-- ─── 4c. PMJAY case with several invoices (dialysis): paid once for the case ─
+select t.check((select (r->>'matched')::int = 1 and (r->>'created')::int = 3
+                from (select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'pmjay_week4.xlsx', $j$[
+  {"source":"pmjay","claim_ref":"5550000000000001","claimed_amount":7260,"tds_amount":145.2,"net_amount":7114.8,"utr":"DIAL1","payment_date":"2026-10-25",
+   "bills":[{"bill_no":"PM/D1","claimed_amount":2420,"bill_date":"2026-10-01"},{"bill_no":"PM/D2","claimed_amount":2420,"bill_date":"2026-10-04"},{"bill_no":"PM/D3","claimed_amount":2420,"bill_date":"2026-10-08"}]}
+]$j$::jsonb) r) x), 'one payment for a 3-invoice case');
+select t.check((select count(*) = 3 and bool_and(recon_status = 'settled') and sum(allocated) = 7114.8 and sum(tds) = 145.2
+                from clm_v_receivable_balance where bill_no like 'PM/D%'), 'case payment spread over its invoices, each settled');
+select t.check((select (r->>'duplicate')::int = 1 from (select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'again', $j$[
+  {"source":"pmjay","claim_ref":"5550000000000001","claimed_amount":7260,"tds_amount":145.2,"net_amount":7114.8,"utr":"DIAL1","payment_date":"2026-10-25",
+   "bills":[{"bill_no":"PM/D1","claimed_amount":2420},{"bill_no":"PM/D2","claimed_amount":2420},{"bill_no":"PM/D3","claimed_amount":2420}]}
+]$j$::jsonb) r) x), 'case re-upload is a duplicate');
+-- case paid for 2 of its 3 invoices: the third stays open as short
+select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'pmjay_week5.xlsx', $j$[
+  {"source":"pmjay","claim_ref":"5550000000000002","claimed_amount":45540,"tds_amount":607.2,"net_amount":29752.8,"utr":"DIAL2","payment_date":"2026-10-25",
+   "bills":[{"bill_no":"PM/E1","claimed_amount":15180},{"bill_no":"PM/E2","claimed_amount":15180},{"bill_no":"PM/E3","claimed_amount":15180}]}
+]$j$::jsonb);
+select t.check((select string_agg(bill_no || ':' || recon_status, ',' order by bill_no) = 'PM/E1:settled,PM/E2:settled,PM/E3:open'
+                from clm_v_receivable_balance where bill_no like 'PM/E%'), 'part-paid case: earlier invoices settled, last still due');
+
 -- ─── 5. Lines with no reference are skipped; read-only users blocked ─
 select t.check((select (r->>'skipped')::int = 1 from (select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'x', '[{"net_amount":10}]') r) x),
                'line with no claim or bill no is skipped');

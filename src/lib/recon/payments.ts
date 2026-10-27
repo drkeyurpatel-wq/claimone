@@ -25,6 +25,13 @@ export interface PaymentLine {
   net_amount: number;
   utr: string | null;
   payment_date: string | null;
+  /** PMJAY: one case ID (letter) can cover several invoices — e.g. dialysis sessions. */
+  bills?: BillPart[];
+}
+
+export interface BillPart {
+  bill_no: string; bill_date: string | null; ip_no: string | null; uhid: string | null;
+  patient_name: string | null; doctor_name: string | null; claimed_amount: number | null;
 }
 
 export type Cell = string | number | boolean | Date | null | undefined;
@@ -96,7 +103,41 @@ export function parsePmjay(rows: string[][]): { rows: PaymentLine[]; skipped: nu
       payment_date: net > 0 ? parseDate(get(r, c.pdate).slice(0, 10)) : null,
     });
   }
-  return { rows: out, skipped };
+  return { rows: groupByCase(out), skipped };
+}
+
+/**
+ * In the PMJAY sheet a case ID with several invoices (dialysis, repeat day-care)
+ * repeats the case's TOTAL paid and TDS on every invoice row. Counting each row
+ * would multiply the payment. Rows of one case with the same paid/TDS/UTR become
+ * one payment line that lists its invoices.
+ */
+export function groupByCase(lines: PaymentLine[]): PaymentLine[] {
+  const by = new Map<string, PaymentLine[]>();
+  const out: PaymentLine[] = [];
+  for (const l of lines) {
+    if (!l.claim_ref || !l.bill_no) { out.push(l); continue; }
+    const k = l.claim_ref;
+    if (!by.has(k)) { by.set(k, []); out.push(l); }
+    by.get(k)!.push(l);
+  }
+  return out.map((l) => {
+    const g = l.claim_ref && l.bill_no ? by.get(l.claim_ref)! : [l];
+    if (g.length < 2) return l;
+    const same = g.every((x) => x.net_amount === l.net_amount && x.tds_amount === l.tds_amount && x.utr === l.utr);
+    if (!same) return l;   // genuinely separate payments: keep (only the first is emitted below)
+    const claimed = g.reduce((a, x) => a + (x.claimed_amount ?? 0), 0);
+    return {
+      ...l, bill_no: null, claimed_amount: round2(claimed),
+      bills: g.map((x) => ({ bill_no: x.bill_no!, bill_date: x.bill_date, ip_no: x.ip_no, uhid: x.uhid, patient_name: x.patient_name,
+        doctor_name: x.doctor_name, claimed_amount: x.claimed_amount })),
+    };
+  }).flatMap((l) => {
+    // a case whose rows differ: emit every row as its own payment
+    if (l.bills || !l.claim_ref || !l.bill_no) return [l];
+    const g = by.get(l.claim_ref)!;
+    return g.length > 1 ? g : [l];
+  });
 }
 
 /** Any other settlement Excel/CSV (TPA portal download): reuse the advice parser. */

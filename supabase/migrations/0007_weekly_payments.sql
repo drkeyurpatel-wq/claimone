@@ -105,16 +105,7 @@ begin
 
     -- the bill: case ID / claim no first, then bill no
     rv := null;
-    if k_claim is not null then
-      select * into rv from clm_receivables
-      where tenant_id = t and centre_id = p_centre and clm_norm_ref(claim_ref) = k_claim and debtor_type not in ('patient','referrer')
-      order by created_at limit 1;
-    end if;
-    if rv.id is null and k_bill is not null then
-      select * into rv from clm_receivables
-      where tenant_id = t and centre_id = p_centre and clm_norm_ref(bill_no) = k_bill and debtor_type not in ('patient','referrer')
-      order by created_at limit 1;
-    end if;
+    select * into rv from clm_receivables where id = clm_find_receivable(t, p_centre, k_claim, k_bill);
 
     -- what this payer finally owes for the bill
     owed := coalesce(claimed, approved, net + tds + ded);
@@ -167,10 +158,7 @@ begin
     -- if the bank statement with this UTR is already in, pay the bill from that credit
     rc := null;
     if nullif(l->>'utr', '') is not null then
-      select id into rc from clm_v_receipt_balance
-      where tenant_id = t and centre_id = p_centre and source = 'bank'
-        and upper(reference) = upper(l->>'utr') and unallocated >= net - 0.5
-      order by value_date limit 1;
+      rc := clm_bank_receipt_for(t, p_centre, l->>'utr', net);
     end if;
     if rc is null then
       insert into clm_receipts (tenant_id, centre_id, source, bank_account, value_date, amount, reference, narration, payer_id, import_batch_id)

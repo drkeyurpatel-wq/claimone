@@ -30,6 +30,18 @@ describe('PMJAY settlement sheet', () => {
     expect(summarise(out)).toEqual({ lines: 2, paid: 1, paidAmount: 3985, tds: 443, unpaid: 1 });
   });
 
+  it('a case with several invoices is one payment, not one per row', () => {
+    const r = parsePmjay(cellsToRows([HEAD,
+      [1, 'IPB126/11', '01/04/2026', 'DIP-1', 'R1', 'Test G', '', '', 2026040410000001, 'Dr X', 2420, 2420, 1452, 13068, 'AXISCN9', new Date(Date.UTC(2026, 4, 1))],
+      [2, 'IPB126/90', '06/04/2026', 'DIP-2', 'R1', 'Test G', '', '', 2026040410000001, 'Dr X', 2420, 2420, 1452, 13068, 'AXISCN9', new Date(Date.UTC(2026, 4, 1))],
+      [3, 'IPB126/95', '07/04/2026', 'DIP-3', 'R2', 'Test H', '', '', 2026040410000002, 'Dr X', 5000, 5000, 100, 4900, 'AXISCN9', new Date(Date.UTC(2026, 4, 1))],
+    ]));
+    expect(r.rows).toHaveLength(2);
+    expect(r.rows[0]).toMatchObject({ claim_ref: '2026040410000001', bill_no: null, net_amount: 13068, tds_amount: 1452, claimed_amount: 4840 });
+    expect(r.rows[0].bills?.map((b) => b.bill_no)).toEqual(['IPB126/11', 'IPB126/90']);
+    expect(summarise(r.rows).paidAmount).toBe(13068 + 4900);
+  });
+
   it('routes other sheets to the letter reader', () => {
     const tpa = cellsToRows([['Claim No', 'Patient Name', 'Approved', 'TDS', 'Deduction', 'Deduction Reason', 'Net Paid', 'UTR', 'Payment Date'],
       ['CL-1', 'Test C', 100000, 2000, 3000, 'Room rent', 95000, 'UTR1', '22/10/2026']]);
