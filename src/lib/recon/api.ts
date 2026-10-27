@@ -2,6 +2,7 @@
 // Browser data access for receivables and reconciliation.
 import { sb } from '@/lib/supabase/browser';
 import type { AdviceRow, OpenReceipt, OpenReceivable, Proposal } from './match';
+import type { PaymentLine } from './payments';
 
 export type DebtorType = 'insurer' | 'tpa' | 'government' | 'corporate' | 'patient' | 'referrer';
 export type ReconStatus = 'open' | 'part_received' | 'settled' | 'over_received' | 'disputed';
@@ -108,3 +109,53 @@ export const addAdjustment = (id: string, body: { kind: string; amount: number; 
 
 export const reverse = (id: string, reason: string, table: 'allocation' | 'adjustment' = 'allocation') =>
   post<{ ok: true }>(`/api/recon/allocations/${id}/reverse`, { reason, table });
+
+// ─── Weekly upload ───────────────────────────────────────────────────
+
+export type Problem = 'short' | 'over' | 'overdue';
+export interface ExceptionRow {
+  receivable_id: string; debtor_type: DebtorType; debtor_name: string; patient_name: string | null; uhid: string | null;
+  bill_no: string | null; claim_ref: string | null; bill_date: string; expected_amount: number; allocated: number; tds: number;
+  deduction: number; balance: number; age_days: number; last_receipt_date: string | null; problem: Problem;
+}
+
+export async function fetchExceptions(centreId: string): Promise<ExceptionRow[]> {
+  const { data, error } = await sb().from('clm_v_exceptions').select('*').eq('centre_id', centreId).order('bill_date').limit(5000);
+  if (error) { console.error('fetchExceptions', error.code); return []; }
+  return (data ?? []).map((r: Record<string, unknown>) =>
+    num(r, ['expected_amount', 'allocated', 'tds', 'deduction', 'balance', 'age_days']) as unknown as ExceptionRow);
+}
+
+export interface ApplyResult { matched: number; created: number; unpaid: number; duplicate: number; skipped: number }
+
+/** Send lines in chunks so a 2,600-row PMJAY sheet stays inside the database time limit. */
+export async function applyPayments(centre_id: string, file_name: string, lines: PaymentLine[], onProgress?: (done: number) => void): Promise<ApplyResult> {
+  const total: ApplyResult = { matched: 0, created: 0, unpaid: 0, duplicate: 0, skipped: 0 };
+  for (let i = 0; i < lines.length; i += 250) {
+    const r = await post<ApplyResult>('/api/recon/apply', { centre_id, file_name, lines: lines.slice(i, i + 250) });
+    for (const k of Object.keys(total) as (keyof ApplyResult)[]) total[k] += Number(r[k] ?? 0);
+    onProgress?.(Math.min(i + 250, lines.length));
+  }
+  return total;
+}
+
+export async function readLetter(input: { file?: Blob; fileName?: string; text?: string }): Promise<PaymentLine[]> {
+  const fd = new FormData();
+  if (input.file) fd.append('file', input.file, input.fileName ?? 'letter');
+  if (input.text) fd.append('text', input.text);
+  const res = await fetch('/api/recon/read-letter', { method: 'POST', body: fd });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `Could not read the letter (${res.status})`);
+  return json.lines as PaymentLine[];
+}
+
+export async function setDisputed(id: string, note: string) {
+  const { error } = await sb().from('clm_receivables').update({ status: 'disputed', notes: note }).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+/** Payer paid more than the bill on file: take what was paid as the right amount. */
+export async function acceptPaidAmount(id: string, newExpected: number) {
+  const { error } = await sb().from('clm_receivables').update({ expected_amount: Math.max(0, Math.round(newExpected * 100) / 100) }).eq('id', id);
+  if (error) throw new Error(error.message);
+}

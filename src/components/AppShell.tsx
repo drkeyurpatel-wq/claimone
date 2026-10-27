@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   ShieldCheck, LayoutDashboard, FilePlus2, Shield, MessageSquare, IndianRupee,
-  Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut, Wallet, GitMerge, Upload,
+  Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut, Wallet, CalendarCheck, GitMerge, Upload,
 } from 'lucide-react';
 import type { Session } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/store/auth';
@@ -21,6 +21,7 @@ const NAV = [
   { href: '/claims/payers', label: 'Payers', icon: Building2 },
   { href: '/claims/rules', label: 'Document rules', icon: ListChecks },
   { href: '/claims/bot', label: 'Portal bot', icon: Bot },
+  { href: '/receivables/weekly', label: 'Weekly payments', icon: CalendarCheck },
   { href: '/receivables', label: 'Receivables', icon: Wallet },
   { href: '/receivables/reconcile', label: 'Reconcile', icon: GitMerge },
   { href: '/receivables/import', label: 'Import', icon: Upload },
