@@ -15,16 +15,27 @@ What was dropped, and why, is in [`docs/MERGE_NOTES.md`](docs/MERGE_NOTES.md).
 
 A claim starts as a **draft**. Every move to a new status goes through the database, which allows only the moves in `clm_allowed_transitions`. A move that *submits* something (pre-auth, final claim, reimbursement) is refused while any required document for that stage is not **verified** — uploaded is not enough. Which documents are required comes from `clm_doc_rules`: platform defaults, overridden by payer, claim-type or hospital rules (most specific wins). Settlement records approved, TDS, net and UTR in one transaction and itemises the deduction, which feeds the leakage report. The portal bot signs in as a normal user with role `bot` and can only change three fields through one function.
 
+## Receivables and reconciliation
+
+Every approved claim becomes a **receivable** automatically. The cashless tracker tab and the patient-dues list can be imported for what is already owed. Bank statements (CSV) become **receipts**; payer settlement advices become **remittance lines**. The reconcile screen proposes which receipt pays which bill, in this order of evidence: settlement advice → UTR the team recorded on the bill → same amount (or amount net of 2% TDS) with the payer named in the narration → one payment covering several bills. A person ticks and confirms; nothing is saved before that.
+
+Balance = owed − received − TDS − deductions − discount − write-off − refund owed. Matches and adjustments are never edited or deleted, only reversed with a reason. Write-off is manager only; a deduction needs a category and the payer's reason.
+
+Tested on Shilaj Mar–Oct 2026: with the UTRs the team typed, 360 of 372 receipts matched and every proposal checked was right (367/367). Without UTRs, 249 matched, all right, 4 left for a person to choose.
+
 ## Layout
 
 ```
-supabase/migrations/   0001 schema + rules + RLS · 0002 views · 0003 storage · 0004 realtime · 0005 PHI tags
+supabase/migrations/   0001 schema + rules + RLS · 0002 views · 0003 storage · 0004 realtime · 0005 PHI tags · 0006 receivables
 supabase/seed.sql      31 payers and the default document rules (billing head to confirm)
 supabase/tests/        database rule tests — run.sh against plain Postgres
 src/lib/engine/        pure TypeScript: validation (gate), transitions, settlement maths — unit tested
 src/lib/claims/        types, browser data access, store (Zustand + Realtime), server-side WhatsApp
 src/app/api/claims/    transition, settle, document review, signed document URL
 src/app/(app)/claims/  desk, claim workstation, new claim, pre-auth, queries, settlements, leakage, MIS, payers, rules, bot
+src/lib/recon/          receivables: CSV parsers (bank, cashless tracker, settlement advice, patient dues) and the matching engine — unit tested
+src/app/api/recon/      import, confirm matches, adjust, reverse
+src/app/(app)/receivables/  overview + ageing, import, reconcile, one bill
 src/lib/nhcx/          NHCX FHIR builders — not wired; encryption deliberately refuses to run
 bot/                   Playwright portal bot for the hospital mini PC
 ```

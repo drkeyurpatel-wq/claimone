@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   ShieldCheck, LayoutDashboard, FilePlus2, Shield, MessageSquare, IndianRupee,
-  Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut,
+  Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut, Wallet, GitMerge, Upload,
 } from 'lucide-react';
 import type { Session } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/store/auth';
@@ -21,7 +21,17 @@ const NAV = [
   { href: '/claims/payers', label: 'Payers', icon: Building2 },
   { href: '/claims/rules', label: 'Document rules', icon: ListChecks },
   { href: '/claims/bot', label: 'Portal bot', icon: Bot },
+  { href: '/receivables', label: 'Receivables', icon: Wallet },
+  { href: '/receivables/reconcile', label: 'Reconcile', icon: GitMerge },
+  { href: '/receivables/import', label: 'Import', icon: Upload },
 ];
+
+// The most specific nav entry that matches wins, so /receivables/import
+// does not also light up Receivables.
+function activeHref(pathname: string) {
+  return NAV.filter((n) => (n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(n.href + '/')))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+}
 
 export function AppShell({ session, children }: { session: Session; children: React.ReactNode }) {
   const pathname = usePathname();
@@ -30,6 +40,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
 
   useEffect(() => { hydrate(session); }, [session, hydrate]);
 
+  const current = activeHref(pathname);
   const signOut = async () => { await sb().auth.signOut(); router.replace('/login'); router.refresh(); };
 
   return (
@@ -49,7 +60,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
         </div>
         <nav className="mt-4 flex-1 space-y-0.5 overflow-y-auto px-3">
           {NAV.map((n) => {
-            const active = n.exact ? pathname === n.href : pathname.startsWith(n.href);
+            const active = n.href === current;
             return (
               <Link key={n.href} href={n.href}
                 className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -78,7 +89,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
           </div>
           <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
             {NAV.map((n) => {
-              const active = n.exact ? pathname === n.href : pathname.startsWith(n.href);
+              const active = n.href === current;
               return <Link key={n.href} href={n.href} className={`whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium ${active ? 'bg-teal-50 text-teal-700' : 'text-slate-600'}`}>{n.label}</Link>;
             })}
           </nav>
