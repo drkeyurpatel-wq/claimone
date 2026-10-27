@@ -1,0 +1,215 @@
+{
+  "tpa_code": "medi_assist",
+  "tpa_name": "Medi Assist Healthcare Services",
+  "verified_on": null,
+  "_note": "Selectors and URLs were written without access to the live portal. Run each flow with HEADLESS=false, fix selectors, then set verified_on.",
+  "portal": {
+    "url": "https://provider.mediassist.in",
+    "type": "web"
+  },
+  "auth": {
+    "method": "form",
+    "login_url": "https://provider.mediassist.in/login",
+    "selectors": {
+      "username": "input[name='userId'], #userId, input[placeholder*='User']",
+      "password": "input[name='password'], #password, input[type='password']",
+      "submit": "button[type='submit'], #loginButton, .btn-login",
+      "success": ".main-dashboard, .nav-menu, [class*='dashboard']"
+    },
+    "captcha": false,
+    "otp": false
+  },
+  "env_prefix": "MEDIASSIST",
+  "flows": {
+    "submit_preauth": {
+      "description": "Submit pre-auth on Medi Assist provider portal",
+      "timeout_seconds": 120,
+      "retry_on_failure": true,
+      "steps": [
+        {
+          "action": "goto",
+          "url": "/cashless/new-request"
+        },
+        {
+          "action": "wait",
+          "selector": "form, .cashless-form, [class*='request']"
+        },
+        {
+          "action": "screenshot",
+          "name": "preauth_form"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='memberName'], #memberName",
+          "value": "{{patient_name}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='policyNo'], #policyNo",
+          "value": "{{policy_number}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='diagnosis'], #ailment",
+          "value": "{{primary_diagnosis}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='icdCode'], #icdCode",
+          "value": "{{icd_code}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='surgeryName'], #procedure",
+          "value": "{{procedure_name}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='expectedAmount'], #amount",
+          "value": "{{estimated_amount}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='treatingDoctor'], #doctor",
+          "value": "{{treating_doctor_name}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='dateOfAdmission'], #admDate",
+          "value": "{{admission_date}}"
+        },
+        {
+          "action": "if_visible",
+          "selector": "input[type='file'], .file-upload",
+          "then": [
+            {
+              "action": "upload",
+              "selector": "input[type='file']",
+              "files": "{{document_paths}}"
+            }
+          ]
+        },
+        {
+          "action": "screenshot",
+          "name": "preauth_filled"
+        },
+        {
+          "action": "click",
+          "selector": "button[type='submit'], #submitBtn, .btn-submit"
+        },
+        {
+          "action": "sleep",
+          "ms": 3000
+        },
+        {
+          "action": "extract",
+          "selector": ".ref-number, .cashless-id, [class*='reference']",
+          "output": "tpa_preauth_number"
+        },
+        {
+          "action": "screenshot",
+          "name": "preauth_result"
+        }
+      ]
+    },
+    "check_status": {
+      "description": "Check cashless request status on Medi Assist",
+      "timeout_seconds": 60,
+      "steps": [
+        {
+          "action": "goto",
+          "url": "/cashless/track"
+        },
+        {
+          "action": "wait",
+          "selector": "input[name='searchRef'], #searchBox, .search-field"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='searchRef'], #searchBox, .search-field",
+          "value": "{{tpa_claim_number}}"
+        },
+        {
+          "action": "click",
+          "selector": "button.search, #searchBtn, .btn-search"
+        },
+        {
+          "action": "sleep",
+          "ms": 2000
+        },
+        {
+          "action": "extract",
+          "selector": ".request-status, .status-text, [class*='status']",
+          "output": "portal_status"
+        },
+        {
+          "action": "if_visible",
+          "selector": ".approved-amt, [class*='approved']",
+          "then": [
+            {
+              "action": "extract",
+              "selector": ".approved-amt, [class*='approved']",
+              "output": "approved_amount"
+            }
+          ]
+        },
+        {
+          "action": "screenshot",
+          "name": "status_result"
+        }
+      ]
+    },
+    "download_letter": {
+      "description": "Download approval letter from Medi Assist",
+      "timeout_seconds": 60,
+      "steps": [
+        {
+          "action": "goto",
+          "url": "/cashless/detail/{{tpa_claim_number}}"
+        },
+        {
+          "action": "wait",
+          "selector": ".request-detail, [class*='detail']"
+        },
+        {
+          "action": "if_visible",
+          "selector": "a.download-letter, .btn-download, [href*='download']",
+          "then": [
+            {
+              "action": "download",
+              "selector": "a.download-letter, .btn-download, [href*='download']",
+              "output": "letter_path"
+            }
+          ],
+          "else": [
+            {
+              "action": "log",
+              "message": "No letter available for {{tpa_claim_number}}"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "status_mapping": {
+    "Approved": "preauth_approved",
+    "Cashless Approved": "preauth_approved",
+    "Pre-Auth Approved": "preauth_approved",
+    "Pending": "preauth_pending",
+    "Under Process": "claim_under_review",
+    "In Process": "claim_under_review",
+    "Query": "claim_query",
+    "Deficiency": "claim_query",
+    "Rejected": "claim_rejected",
+    "Denied": "claim_rejected",
+    "Claim Settled": "settlement_pending",
+    "Settled": "settlement_pending",
+    "Partially Settled": "claim_partial",
+    "Enhancement Approved": "preauth_enhanced"
+  },
+  "rate_limit": {
+    "requests_per_minute": 4,
+    "session_timeout_minutes": 25,
+    "max_retries": 2
+  }
+}

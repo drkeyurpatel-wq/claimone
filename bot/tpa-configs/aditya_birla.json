@@ -1,0 +1,211 @@
+{
+  "tpa_code": "aditya_birla",
+  "tpa_name": "Aditya Birla Health Insurance",
+  "verified_on": null,
+  "_note": "Selectors and URLs were written without access to the live portal. Run each flow with HEADLESS=false, fix selectors, then set verified_on.",
+  "portal": {
+    "url": "https://provider.adityabirlahealthinsurance.com",
+    "type": "web"
+  },
+  "auth": {
+    "method": "form",
+    "login_url": "https://provider.adityabirlahealthinsurance.com/provider-login",
+    "selectors": {
+      "username": "input[name='username'], #loginId, input[placeholder*='ID']",
+      "password": "input[name='password'], #loginPassword, input[type='password']",
+      "submit": "button[type='submit'], #btnLogin, .login-submit",
+      "success": ".provider-dashboard, .nav-header, [class*='dashboard']"
+    },
+    "captcha": false,
+    "otp": true,
+    "otp_input": "input[name='otp'], #otpInput"
+  },
+  "env_prefix": "ABHI",
+  "flows": {
+    "submit_preauth": {
+      "description": "Submit cashless pre-auth on ABHI provider portal",
+      "timeout_seconds": 120,
+      "retry_on_failure": true,
+      "steps": [
+        {
+          "action": "goto",
+          "url": "/cashless/initiate"
+        },
+        {
+          "action": "wait",
+          "selector": "form, .cashless-form"
+        },
+        {
+          "action": "screenshot",
+          "name": "preauth_form"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='patientName'], #patientName",
+          "value": "{{patient_name}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='policyNumber'], #policyNumber",
+          "value": "{{policy_number}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='ailment'], #diagnosis",
+          "value": "{{primary_diagnosis}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='icd'], #icdCode",
+          "value": "{{icd_code}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='procedure'], #surgeryProc",
+          "value": "{{procedure_name}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='estCost'], #estimatedCost",
+          "value": "{{estimated_amount}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='consultantName'], #doctorName",
+          "value": "{{treating_doctor_name}}"
+        },
+        {
+          "action": "if_visible",
+          "selector": "input[type='file']",
+          "then": [
+            {
+              "action": "upload",
+              "selector": "input[type='file']",
+              "files": "{{document_paths}}"
+            }
+          ]
+        },
+        {
+          "action": "screenshot",
+          "name": "preauth_filled"
+        },
+        {
+          "action": "click",
+          "selector": "button[type='submit'], #btnSubmit"
+        },
+        {
+          "action": "sleep",
+          "ms": 3000
+        },
+        {
+          "action": "extract",
+          "selector": ".preauth-id, .ref-no, [class*='reference']",
+          "output": "tpa_preauth_number"
+        },
+        {
+          "action": "screenshot",
+          "name": "preauth_result"
+        }
+      ]
+    },
+    "check_status": {
+      "description": "Check cashless status on ABHI portal",
+      "timeout_seconds": 60,
+      "steps": [
+        {
+          "action": "goto",
+          "url": "/cashless/status-check"
+        },
+        {
+          "action": "wait",
+          "selector": "input[name='refNo'], #claimSearch"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='refNo'], #claimSearch",
+          "value": "{{tpa_claim_number}}"
+        },
+        {
+          "action": "click",
+          "selector": "#btnSearch, button.search"
+        },
+        {
+          "action": "sleep",
+          "ms": 2000
+        },
+        {
+          "action": "extract",
+          "selector": ".claim-status, .status-value, td.status",
+          "output": "portal_status"
+        },
+        {
+          "action": "if_visible",
+          "selector": ".approved-amount, .amount-approved",
+          "then": [
+            {
+              "action": "extract",
+              "selector": ".approved-amount, .amount-approved",
+              "output": "approved_amount"
+            }
+          ]
+        },
+        {
+          "action": "screenshot",
+          "name": "status_result"
+        }
+      ]
+    },
+    "download_letter": {
+      "description": "Download approval/settlement letter from ABHI",
+      "timeout_seconds": 60,
+      "steps": [
+        {
+          "action": "goto",
+          "url": "/cashless/view/{{tpa_claim_number}}"
+        },
+        {
+          "action": "wait",
+          "selector": ".case-detail"
+        },
+        {
+          "action": "if_visible",
+          "selector": "a[href*='letter'], .download-letter, .btn-download",
+          "then": [
+            {
+              "action": "download",
+              "selector": "a[href*='letter'], .download-letter, .btn-download",
+              "output": "letter_path"
+            }
+          ],
+          "else": [
+            {
+              "action": "log",
+              "message": "No letter for {{tpa_claim_number}}"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "status_mapping": {
+    "Approved": "preauth_approved",
+    "Cashless Approved": "preauth_approved",
+    "Pre-Authorised": "preauth_approved",
+    "Pending Review": "claim_under_review",
+    "Under Review": "claim_under_review",
+    "Processing": "claim_under_review",
+    "Query Raised": "claim_query",
+    "Deficiency Raised": "claim_query",
+    "Rejected": "claim_rejected",
+    "Denied": "claim_rejected",
+    "Final Approved": "claim_approved",
+    "Settlement Done": "settlement_pending",
+    "Paid": "settlement_pending",
+    "Partial Approval": "claim_partial"
+  },
+  "rate_limit": {
+    "requests_per_minute": 3,
+    "session_timeout_minutes": 20,
+    "max_retries": 2
+  }
+}

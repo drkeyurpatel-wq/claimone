@@ -1,0 +1,19 @@
+services:
+  claimone-bot:
+    build: .
+    container_name: claimone-bot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./screenshots:/app/screenshots
+      - ./tpa-configs:/app/tpa-configs  # Hot-reload configs without rebuild
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'

@@ -1,0 +1,245 @@
+{
+  "tpa_code": "hdfc_ergo",
+  "tpa_name": "HDFC Ergo General Insurance",
+  "verified_on": null,
+  "_note": "Selectors and URLs were written without access to the live portal. Run each flow with HEADLESS=false, fix selectors, then set verified_on.",
+  "portal": {
+    "url": "https://provider.hdfcergo.com",
+    "type": "web"
+  },
+  "auth": {
+    "method": "form",
+    "login_url": "https://provider.hdfcergo.com/login",
+    "selectors": {
+      "username": "input[name='username'], #username, input[type='text']",
+      "password": "input[name='password'], #password, input[type='password']",
+      "submit": "button[type='submit'], #loginBtn, .login-btn",
+      "success": ".dashboard, .welcome, [class*='dashboard'], [class*='home']"
+    },
+    "captcha": false,
+    "otp": false
+  },
+  "env_prefix": "HDFC",
+  "flows": {
+    "submit_preauth": {
+      "description": "Submit a new pre-authorization request",
+      "timeout_seconds": 120,
+      "retry_on_failure": true,
+      "steps": [
+        {
+          "action": "goto",
+          "url": "/preauth/new"
+        },
+        {
+          "action": "wait",
+          "selector": "form, .preauth-form, [class*='preauth']"
+        },
+        {
+          "action": "screenshot",
+          "name": "preauth_form_loaded"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='patientName'], #patientName",
+          "value": "{{patient_name}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='policyNumber'], #policyNumber",
+          "value": "{{policy_number}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='diagnosis'], #diagnosis",
+          "value": "{{primary_diagnosis}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='icdCode'], #icdCode",
+          "value": "{{icd_code}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='procedure'], #procedure",
+          "value": "{{procedure_name}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='estimatedAmount'], #estimatedAmount",
+          "value": "{{estimated_amount}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='doctorName'], #doctorName",
+          "value": "{{treating_doctor_name}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='admissionDate'], #admissionDate",
+          "value": "{{admission_date}}"
+        },
+        {
+          "action": "if_visible",
+          "selector": "input[type='file'], .upload-btn",
+          "then": [
+            {
+              "action": "upload",
+              "selector": "input[type='file']",
+              "files": "{{document_paths}}"
+            }
+          ]
+        },
+        {
+          "action": "screenshot",
+          "name": "preauth_form_filled"
+        },
+        {
+          "action": "click",
+          "selector": "button[type='submit'], #submitPreauth, .submit-btn"
+        },
+        {
+          "action": "sleep",
+          "ms": 3000
+        },
+        {
+          "action": "if_visible",
+          "selector": ".success, .preauth-number, [class*='success']",
+          "then": [
+            {
+              "action": "extract",
+              "selector": ".preauth-number, .reference-number, [class*='reference']",
+              "output": "tpa_preauth_number"
+            },
+            {
+              "action": "screenshot",
+              "name": "preauth_submitted_success"
+            }
+          ],
+          "else": [
+            {
+              "action": "screenshot",
+              "name": "preauth_submit_result"
+            }
+          ]
+        }
+      ]
+    },
+    "check_status": {
+      "description": "Check claim/pre-auth status on HDFC Ergo portal",
+      "timeout_seconds": 60,
+      "steps": [
+        {
+          "action": "goto",
+          "url": "/claims/track"
+        },
+        {
+          "action": "wait",
+          "selector": "input[name='claimRef'], #searchInput, .search-input"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='claimRef'], #searchInput, .search-input",
+          "value": "{{tpa_claim_number}}"
+        },
+        {
+          "action": "click",
+          "selector": "button[type='submit'], #searchBtn, .search-btn"
+        },
+        {
+          "action": "sleep",
+          "ms": 2000
+        },
+        {
+          "action": "if_visible",
+          "selector": ".claim-details, .status-row, [class*='result']",
+          "then": [
+            {
+              "action": "extract",
+              "selector": ".claim-status, .status-label, [class*='status']",
+              "output": "portal_status"
+            },
+            {
+              "action": "if_visible",
+              "selector": ".approved-amount, [class*='approved']",
+              "then": [
+                {
+                  "action": "extract",
+                  "selector": ".approved-amount, [class*='approved']",
+                  "output": "approved_amount"
+                }
+              ]
+            },
+            {
+              "action": "screenshot",
+              "name": "status_check_result"
+            }
+          ],
+          "else": [
+            {
+              "action": "log",
+              "message": "No results found for claim {{tpa_claim_number}}"
+            },
+            {
+              "action": "screenshot",
+              "name": "status_no_results"
+            }
+          ]
+        }
+      ]
+    },
+    "download_letter": {
+      "description": "Download approval/settlement letter",
+      "timeout_seconds": 60,
+      "steps": [
+        {
+          "action": "goto",
+          "url": "/claims/{{tpa_claim_number}}"
+        },
+        {
+          "action": "wait",
+          "selector": ".claim-details, [class*='detail']"
+        },
+        {
+          "action": "if_visible",
+          "selector": "a[href*='download'], .download-btn, [class*='download']",
+          "then": [
+            {
+              "action": "download",
+              "selector": "a[href*='download'], .download-btn",
+              "output": "letter_path"
+            },
+            {
+              "action": "log",
+              "message": "Letter downloaded for {{tpa_claim_number}}"
+            }
+          ],
+          "else": [
+            {
+              "action": "log",
+              "message": "No letter available for {{tpa_claim_number}}"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "status_mapping": {
+    "Approved": "preauth_approved",
+    "Pre-Auth Approved": "preauth_approved",
+    "Pending": "preauth_pending",
+    "In Process": "claim_under_review",
+    "Under Process": "claim_under_review",
+    "Query Raised": "claim_query",
+    "Query": "claim_query",
+    "Rejected": "claim_rejected",
+    "Claim Approved": "claim_approved",
+    "Settled": "settlement_pending",
+    "Payment Done": "settlement_pending",
+    "Partially Approved": "claim_partial"
+  },
+  "rate_limit": {
+    "requests_per_minute": 5,
+    "session_timeout_minutes": 30,
+    "max_retries": 2
+  }
+}
