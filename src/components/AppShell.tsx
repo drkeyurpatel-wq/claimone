@@ -2,15 +2,24 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import type { LucideIcon } from 'lucide-react';
 import {
   ShieldCheck, LayoutDashboard, FilePlus2, Shield, MessageSquare, IndianRupee,
-  Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut, Wallet, CalendarCheck, GitMerge, Upload,
+  Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut, Wallet, ClipboardCheck, GitMerge, Upload,
 } from 'lucide-react';
 import type { Session } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/store/auth';
 import { sb } from '@/lib/supabase/browser';
 
-const NAV = [
+// Desk (data-entry) logins see only these two screens.
+type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean };
+const STAFF_NAV: NavItem[] = [
+  { href: '/pay', label: 'Upload payments', icon: Upload, exact: true },
+  { href: '/pay/check', label: 'Check list', icon: ClipboardCheck, exact: true },
+];
+
+const NAV: NavItem[] = [
+  ...STAFF_NAV,
   { href: '/claims', label: 'Claims', icon: LayoutDashboard, exact: true },
   { href: '/claims/new', label: 'New claim', icon: FilePlus2 },
   { href: '/claims/preauth', label: 'Pre-auth queue', icon: Shield },
@@ -21,7 +30,6 @@ const NAV = [
   { href: '/claims/payers', label: 'Payers', icon: Building2 },
   { href: '/claims/rules', label: 'Document rules', icon: ListChecks },
   { href: '/claims/bot', label: 'Portal bot', icon: Bot },
-  { href: '/receivables/weekly', label: 'Weekly payments', icon: CalendarCheck },
   { href: '/receivables', label: 'Receivables', icon: Wallet },
   { href: '/receivables/reconcile', label: 'Reconcile', icon: GitMerge },
   { href: '/receivables/import', label: 'Import', icon: Upload },
@@ -29,8 +37,8 @@ const NAV = [
 
 // The most specific nav entry that matches wins, so /receivables/import
 // does not also light up Receivables.
-function activeHref(pathname: string) {
-  return NAV.filter((n) => (n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(n.href + '/')))
+function activeHref(pathname: string, nav: NavItem[]) {
+  return nav.filter((n) => (n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(n.href + '/')))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 }
 
@@ -41,7 +49,9 @@ export function AppShell({ session, children }: { session: Session; children: Re
 
   useEffect(() => { hydrate(session); }, [session, hydrate]);
 
-  const current = activeHref(pathname);
+  const isStaff = (staff?.role ?? session.role) === 'desk';
+  const nav = isStaff ? STAFF_NAV : NAV;
+  const current = activeHref(pathname, nav);
   const signOut = async () => { await sb().auth.signOut(); router.replace('/login'); router.refresh(); };
 
   return (
@@ -60,11 +70,11 @@ export function AppShell({ session, children }: { session: Session; children: Re
           </select>
         </div>
         <nav className="mt-4 flex-1 space-y-0.5 overflow-y-auto px-3">
-          {NAV.map((n) => {
+          {nav.map((n) => {
             const active = n.href === current;
             return (
               <Link key={n.href} href={n.href}
-                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2.5 rounded-lg px-3 font-medium transition-colors ${isStaff ? 'min-h-12 text-base' : 'py-2 text-sm'} ${
                   active ? 'bg-teal-50 text-teal-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
                 <n.icon className="h-4 w-4" /> {n.label}
               </Link>
@@ -89,9 +99,9 @@ export function AppShell({ session, children }: { session: Session; children: Re
             </select>
           </div>
           <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
-            {NAV.map((n) => {
+            {nav.map((n) => {
               const active = n.href === current;
-              return <Link key={n.href} href={n.href} className={`whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium ${active ? 'bg-teal-50 text-teal-700' : 'text-slate-600'}`}>{n.label}</Link>;
+              return <Link key={n.href} href={n.href} className={`whitespace-nowrap rounded-lg font-medium ${isStaff ? 'px-4 py-2.5 text-base' : 'px-2.5 py-1.5 text-xs'} ${active ? 'bg-teal-50 text-teal-700' : 'text-slate-600'}`}>{n.label}</Link>;
             })}
           </nav>
         </div>

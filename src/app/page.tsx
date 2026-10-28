@@ -1,2 +1,8 @@
 import { redirect } from 'next/navigation';
-export default function Home() { redirect('/claims'); }
+import { getSession } from '@/lib/auth/session';
+
+// Desk staff start on Upload payments; managers on the claims desk.
+export default async function Home() {
+  const s = await getSession();
+  redirect(s?.role === 'desk' ? '/pay' : '/claims');
+}

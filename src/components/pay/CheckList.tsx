@@ -1,23 +1,23 @@
 'use client';
-// Step 3 of the weekly page: only the bills that don't add up.
+// Check list — staff screen 2 of 2: only the bills that don't add up.
 // Built for the data-entry desk: biggest money first, search, one reason for
 // many bills at once, small rounding differences closed in one click, and a
 // download to send to the TPA.
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, CheckCircle2, Download, Search, Loader2 } from 'lucide-react';
+import { CheckCircle2, Download, Search, Loader2 } from 'lucide-react';
 import { addAdjustment, setDisputed, acceptPaidAmount, type ExceptionRow, type Problem } from '@/lib/recon/api';
 import { DISALLOWANCE_CATEGORIES } from '@/lib/engine/settlement';
 import { Skeleton, inr, inrShort, shortDate, btn } from '@/components/ui';
 import { csvOf, SMALL_DIFF } from '@/lib/recon/exceptions';
 
 const PROBLEM: Record<Problem, { title: string; help: string; tone: string; amountLabel: string }> = {
-  short: { title: 'Paid less than billed', amountLabel: 'Short by', tone: 'border-amber-300 bg-amber-50',
-    help: 'Find the reason on the letter or portal. Tick the bills with the same reason and save them together — or dispute with the payer.' },
-  overdue: { title: 'Not paid yet — overdue', amountLabel: 'Due', tone: 'border-rose-300 bg-rose-50',
-    help: 'No payment for more than 30 days (45 for PMJAY). Chase the TPA or check the TMS portal, then write what you did.' },
-  over: { title: 'Paid more than billed', amountLabel: 'Extra', tone: 'border-sky-300 bg-sky-50',
-    help: 'The amount on file was lower than what came in. If the payment is right, accept it.' },
+  short: { title: 'Paid less', amountLabel: 'Short by', tone: 'border-amber-300 bg-amber-50',
+    help: 'Find why on the letter or TPA website. Tick the bills, pick the reason, press Save.' },
+  overdue: { title: 'Not paid yet', amountLabel: 'Due', tone: 'border-rose-300 bg-rose-50',
+    help: 'No money for over 30 days (45 for PMJAY). Call the TPA or check the portal, write what you did, press Save.' },
+  over: { title: 'Paid more', amountLabel: 'Extra', tone: 'border-sky-300 bg-sky-50',
+    help: 'More money came than the bill on file. If the payment is right, tick and press the green button.' },
 };
 
 const big = 'min-h-11 px-4 text-sm';
@@ -32,7 +32,7 @@ async function inBatches<T>(items: T[], f: (x: T) => Promise<unknown>, size = 5)
   return failed;
 }
 
-export function Problems({ rows, canWrite, onChanged, flash }: {
+export function CheckList({ rows, canWrite, onChanged, flash }: {
   rows: ExceptionRow[] | null; canWrite: boolean; onChanged: () => void; flash: (t: string, tone?: 'ok' | 'err') => void;
 }) {
   const [tab, setTab] = useState<Problem>('short');
@@ -61,7 +61,7 @@ export function Problems({ rows, canWrite, onChanged, flash }: {
   if (!rows.length) return (
     <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
       <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600" />
-      <p className="mt-2 text-base font-semibold text-emerald-900">Nothing to check. Every payment matches its bill.</p>
+      <p className="mt-2 text-lg font-semibold text-emerald-900">All clear. Every payment matches its bill.</p>
     </section>
   );
 
@@ -110,8 +110,7 @@ export function Problems({ rows, canWrite, onChanged, flash }: {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white">
       <div className="border-b border-slate-100 p-5">
-        <p className="flex items-center gap-2 text-base font-semibold text-slate-900"><AlertTriangle className="h-4 w-4 text-amber-500" /> 3. Check these — only the bills that don&apos;t add up</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-3">
           {(Object.keys(PROBLEM) as Problem[]).map((p) => (
             <button key={p} onClick={() => switchTab(p)} aria-pressed={tab === p}
               className={`rounded-xl border px-4 py-3 text-left transition ${tab === p ? `${PROBLEM[p].tone} ring-2 ring-offset-1 ring-slate-300` : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
@@ -121,13 +120,13 @@ export function Problems({ rows, canWrite, onChanged, flash }: {
             </button>
           ))}
         </div>
-        <p className="mt-3 text-sm text-slate-600">{PROBLEM[tab].help}</p>
+        <p className="mt-3 text-base text-slate-700">{PROBLEM[tab].help}</p>
 
         {tab === 'short' && small.length > 0 && canWrite && (
           <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-            <span><b>{small.length}</b> bills are short by less than ₹{SMALL_DIFF} each (total {inr(sum(small))}) — usually rounding.</span>
+            <span><b>{small.length}</b> bills are short by less than ₹{SMALL_DIFF} (total {inr(sum(small))}). These are rounding — close them.</span>
             <button onClick={closeSmall} disabled={!!busy} className={`${btn.ghost} ${big}`}>
-              {busy === 'small' && <Loader2 className="h-4 w-4 animate-spin" />} Close all {small.length} as small differences
+              {busy === 'small' && <Loader2 className="h-4 w-4 animate-spin" />} Close all {small.length}
             </button>
           </div>
         )}
@@ -136,7 +135,7 @@ export function Problems({ rows, canWrite, onChanged, flash }: {
           <label className="relative min-w-[220px] flex-1">
             <span className="sr-only">Search</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search patient, UHID, bill or claim no."
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a patient, UHID or bill no."
               className={`${btn.input} min-h-11 w-full pl-9`} />
           </label>
           <button onClick={download} disabled={!list.length} className={`${btn.ghost} ${big}`}><Download className="h-4 w-4" /> Download list</button>
@@ -186,7 +185,7 @@ export function Problems({ rows, canWrite, onChanged, flash }: {
               <input type="checkbox" aria-label="Tick all shown" className="h-5 w-5 accent-teal-600"
                 checked={list.slice(0, 300).every((r) => picked.has(r.receivable_id))}
                 onChange={(e) => setPicked(e.target.checked ? new Set(list.slice(0, 300).map((r) => r.receivable_id)) : new Set())} />
-              Tick all shown · biggest amount first
+              Tick all · biggest first
             </li>
           )}
           {list.slice(0, 300).map((r) => {

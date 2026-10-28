@@ -20,7 +20,7 @@ function LoginForm() {
     setBusy(false);
     if (error) { setError('Email or password is wrong.'); return; }
     const next = params.get('next');
-    router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/claims');
+    router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/');
     router.refresh();
   };
 
