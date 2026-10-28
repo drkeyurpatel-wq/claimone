@@ -27,8 +27,9 @@ describe('next step for a case', () => {
     const s = nextStep({ ...base, status: 'preauth_approved', discharged_at: '2026-10-28T08:30:00+05:30' }, now);
     expect(s).toMatchObject({ desk: 'claims', key: 'send_claim', overdue: true });
   });
-  it('a corporate (PGVCL) case skips pre-auth and goes straight to billing', () => {
-    expect(nextStep({ ...base, claim_type: 'corporate' }, now)).toMatchObject({ desk: 'claims', key: 'send_claim' });
+  it('a corporate (PGVCL) case skips pre-auth: in hospital, then billed after discharge', () => {
+    expect(nextStep({ ...base, claim_type: 'corporate' }, now)).toMatchObject({ key: 'in_hospital_approved', ours: false });
+    expect(nextStep({ ...base, claim_type: 'corporate', discharged_at: '2026-10-28T09:00:00+05:30' }, now)).toMatchObject({ desk: 'claims', key: 'send_claim' });
   });
   it('approved claims wait for money on the payments side', () => {
     expect(nextStep({ ...base, status: 'claim_partial' }, now)).toMatchObject({ desk: 'payment', key: 'wait_payment' });

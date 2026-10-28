@@ -128,8 +128,7 @@ export default function UploadCases() {
             <li className="text-emerald-800">{n(result.cash)} cash patients left out</li>
           </ul>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link href="/desk/admission" className="inline-flex min-h-11 items-center rounded-lg bg-white px-4 font-semibold text-teal-700 hover:bg-teal-50">Open admission desk</Link>
-            <Link href="/desk/claims" className="inline-flex min-h-11 items-center rounded-lg bg-white px-4 font-semibold text-teal-700 hover:bg-teal-50">Open claims desk</Link>
+            <Link href="/patients" className="inline-flex min-h-11 items-center rounded-lg bg-white px-4 font-semibold text-teal-700 hover:bg-teal-50">Open Patients</Link>
           </div>
         </section>
       )}

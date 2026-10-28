@@ -96,7 +96,7 @@ export default function Overview() {
 
       {/* Desks */}
       <div className="mt-6 grid gap-3 md:grid-cols-3">
-        {([['admission', 'Admission desk', '/desk/admission'], ['claims', 'Claims desk', '/desk/claims']] as const).map(([k, label, href]) => (
+        {([['admission', 'Pre-auth & in hospital', '/patients?stage=preauth'], ['claims', 'Discharge & claims', '/patients?stage=discharge']] as const).map(([k, label, href]) => (
           <Link key={k} href={href} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-teal-400">
             <div className="flex-1">
               <p className="font-semibold text-slate-900">{label}</p>
@@ -105,7 +105,7 @@ export default function Overview() {
             <ChevronRight className="h-5 w-5 text-slate-300" />
           </Link>
         ))}
-        <Link href="/pay/check" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-teal-400">
+        <Link href="/patients?stage=payment" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-teal-400">
           <div className="flex-1">
             <p className="font-semibold text-slate-900">Approved, waiting for money</p>
             <p className="text-sm text-slate-600">{d.pipe.payment.count} cases · <span className={d.pipe.payment.late ? 'font-semibold text-rose-700' : ''}>{d.pipe.payment.late} late</span></p>

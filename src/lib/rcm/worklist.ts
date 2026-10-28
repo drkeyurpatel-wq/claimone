@@ -66,7 +66,10 @@ export function nextStep(c: CaseLike, now = new Date()): Step {
 
   switch (c.status) {
     case 'draft':
-      if (discharged || corporate) {
+      if (corporate && !discharged) {
+        return step('admission', 'in_hospital_approved', 'In hospital — bill the company after discharge', false, null, null, now);
+      }
+      if (discharged) {
         return step('claims', 'send_claim', corporate ? 'Send the bill to the company' : 'Send the claim', true,
           discharged ?? admitted, corporate ? TARGETS.sendClaim.corporate : govt ? TARGETS.sendClaim.govt : TARGETS.sendClaim.insurer, now);
       }

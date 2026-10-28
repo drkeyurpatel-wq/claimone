@@ -6,6 +6,7 @@ import type { Claim, Payer } from '@/lib/claims/types';
 import type { CaseRow } from './ecw';
 import { nextStep, type Step } from './worklist';
 import { CASE_SELECT } from './select';
+import { stageOf, type CaseMoney, type StageKey } from './journey';
 
 export { CASE_SELECT };
 
@@ -72,4 +73,52 @@ export async function fetchNhcxMessages(claimId: string): Promise<NhcxMessage[]>
 export async function markNhcxHandled(id: string, status: 'applied' | 'ignored') {
   const { error } = await sb().from('clm_nhcx_messages').update({ status, handled_at: new Date().toISOString() }).eq('id', id);
   if (error) throw new Error(error.message);
+}
+
+// ─── Money side of each case (its bill on the receivables book) ─────
+
+const MONEY_SELECT = 'id, claim_id, expected_amount, billed_amount, allocated, tds, deduction, balance, recon_status, status';
+const toMoney = (r: Record<string, unknown>): CaseMoney => ({
+  receivable_id: r.id as string, claim_id: r.claim_id as string, expected_amount: Number(r.expected_amount ?? 0),
+  billed_amount: r.billed_amount == null ? null : Number(r.billed_amount), allocated: Number(r.allocated ?? 0), tds: Number(r.tds ?? 0),
+  deduction: Number(r.deduction ?? 0), balance: Number(r.balance ?? 0), recon_status: r.recon_status as CaseMoney['recon_status'], status: r.status as string,
+});
+
+/** Bills tied to cases at this centre, keyed by case. Patient-due bills are left out. */
+export async function fetchCaseMoney(centreId: string): Promise<Map<string, CaseMoney>> {
+  const { data } = await sb().from('clm_v_receivable_balance').select(MONEY_SELECT)
+    .eq('centre_id', centreId).not('claim_id', 'is', null).neq('debtor_type', 'patient').limit(20000);
+  return new Map(((data ?? []) as Record<string, unknown>[]).map((r) => [r.claim_id as string, toMoney(r)]));
+}
+
+export async function fetchMoneyFor(claimId: string): Promise<CaseMoney | null> {
+  const { data } = await sb().from('clm_v_receivable_balance').select(MONEY_SELECT)
+    .eq('claim_id', claimId).neq('debtor_type', 'patient').maybeSingle();
+  return data ? toMoney(data as Record<string, unknown>) : null;
+}
+
+export interface Journey extends CaseWithStep { money: CaseMoney | null; stage: StageKey }
+
+/** Every file still moving, plus files closed in the last 60 days. */
+export async function fetchJourneys(centreId: string): Promise<Journey[]> {
+  const since = new Date(Date.now() - 60 * 86_400_000).toISOString();
+  const [open, closed, money] = await Promise.all([
+    fetchOpenCases(centreId),
+    sb().from('clm_claims').select(CASE_SELECT).eq('centre_id', centreId).in('status', ['settled', 'closed', 'written_off'])
+      .gte('updated_at', since).limit(1000),
+    fetchCaseMoney(centreId),
+  ]);
+  const now = new Date();
+  const all = [...open, ...((closed.data ?? []) as unknown as Claim[]).map((c) => ({ c, step: nextStep(c, now) }))];
+  return all.map((x) => {
+    const m = money.get(x.c.id) ?? null;
+    const stage = stageOf(x.c, m, x.step);
+    return { ...x, step: paymentStep(x.step, stage, m), money: m, stage };
+  });
+}
+
+/** In payment, a part-paid bill is the hospital's turn: find the reason for the cut. */
+export function paymentStep(step: Step, stage: StageKey, m: CaseMoney | null): Step {
+  if (stage !== 'payment' || !m || m.allocated <= 0 || m.balance <= 100) return step;
+  return { ...step, ours: true, label: 'Paid less — find the reason on the letter', overdue: false, dueAt: null };
 }
