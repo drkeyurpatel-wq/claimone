@@ -1,7 +1,7 @@
 // The one seam to replace when the common login (H1 Identity, built with
 // HRMS) goes live: everything else asks this file who the user is.
 import { createClient } from '@/lib/supabase/server';
-import type { Role } from '@/lib/claims/types';
+import type { Role, Workspace } from '@/lib/claims/types';
 
 export interface Centre { id: string; code: string; name: string }
 export interface Session {
@@ -9,6 +9,8 @@ export interface Session {
   tenantId: string;
   fullName: string;
   role: Role;
+  /** Desk users: which desk they work. Null: managers see all; desk users keep the payment screens. */
+  workspace: Workspace | null;
   centres: Centre[];
 }
 
@@ -19,7 +21,7 @@ export async function getSession(): Promise<Session | null> {
 
   const { data: profile } = await supabase
     .from('clm_user_profiles')
-    .select('tenant_id, full_name, role, is_active')
+    .select('tenant_id, full_name, role, is_active, workspace')
     .eq('user_id', user.id)
     .maybeSingle();
   if (!profile || !profile.is_active) return null;
@@ -33,6 +35,7 @@ export async function getSession(): Promise<Session | null> {
     tenantId: profile.tenant_id,
     fullName: profile.full_name,
     role: profile.role as Role,
+    workspace: (profile.workspace ?? null) as Workspace | null,
     centres: centres ?? [],
   };
 }

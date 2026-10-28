@@ -20,6 +20,8 @@ export interface Payer {
   type: 'tpa' | 'insurer' | 'government' | 'psu' | 'corporate';
   portal_url: string | null;
   is_nhcx_live: boolean;
+  nhcx_code?: string | null;
+  channel?: PayerChannel;
   query_tat_hours: number;
   is_active: boolean;
 }
@@ -71,8 +73,23 @@ export interface Claim {
   tags: string[] | null;
   created_at: string;
   updated_at: string;
-  clm_payers?: Pick<Payer, 'id' | 'code' | 'name' | 'type'> | null;
+  // admission facts from the HMIS (0013)
+  case_source?: 'manual' | 'ecw' | 'hmis';
+  admitted_at?: string | null;
+  intimated_at?: string | null;
+  discharged_at?: string | null;
+  bill_no?: string | null;
+  bill_amount?: number | null;
+  discount_amount?: number | null;
+  patient_paid?: number | null;
+  bed_category?: string | null;
+  sponsor_name?: string | null;
+  clm_payers?: (Pick<Payer, 'id' | 'code' | 'name' | 'type'> & Partial<Pick<Payer, 'channel' | 'is_nhcx_live' | 'nhcx_code'>>) | null;
 }
+
+/** How a payer is reached when it is not live on NHCX. */
+export type PayerChannel = 'portal' | 'email' | 'tms' | 'direct';
+export type Workspace = 'admission' | 'claims' | 'payments';
 
 export interface ClaimDocument {
   id: string;

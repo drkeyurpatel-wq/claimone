@@ -6,21 +6,34 @@ import type { LucideIcon } from 'lucide-react';
 import {
   ShieldCheck, LayoutDashboard, FilePlus2, Shield, MessageSquare, IndianRupee,
   Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut, Wallet, ClipboardCheck, GitMerge, Upload,
+  BedDouble, FileCheck2, Gauge, FileSpreadsheet,
 } from 'lucide-react';
+import type { Workspace } from '@/lib/claims/types';
 import type { Session } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/store/auth';
 import { sb } from '@/lib/supabase/browser';
 
-// Desk (data-entry) logins see only these two screens.
+// Desk (data-entry) logins see only their desk's few screens.
 type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean };
-const STAFF_NAV: NavItem[] = [
+const PAY_NAV: NavItem[] = [
   { href: '/pay', label: 'Upload payments', icon: Upload, exact: true },
   { href: '/pay/check', label: 'Check list', icon: ClipboardCheck, exact: true },
 ];
+const ADMISSION_NAV: NavItem[] = [
+  { href: '/desk/admission', label: 'Admission desk', icon: BedDouble },
+  { href: '/cases/upload', label: 'Upload eCW file', icon: FileSpreadsheet },
+];
+const CLAIMS_NAV: NavItem[] = [
+  { href: '/desk/claims', label: 'Claims desk', icon: FileCheck2 },
+  ...PAY_NAV,
+];
+export const DESK_NAV: Record<Workspace, NavItem[]> = { admission: ADMISSION_NAV, claims: CLAIMS_NAV, payments: PAY_NAV };
 
 const NAV: NavItem[] = [
-  ...STAFF_NAV,
-  { href: '/claims', label: 'Claims', icon: LayoutDashboard, exact: true },
+  { href: '/overview', label: 'Overview', icon: Gauge },
+  ...ADMISSION_NAV,
+  ...CLAIMS_NAV,
+  { href: '/claims', label: 'All claims', icon: LayoutDashboard, exact: true },
   { href: '/claims/new', label: 'New claim', icon: FilePlus2 },
   { href: '/claims/preauth', label: 'Pre-auth queue', icon: Shield },
   { href: '/claims/queries', label: 'Queries', icon: MessageSquare },
@@ -50,7 +63,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
   useEffect(() => { hydrate(session); }, [session, hydrate]);
 
   const isStaff = (staff?.role ?? session.role) === 'desk';
-  const nav = isStaff ? STAFF_NAV : NAV;
+  const nav = isStaff ? DESK_NAV[session.workspace ?? 'payments'] : NAV;
   const current = activeHref(pathname, nav);
   const signOut = async () => { await sb().auth.signOut(); router.replace('/login'); router.refresh(); };
 

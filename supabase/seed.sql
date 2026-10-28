@@ -47,6 +47,9 @@ on conflict do nothing;
 -- ─── Default document rules ─────────────────────────────────────────
 -- stage: preauth = cashless request, final = cashless final bill,
 --        reimbursement = patient-paid claim
+-- PMJAY / MA pre-auth and claims are filed in the scheme's TMS
+update clm_payers set channel = 'tms' where code like 'pmjay%';
+
 insert into clm_doc_rules (tenant_id, payer_id, claim_type, stage, doc_code, doc_label, is_mandatory, min_amount, sort_order) values
   -- Pre-authorisation (all cashless types)
   (null, null, null, 'preauth', 'preauth_form',     'Pre-authorisation form (signed)',     true,  null, 10),

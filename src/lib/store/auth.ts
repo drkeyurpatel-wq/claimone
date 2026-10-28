@@ -3,14 +3,14 @@
 // (staff, activeCentreId) so they port with minimal change.
 import { create } from 'zustand';
 import type { Centre } from '@/lib/auth/session';
-import type { Role } from '@/lib/claims/types';
+import type { Role, Workspace } from '@/lib/claims/types';
 
 interface AuthState {
-  staff: { id: string; full_name: string; role: Role } | null;
+  staff: { id: string; full_name: string; role: Role; workspace: Workspace | null } | null;
   tenantId: string | null;
   centres: Centre[];
   activeCentreId: string | null;
-  hydrate: (s: { userId: string; fullName: string; role: Role; tenantId: string; centres: Centre[] }) => void;
+  hydrate: (s: { userId: string; fullName: string; role: Role; workspace?: Workspace | null; tenantId: string; centres: Centre[] }) => void;
   setActiveCentre: (id: string) => void;
 }
 
@@ -26,7 +26,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try { saved = localStorage.getItem(KEY); } catch { /* private mode */ }
     const active = s.centres.find((c) => c.id === saved)?.id ?? s.centres[0]?.id ?? null;
     set({
-      staff: { id: s.userId, full_name: s.fullName, role: s.role },
+      staff: { id: s.userId, full_name: s.fullName, role: s.role, workspace: s.workspace ?? null },
       tenantId: s.tenantId,
       centres: s.centres,
       activeCentreId: active,
