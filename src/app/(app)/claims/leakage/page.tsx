@@ -64,13 +64,13 @@ export default function Leakage() {
   if (!centreId) return <NoCentre />;
   return (
     <div>
-      <PageHeader title="Leakage" sub="Money claimed but not paid, by reason — from itemised settlement deductions" icon={TrendingDown}>
+      <PageHeader title="Leakage" sub="Money claimed but not paid, by reason — approval cuts, short payments and settlement deductions" icon={TrendingDown}>
         <select value={months} onChange={(e) => setMonths(Number(e.target.value))} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs">
           <option value={3}>Last 3 months</option><option value={6}>Last 6 months</option><option value={12}>Last 12 months</option>
         </select>
       </PageHeader>
       {loading ? <div className="p-6"><Skeleton rows={10} /></div> : rows.length === 0 ? (
-        <div className="m-6 rounded-2xl border bg-white"><Empty icon={TrendingDown} title="No deductions recorded yet" sub="When a settlement is recorded, split its deduction by reason. This page fills from those lines." /></div>
+        <div className="m-6 rounded-2xl border bg-white"><Empty icon={TrendingDown} title="No deductions recorded yet" sub="This fills when a claim is approved for less than billed, or a payment comes in short and its reason is given." /></div>
       ) : (
         <div className="space-y-4 px-6 py-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">

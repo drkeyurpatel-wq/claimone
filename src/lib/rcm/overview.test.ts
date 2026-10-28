@@ -34,9 +34,13 @@ describe('overview', () => {
     expect(pipeline([s('admission', true, true), s('admission', false, false), s('claims', true, false), s('payment', false, true)]))
       .toEqual({ admission: { todo: 1, late: 1, waiting: 1 }, claims: { todo: 1, late: 0, waiting: 0 }, payment: { count: 1, late: 1 } });
   });
-  it('deductions by reason and doctor', () => {
-    const d = deductions([{ category: 'room_rent_cap', amount: 5000, created_at: '' }, { category: null, amount: 1000, created_at: '' },
-      { category: 'room_rent_cap', amount: 2000, created_at: '' }], [bill({ doctor_name: 'Dr A', deduction: 7000 }), bill({ deduction: 1000 })]);
+  it('deductions by reason and doctor, rejections left out', () => {
+    const d = deductions([
+      { kind: 'deduction', category: 'room_rent_cap', doctor_name: 'Dr A', amount: 5000 },
+      { kind: 'deduction', category: null, doctor_name: '—', amount: 1000 },
+      { kind: 'deduction', category: 'room_rent_cap', doctor_name: 'Dr A', amount: 2000 },
+      { kind: 'rejection', category: 'policy_exclusion', doctor_name: 'Dr B', amount: 90000 },
+    ]);
     expect(d.total).toBe(8000);
     expect(d.byReason[0]).toEqual({ reason: 'Room rent limit', amount: 7000 });
     expect(d.byDoctor).toEqual([{ doctor: 'Dr A', amount: 7000 }, { doctor: 'Not recorded', amount: 1000 }]);

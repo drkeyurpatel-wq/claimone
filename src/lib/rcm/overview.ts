@@ -80,15 +80,21 @@ export function pipeline(steps: Step[]): Pipeline {
 /** Category codes from clm_deduction_category() (0007). */
 export const DEDUCTION_WORDS: Record<string, string> = {
   room_rent_cap: 'Room rent limit', co_pay: 'Co-pay', non_payable: 'Consumables / not payable', policy_exclusion: 'Policy exclusion',
-  pre_existing: 'Pre-existing disease', tariff_excess: 'Above package / tariff', doc_missing: 'Papers missing', other: 'Other',
+  pre_existing: 'Pre-existing disease', query_tat: 'Query not answered in time', tariff_excess: 'Above package / tariff', doc_missing: 'Papers missing', other: 'Other',
   unknown: 'No reason given',
 };
 
-export function deductions(adj: DeductionAdj[], bills: OpenBill[]) {
+/** Money lost to deductions, from the leakage view (approval cuts, short payments, itemised lines). */
+export interface LeakLite { kind: string; category: string | null; doctor_name: string; amount: number }
+export function deductions(rows: LeakLite[]) {
   const byReason = new Map<string, number>();
-  for (const a of adj) byReason.set(a.category ?? 'unknown', (byReason.get(a.category ?? 'unknown') ?? 0) + a.amount);
   const byDoctor = new Map<string, number>();
-  for (const b of bills) if (b.deduction > 0) byDoctor.set(b.doctor_name || 'Not recorded', (byDoctor.get(b.doctor_name || 'Not recorded') ?? 0) + b.deduction);
+  for (const r of rows) {
+    if (r.kind !== 'deduction') continue;
+    byReason.set(r.category ?? 'unknown', (byReason.get(r.category ?? 'unknown') ?? 0) + r.amount);
+    const d = !r.doctor_name || r.doctor_name === '—' ? 'Not recorded' : r.doctor_name;
+    byDoctor.set(d, (byDoctor.get(d) ?? 0) + r.amount);
+  }
   const total = [...byReason.values()].reduce((s, x) => s + x, 0);
   return {
     total: r0(total),

@@ -81,6 +81,7 @@ export default function CasePage() {
   const [error, setError] = useState('');
   const [discharge, setDischarge] = useState('');
   const [why, setWhy] = useState({ cat: '', text: '' });
+  const [cutWhy, setCutWhy] = useState('');
 
   const reload = useCallback(async () => {
     const [x, mm, msg, hist] = await Promise.all([fetchCase(id), fetchMoneyFor(id), fetchNhcxMessages(id), fetchClaimTimeline(id), loadClaimDetail(id)]);
@@ -114,6 +115,9 @@ export default function CasePage() {
     if (!c || !open) return;
     if (open.amount && (amount === '' || !(Number(amount) >= 0))) { setError('Enter the amount.'); return; }
     if (open.note?.required && !note.trim()) { setError(`Fill in: ${open.note.label}`); return; }
+    if (open.id === 'part' && !cutWhy) { setError('Pick the reason for the cut.'); return; }
+    // the reason heads the note so leakage files it under the right reason
+    const fullNote = open.id === 'part' ? `${DISALLOWANCE_CATEGORIES[cutWhy as keyof typeof DISALLOWANCE_CATEGORIES].label} — ${note.trim()}` : note.trim();
     setBusy(true); setError(''); setBlockers([]);
     try {
       if (open.nhcx) {
@@ -125,7 +129,7 @@ export default function CasePage() {
         const fields: Record<string, unknown> = {};
         if (open.amount) fields[open.amount.field] = Number(amount);
         if (open.ref && ref.trim()) fields[open.ref.field] = ref.trim();
-        await transition(c.id, open.to, fields, note.trim() || (open.ref ? `Sent via ${ROUTE_WORDS[route].label}` : undefined));
+        await transition(c.id, open.to, fields, fullNote || (open.ref ? `Sent via ${ROUTE_WORDS[route].label}` : undefined));
       }
       setOpen(null); setView(null); flash('Saved'); await reload();
     } catch (e) {
@@ -198,6 +202,11 @@ export default function CasePage() {
             <input type="number" min="0" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={field} autoFocus /></label>}
           {open.ref && <label className="block text-base font-medium text-slate-800">{open.ref.label}
             <input value={ref} onChange={(e) => setRef(e.target.value)} className={field} /></label>}
+          {open.id === 'part' && <label className="block text-base font-medium text-slate-800">Reason for the cut *
+            <select value={cutWhy} onChange={(e) => setCutWhy(e.target.value)} className={field}>
+              <option value="">Choose…</option>
+              {Object.entries(DISALLOWANCE_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select></label>}
           {open.note && <label className="block text-base font-medium text-slate-800">{open.note.label}{open.note.required ? ' *' : ''}
             <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className={`${field} py-2`} /></label>}
           {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-base text-rose-800">{error}</p>}

@@ -9,7 +9,7 @@ import { sb } from '@/lib/supabase/browser';
 import { fetchAllPayers, fetchOpenCases } from '@/lib/rcm/api';
 import {
   ageing, collections, deductions, pipeline, turnaround, BUCKETS,
-  type Ageing, type OpenBill, type PayerInfo, type DeductionAdj, type ReceiptLite, type TransitionLite,
+  type Ageing, type OpenBill, type PayerInfo, type LeakLite, type ReceiptLite, type TransitionLite,
 } from '@/lib/rcm/overview';
 import { NoCentre, inrShort } from '@/components/ui';
 
@@ -27,8 +27,8 @@ async function load(centreId: string): Promise<Data> {
       .select('debtor_type, payer_id, debtor_name, doctor_name, balance, age_days, billed_amount, expected_amount, deduction, recon_status, status')
       .eq('centre_id', centreId).limit(20000),
     fetchAllPayers(),
-    sb().from('clm_adjustments').select('category, amount, created_at, clm_receivables!inner(centre_id)')
-      .eq('kind', 'deduction').is('reversed_at', null).eq('clm_receivables.centre_id', centreId).gte('created_at', since(365)).limit(20000),
+    sb().from('clm_v_leakage').select('kind, category, doctor_name, amount, month')
+      .eq('centre_id', centreId).gte('month', since(365).slice(0, 10)).limit(20000),
     sb().from('clm_receipts').select('value_date, amount, source').eq('centre_id', centreId).gte('value_date', since(200).slice(0, 10)).limit(20000),
     sb().from('clm_state_transitions').select('claim_id, from_status, to_status, created_at, clm_claims!inner(centre_id)')
       .eq('clm_claims.centre_id', centreId).gte('created_at', since(180)).limit(20000),
@@ -42,7 +42,7 @@ async function load(centreId: string): Promise<Data> {
   return {
     age: ageing(B, pm),
     pipe: pipeline(cases.map((x) => x.step)),
-    ded: deductions(((adj.data ?? []) as unknown as DeductionAdj[]).map((a) => ({ ...a, amount: N(a.amount) })), B),
+    ded: deductions(((adj.data ?? []) as unknown as LeakLite[]).map((a) => ({ ...a, amount: N(a.amount) }))),
     coll: collections(((rcpt.data ?? []) as ReceiptLite[]).map((r) => ({ ...r, amount: N(r.amount) }))),
     tat: turnaround((trans.data ?? []) as unknown as TransitionLite[]),
   };
