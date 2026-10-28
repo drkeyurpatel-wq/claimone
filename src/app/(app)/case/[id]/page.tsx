@@ -16,6 +16,7 @@ import { actionsFor, type CaseAction } from '@/lib/rcm/actions';
 import { routeFor, ROUTE_WORDS } from '@/lib/rcm/payer';
 import type { Claim } from '@/lib/claims/types';
 import { ReadinessPanel } from '@/components/claim/ReadinessPanel';
+import { NhcxDetails } from '@/components/case/NhcxDetails';
 import { inr, shortDate, dateTime, useToast } from '@/components/ui';
 
 const TONE: Record<CaseAction['tone'], string> = {
@@ -188,7 +189,7 @@ export default function CasePage() {
             {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-base text-rose-800">{error}</p>}
             {blockers.length > 0 && (
               <div className="rounded-lg bg-amber-50 p-3 text-base text-amber-900">
-                <p className="font-semibold">These papers are needed first — add them below:</p>
+                <p className="font-semibold">Needed first — fill these in below:</p>
                 <ul className="mt-1 list-disc pl-5">{blockers.map((b) => <li key={b}>{b}</li>)}</ul>
               </div>
             )}
@@ -209,6 +210,10 @@ export default function CasePage() {
           </div>
         )}
       </section>
+
+      {route === 'nhcx' && step.desk !== 'payment' && step.desk !== 'done' && (
+        <NhcxDetails key={c.updated_at} c={c} kind={step.desk === 'admission' ? 'preauth' : 'claim'} canWrite={canWrite} onSaved={reload} />
+      )}
 
       {/* Replies on NHCX */}
       {replies.length > 0 && (

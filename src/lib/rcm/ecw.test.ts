@@ -3,13 +3,13 @@ import { cleanDoctor, ecwDateTime, isEcwSheet, parseEcw, summariseEcw } from './
 
 const HEAD = ['Admission Date & Time', 'Intimated Date & Time', 'Invoice Date & Time', 'Net Amount', 'S.No.', 'Registration No.', 'IP No.',
   'Patient Name', 'Discharge Date', 'Bill No', 'Admitted Under Doctor.', 'Sponsor Name', 'Bill Amount', 'Discount Amount', 'Mobile No.',
-  'Specialisation', 'Billing Category', 'Estimated Amount', 'Credit Limit', 'Paid Amount'];
+  'Specialisation', 'Billing Category', 'Estimated Amount', 'Credit Limit', 'Paid Amount', 'Age', 'Sex'];
 
 const cells = [
   ['September 2026 IPD report'],
   HEAD,
   ['30/09/2026 14:41:01', '30/09/2026 18:20:33', '30/09/2026 19:05:44', 7130, 1, 740735726432, 'DIP-1', 'Test A', '30/09/2026 07:05 PM',
-    'IPB126/1', 'Dr. Test Doc Health One Team', 'PMJAY', 7130, 0, 9000000000, 'Medical Oncology', 'DAY CARE', 0, 7130, 0],
+    'IPB126/1', 'Dr. Test Doc Health One Team', 'PMJAY', 7130, 0, 9000000000, 'Medical Oncology', 'DAY CARE', 0, 7130, 0, '44Y 1M 16D', 'Female'],
   ['29/09/2026 10:00:00', '', '', null, 2, 'H1S-2', 'IPS-2', 'Test B', '', '', 'Dr. Other', 'MEDI ASSIST', null, null, '', 'Cardiology', 'ICU', 250000, null, null],
   ['28/09/2026 09:00:00', '', '30/09/2026 11:00:00', 96000, 3, 'H1S-3', 'IPS-3', 'Test C', '30/09/2026 11:00 AM', 'IPB126/3', 'Dr X', 'CASH', 96366, 366, '', '', '', 0, null, 96000],
   [null, null, null, null, null, null, null, null],
@@ -29,7 +29,7 @@ describe('eCW daily export', () => {
     expect(rows[0]).toMatchObject({
       ip_no: 'DIP-1', uhid: '740735726432', admitted_at: '2026-09-30T14:41:00+05:30', discharged_at: '2026-09-30T19:05:00+05:30',
       bill_no: 'IPB126/1', bill_date: '2026-09-30', sponsor: 'PMJAY', doctor: 'Dr. Test Doc', net_amount: 7130, estimated_amount: 7130,
-      phone: '9000000000',
+      phone: '9000000000', gender: 'female', age_years: 44,
     });
   });
   it('a patient still in hospital has no bill or discharge', () => {

@@ -27,6 +27,8 @@ export interface CaseRow {
   net_amount: number | null;
   paid_amount: number | null;
   estimated_amount: number | null;
+  gender: 'male' | 'female' | 'other' | null;
+  age_years: number | null;
 }
 
 const norm = (h: unknown) => String(h ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
@@ -51,6 +53,8 @@ const COLS: Record<keyof CaseRow, string[]> = {
   net_amount: ['NET AMOUNT'],
   paid_amount: ['PAID AMOUNT'],
   estimated_amount: ['ESTIMATED AMOUNT'],
+  gender: ['SEX', 'GENDER'],
+  age_years: ['AGE'],
 };
 const CREDIT_LIMIT = 'CREDIT LIMIT';
 
@@ -108,6 +112,17 @@ export function cleanDoctor(s: string | null): string | null {
   return s ? s.replace(/\s*Health\s*One\s*Team\s*$/i, '').trim() || null : null;
 }
 
+/** "Female" / "F" / "M" → gender; "44Y 1M 16D" / 44 → years. */
+export function ecwGender(v: Cell): CaseRow['gender'] {
+  const s = String(v ?? '').trim().toUpperCase();
+  return s === 'M' || s === 'MALE' ? 'male' : s === 'F' || s === 'FEMALE' ? 'female' : s ? 'other' : null;
+}
+export function ecwAge(v: Cell): number | null {
+  if (typeof v === 'number') return v >= 0 && v < 130 ? Math.floor(v) : null;
+  const m = String(v ?? '').match(/^\s*(\d{1,3})\s*Y/i) ?? String(v ?? '').match(/^\s*(\d{1,3})\s*$/);
+  return m && Number(m[1]) < 130 ? Number(m[1]) : null;
+}
+
 export interface EcwParse { rows: CaseRow[]; skipped: number; duplicates: number }
 
 export function parseEcw(cells: Cell[][]): EcwParse {
@@ -148,6 +163,8 @@ export function parseEcw(cells: Cell[][]): EcwParse {
       paid_amount: amount(get(r, 'paid_amount')),
       // eCW leaves Estimated Amount at 0 for most cases; the credit limit is the sanctioned amount
       estimated_amount: amount(get(r, 'estimated_amount')) || (limitAt >= 0 ? amount(r[limitAt]) : null) || null,
+      gender: ecwGender(get(r, 'gender')),
+      age_years: ecwAge(get(r, 'age_years')),
     };
     const key = ip.toUpperCase();
     if (byIp.has(key)) { duplicates++; }

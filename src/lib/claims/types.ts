@@ -84,6 +84,12 @@ export interface Claim {
   patient_paid?: number | null;
   bed_category?: string | null;
   sponsor_name?: string | null;
+  // NHCX case details (0014)
+  patient_gender?: 'male' | 'female' | 'other' | 'unknown' | null;
+  patient_age_years?: number | null;
+  member_id?: string | null;
+  treating_doctor_hpr_id?: string | null;
+  treatment_type?: 'medical' | 'surgical' | null;
   clm_payers?: (Pick<Payer, 'id' | 'code' | 'name' | 'type'> & Partial<Pick<Payer, 'channel' | 'is_nhcx_live' | 'nhcx_code'>>) | null;
 }
 

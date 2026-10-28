@@ -85,11 +85,11 @@ describe('NhcxClient: retries', () => {
   });
 
   it('retries timeouts', async () => {
-    const h = createHarness({ client: { requestTimeoutMs: 30 } });
-    h.fake.hangNext.push(1000);
+    const h = createHarness({ client: { requestTimeoutMs: 400 } });
+    h.fake.hangNext.push(4000);
     const r = await h.client.send('preauth/submit', bundle(), PAYER_CODE);
     expect(r.attempts).toBe(2);
-    h.fake.hangNext.push(1000, 1000, 1000, 1000);
+    h.fake.hangNext.push(4000, 4000, 4000, 4000);
     await expect(h.client.send('preauth/submit', bundle(), PAYER_CODE)).rejects.toMatchObject({ kind: 'transport', code: 'ERR_TIMEOUT', retryable: true });
   });
 });

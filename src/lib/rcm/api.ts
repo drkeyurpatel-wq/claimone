@@ -5,13 +5,9 @@ import { sb } from '@/lib/supabase/browser';
 import type { Claim, Payer } from '@/lib/claims/types';
 import type { CaseRow } from './ecw';
 import { nextStep, type Step } from './worklist';
+import { CASE_SELECT } from './select';
 
-export const CASE_SELECT =
-  'id, tenant_id, centre_id, payer_id, claim_number, claim_type, status, patient_name, patient_uhid, admission_ref, ' +
-  'treating_doctor_name, department_name, admission_date, discharge_date, admitted_at, discharged_at, intimated_at, ' +
-  'estimated_amount, claimed_amount, approved_amount, settled_amount, bill_no, bill_amount, patient_paid, sponsor_name, ' +
-  'tpa_claim_number, tpa_preauth_number, preauth_submitted_at, submitted_at, is_query_pending, case_source, created_at, updated_at, ' +
-  'clm_payers!clm_claims_payer_id_fkey(id, code, name, type, channel, is_nhcx_live, nhcx_code)';
+export { CASE_SELECT };
 
 export type CaseRowDb = Claim;
 export interface CaseWithStep { c: Claim; step: Step }

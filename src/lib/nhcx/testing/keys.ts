@@ -37,7 +37,7 @@ export function generateTestKeyPair(commonName: string): TestKeyPair {
   const algId = seq(OID_SHA256_RSA, NULL);
   const name = seq(set(seq(OID_CN, tlv(0x0c, Buffer.from(commonName, 'utf8')))));
   const serial = randomBytes(8);
-  serial[0] &= 0x7f;
+  serial[0] = (serial[0] & 0x3f) | 0x40; // positive and minimal DER (a leading 0x00 would be rejected)
   const now = new Date();
   const tbs = seq(
     tlv(0xa0, tlv(0x02, Buffer.from([2]))),

@@ -1,7 +1,11 @@
 'use client';
 // Payer master + scorecard (across every centre this login can see).
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Search } from 'lucide-react';
+import { Building2, Search, Pencil } from 'lucide-react';
+import { sb } from '@/lib/supabase/browser';
+import { useAuthStore } from '@/lib/store/auth';
+import { ROUTE_WORDS } from '@/lib/rcm/payer';
+import type { PayerChannel } from '@/lib/claims/types';
 import { fetchPayers, fetchPayerScorecard } from '@/lib/claims/api';
 import type { Payer, PayerScorecard } from '@/lib/claims/types';
 import { PageHeader, Skeleton, inrShort } from '@/components/ui';
@@ -12,7 +16,39 @@ const TYPE: Record<Payer['type'], { label: string; cls: string }> = {
   corporate: { label: 'Corporate', cls: 'bg-slate-100 text-slate-700' },
 };
 
+function RouteCell({ p, isAdmin, onSaved }: { p: Payer; isAdmin: boolean; onSaved: () => void }) {
+  const [edit, setEdit] = useState(false);
+  const [channel, setChannel] = useState<PayerChannel>(p.channel ?? 'portal');
+  const [code, setCode] = useState(p.nhcx_code ?? '');
+  const [live, setLive] = useState(p.is_nhcx_live);
+  const [err, setErr] = useState('');
+  const save = async () => {
+    const { error } = await sb().rpc('clm_set_payer_route', { p_payer: p.id, p_channel: channel, p_nhcx_code: code, p_live: live });
+    if (error) { setErr(error.message); return; }
+    setEdit(false); setErr(''); onSaved();
+  };
+  if (!edit) return (
+    <span className="inline-flex items-center gap-1.5 text-xs">
+      {p.is_nhcx_live ? <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-semibold text-indigo-700">NHCX</span> : <span className="text-slate-600">{ROUTE_WORDS[p.channel ?? 'portal'].label}</span>}
+      {isAdmin && <button aria-label={`Change how ${p.name} is reached`} onClick={() => setEdit(true)} className="text-slate-400 hover:text-slate-700"><Pencil className="h-3.5 w-3.5" /></button>}
+    </span>
+  );
+  return (
+    <div className="space-y-1 text-xs">
+      <select value={channel} onChange={(e) => setChannel(e.target.value as PayerChannel)} className="w-full rounded border border-slate-200 px-1 py-1">
+        {(['portal', 'email', 'tms', 'direct'] as const).map((c) => <option key={c} value={c}>{ROUTE_WORDS[c].label}</option>)}
+      </select>
+      <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="NHCX code e.g. 1000003538@hcx" className="w-full rounded border border-slate-200 px-1 py-1" />
+      <label className="flex items-center gap-1"><input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} /> Live on NHCX</label>
+      {err && <p className="text-rose-600">{err}</p>}
+      <div className="flex gap-1"><button onClick={save} className="rounded bg-teal-600 px-2 py-1 font-semibold text-white">Save</button><button onClick={() => setEdit(false)} className="rounded bg-slate-100 px-2 py-1">Cancel</button></div>
+    </div>
+  );
+}
+
 export default function Payers() {
+  const isAdmin = useAuthStore((s) => s.staff?.role) === 'admin';
+  const [reloadKey, setReloadKey] = useState(0);
   const [payers, setPayers] = useState<Payer[]>([]);
   const [score, setScore] = useState<Record<string, PayerScorecard>>({});
   const [q, setQ] = useState('');
@@ -23,7 +59,7 @@ export default function Payers() {
     Promise.all([fetchPayers(), fetchPayerScorecard()]).then(([p, s]) => {
       setPayers(p); setScore(Object.fromEntries(s.map((x) => [x.payer_id, x]))); setLoading(false);
     });
-  }, []);
+  }, [reloadKey]);
 
   const rows = useMemo(() => payers
     .filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()))
@@ -44,17 +80,18 @@ export default function Payers() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="border-b bg-slate-50/80 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  <th className="px-4 py-3">Payer</th><th className="px-4 py-3">Type</th><th className="px-4 py-3 text-right">Claims</th>
+                  <th className="px-4 py-3">Payer</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">How claims go</th><th className="px-4 py-3 text-right">Claims</th>
                   <th className="px-4 py-3 text-right">Settled</th><th className="px-4 py-3 text-right">Rejection</th><th className="px-4 py-3 text-right">Deduction</th>
                   <th className="px-4 py-3 text-right">Avg days to pay</th><th className="px-4 py-3 text-right">Open queries</th><th className="px-4 py-3 text-right">Query reply window</th>
                 </tr></thead>
                 <tbody>
-                  {rows.length === 0 ? <tr><td colSpan={9} className="py-10 text-center text-sm text-slate-400">{onlyActive ? 'No claims filed yet — untick the box to see every payer.' : 'No payers match.'}</td></tr> : rows.map((p) => {
+                  {rows.length === 0 ? <tr><td colSpan={10} className="py-10 text-center text-sm text-slate-400">{onlyActive ? 'No claims filed yet — untick the box to see every payer.' : 'No payers match.'}</td></tr> : rows.map((p) => {
                     const s = score[p.id];
                     return (
                       <tr key={p.id} className="border-b border-slate-100 last:border-0">
                         <td className="px-4 py-3 font-medium">{p.name}{p.tenant_id && <span className="ml-1.5 text-[10px] text-slate-400">(ours)</span>}</td>
                         <td className="px-4 py-3"><span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${TYPE[p.type].cls}`}>{TYPE[p.type].label}</span></td>
+                        <td className="px-4 py-3"><RouteCell p={p} isAdmin={isAdmin} onSaved={() => setReloadKey((k) => k + 1)} /></td>
                         <td className="tabular px-4 py-3 text-right">{s?.total_claims ?? 0}</td>
                         <td className="tabular px-4 py-3 text-right">{s?.total_settled ? inrShort(s.total_settled) : '—'}</td>
                         <td className={`tabular px-4 py-3 text-right ${(s?.rejection_rate_pct ?? 0) > 10 ? 'font-semibold text-rose-600' : ''}`}>{s?.rejection_rate_pct != null ? `${s.rejection_rate_pct}%` : '—'}</td>
