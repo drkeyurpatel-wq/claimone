@@ -93,6 +93,7 @@ export default function Overview() {
         <Tile label="Money owed" value={inrShort(d.age.total)} sub={`${d.age.count.toLocaleString('en-IN')} bills`} />
         <Tile label="Older than 90 days" value={inrShort(d.age.over90)} sub={d.age.total ? `${Math.round((d.age.over90 / d.age.total) * 100)}% of owed` : undefined} tone={d.age.over90 ? 'text-rose-700' : undefined} />
         <Tile label="Lost to deductions (1 yr)" value={inrShort(d.ded.total)} />
+        {d.ded.fighting > 0 && <Tile label="Cuts being fought" value={inrShort(d.ded.fighting)} />}
         <Tile label="Collected this month" value={inrShort(d.coll[d.coll.length - 1]?.amount ?? 0)} />
       </div>
 

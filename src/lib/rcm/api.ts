@@ -8,6 +8,7 @@ import type { CaseRow } from './ecw';
 import { nextStep, type Step } from './worklist';
 import { CASE_SELECT } from './select';
 import { stageOf, type CaseMoney, type StageKey } from './journey';
+import { cutOf, cutStep, type Cut } from './cut';
 
 export { CASE_SELECT };
 
@@ -114,12 +115,21 @@ export async function fetchJourneys(centreId: string): Promise<Journey[]> {
   return all.map((x) => {
     const m = money.get(x.c.id) ?? null;
     const stage = stageOf(x.c, m, x.step);
-    return { ...x, step: paymentStep(x.step, stage, m), money: m, stage };
+    return { ...x, step: paymentStep(x.step, stage, m, cutOf(x.c, m)), money: m, stage };
   });
 }
 
-/** In payment, a part-paid bill is the hospital's turn: find the reason for the cut. */
-export function paymentStep(step: Step, stage: StageKey, m: CaseMoney | null): Step {
-  if (stage !== 'payment' || !m || m.allocated <= 0 || m.balance <= 100) return step;
+/** In payment: a cut waits for Accept / Fight (our turn), a fought cut is chased; a part-paid bill needs its reason. */
+export function paymentStep(step: Step, stage: StageKey, m: CaseMoney | null, cut: Cut | null = null): Step {
+  if (stage !== 'payment') return step;
+  const c = cut && cutStep(cut);
+  if (c) return { ...step, desk: 'payment', key: 'wait_payment', ...c };
+  if (!m || m.allocated <= 0 || m.balance <= 100) return step;
   return { ...step, ours: true, label: 'Paid less — find the reason on the letter', overdue: false, dueAt: null };
+}
+
+/** Accept the insurer's cut (the file then closes from its payments) or fight it (the cut stays due). */
+export async function decideCut(claimId: string, decision: 'accept' | 'fight', note?: string, category?: string) {
+  const { error } = await sb().rpc('clm_decide_cut', { p_claim: claimId, p_decision: decision, p_note: note ?? null, p_category: category ?? null });
+  if (error) throw new Error(error.message);
 }

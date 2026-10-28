@@ -5,6 +5,7 @@
  */
 import type { Claim } from '@/lib/claims/types';
 import { nextStep, type Step } from './worklist';
+import { cutOf } from './cut';
 
 export type StageKey = 'preauth' | 'stay' | 'discharge' | 'claim' | 'payment' | 'closed';
 
@@ -13,7 +14,7 @@ export const STAGES: { key: StageKey; label: string; hint: string }[] = [
   { key: 'stay', label: 'In hospital', hint: 'Watch the bill against the approval; ask for enhancement if it will cross.' },
   { key: 'discharge', label: 'Discharge & bill', hint: 'Final bill and discharge papers ready — send the claim.' },
   { key: 'claim', label: 'Claim', hint: 'Insurer decides: approved, cut, query or rejected.' },
-  { key: 'payment', label: 'Payment', hint: 'Money comes in from the weekly upload; give a reason for any cut.' },
+  { key: 'payment', label: 'Payment', hint: 'Money comes in from the weekly upload. Accept or fight any cut of ₹1,000 or more.' },
   { key: 'closed', label: 'Closed', hint: 'Paid and reconciled.' },
 ];
 
@@ -26,7 +27,11 @@ export interface CaseMoney {
 const PAYMENT_STEPS = new Set(['wait_payment']);
 
 export function stageOf(c: Claim, money: CaseMoney | null, step: Step = nextStep(c)): StageKey {
-  if (c.status === 'closed' || c.status === 'written_off' || c.status === 'settled') return 'closed';
+  if (c.status === 'closed' || c.status === 'written_off') return 'closed';
+  // a cut waiting for Accept / Fight, or being fought, keeps the file in payment
+  const cut = cutOf(c, money);
+  if (cut.needsDecision || (cut.state === 'fought' && cut.amount >= 1)) return 'payment';
+  if (c.status === 'settled') return 'closed';
   if (money && (money.recon_status === 'settled' || (money.status === 'closed' && Math.abs(money.balance) <= 1))) return 'closed';
   if (PAYMENT_STEPS.has(step.key) || (money && money.allocated > 0)) return 'payment';
   switch (step.key) {

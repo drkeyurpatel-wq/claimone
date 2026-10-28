@@ -89,7 +89,9 @@ export interface LeakLite { kind: string; category: string | null; doctor_name: 
 export function deductions(rows: LeakLite[]) {
   const byReason = new Map<string, number>();
   const byDoctor = new Map<string, number>();
+  let fighting = 0;
   for (const r of rows) {
+    if (r.kind === 'fighting') { fighting += r.amount; continue; }
     if (r.kind !== 'deduction') continue;
     byReason.set(r.category ?? 'unknown', (byReason.get(r.category ?? 'unknown') ?? 0) + r.amount);
     const d = !r.doctor_name || r.doctor_name === '—' ? 'Not recorded' : r.doctor_name;
@@ -98,6 +100,8 @@ export function deductions(rows: LeakLite[]) {
   const total = [...byReason.values()].reduce((s, x) => s + x, 0);
   return {
     total: r0(total),
+    /** Cuts the desk is fighting: not lost yet. */
+    fighting: r0(fighting),
     byReason: [...byReason].map(([k, v]) => ({ reason: DEDUCTION_WORDS[k] ?? k, amount: r0(v) })).sort((a, b) => b.amount - a.amount),
     byDoctor: [...byDoctor].map(([doctor, amount]) => ({ doctor, amount: r0(amount) })).sort((a, b) => b.amount - a.amount).slice(0, 10),
   };

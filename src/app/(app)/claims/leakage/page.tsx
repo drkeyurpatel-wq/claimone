@@ -47,19 +47,23 @@ export default function Leakage() {
     const from = new Date(); from.setMonth(from.getMonth() - months + 1); from.setDate(1);
     return rows.filter((r) => new Date(r.month) >= from);
   }, [rows, months]);
+  // cuts being fought are not lost (yet): shown apart, left out of every total below
+  const fighting = useMemo(() => recent.filter((r) => r.kind === 'fighting'), [recent]);
+  const fightingTotal = fighting.reduce((s, r) => s + Number(r.amount), 0);
+  const lost = useMemo(() => recent.filter((r) => r.kind !== 'fighting'), [recent]);
 
   const group = (key: (r: LeakageRow) => string, byReason = false, top = 10) => {
     const m = new Map<string, { amount: number; preventable?: boolean }>();
-    for (const r of recent) {
+    for (const r of lost) {
       const k = key(r); const v = m.get(k) ?? { amount: 0, preventable: byReason ? r.is_preventable : undefined };
       v.amount += Number(r.amount); m.set(k, v);
     }
     return [...m.entries()].map(([label, v]) => ({ label, ...v })).sort((a, b) => b.amount - a.amount).slice(0, top);
   };
 
-  const total = recent.reduce((s, r) => s + Number(r.amount), 0);
-  const preventable = recent.filter((r) => r.is_preventable).reduce((s, r) => s + Number(r.amount), 0);
-  const rejections = recent.filter((r) => r.kind === 'rejection').reduce((s, r) => s + r.items, 0);
+  const total = lost.reduce((s, r) => s + Number(r.amount), 0);
+  const preventable = lost.filter((r) => r.is_preventable).reduce((s, r) => s + Number(r.amount), 0);
+  const rejections = lost.filter((r) => r.kind === 'rejection').reduce((s, r) => s + r.items, 0);
 
   if (!centreId) return <NoCentre />;
   return (
@@ -73,10 +77,11 @@ export default function Leakage() {
         <div className="m-6 rounded-2xl border bg-white"><Empty icon={TrendingDown} title="No deductions recorded yet" sub="This fills when a claim is approved for less than billed, or a payment comes in short and its reason is given." /></div>
       ) : (
         <div className="space-y-4 px-6 py-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <StatCard label="Disallowed" value={inrShort(total)} icon={TrendingDown} tone="rose" />
             <StatCard label="Preventable" value={inrShort(preventable)} sub={total ? `${Math.round((100 * preventable) / total)}% — fixable at admission and billing` : undefined} icon={TrendingDown} tone="amber" />
             <StatCard label="Rejected claims" value={rejections} icon={TrendingDown} />
+            <StatCard label="Being fought" value={inrShort(fightingTotal)} sub={fighting.length ? `${fighting.reduce((s, r) => s + r.items, 0)} files — not counted as lost` : 'No cuts being fought'} icon={TrendingDown} tone="amber" />
           </div>
           <Bars title="By reason" rows={group((r) => DISALLOWANCE_CATEGORIES[r.category as DisallowanceCategory]?.label ?? r.category, true)} />
           <div className="grid gap-4 lg:grid-cols-2">

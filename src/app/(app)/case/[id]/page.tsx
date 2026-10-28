@@ -10,9 +10,9 @@ import { Loader2, ArrowLeft, CheckCircle2, AlertTriangle, Inbox, Send, History }
 import { useAuthStore } from '@/lib/store/auth';
 import { useClaimsStore } from '@/lib/claims/store';
 import { transition, updateClaimFields, fetchClaimTimeline } from '@/lib/claims/api';
-import { addAdjustment, setDisputed, fetchReceivable } from '@/lib/recon/api';
+import { addAdjustment, fetchReceivable } from '@/lib/recon/api';
 import { sb } from '@/lib/supabase/browser';
-import { fetchCase, fetchMoneyFor, fetchNhcxMessages, markNhcxHandled, paymentStep, type NhcxMessage } from '@/lib/rcm/api';
+import { fetchCase, fetchMoneyFor, fetchNhcxMessages, markNhcxHandled, paymentStep, decideCut, type NhcxMessage } from '@/lib/rcm/api';
 import { nextStep, dueText } from '@/lib/rcm/worklist';
 import { STAGES, stageOf, stageStates, type CaseMoney, type StageKey } from '@/lib/rcm/journey';
 import { actionsFor, type CaseAction } from '@/lib/rcm/actions';
@@ -22,6 +22,8 @@ import type { Claim, TimelineEvent } from '@/lib/claims/types';
 import { ReadinessPanel } from '@/components/claim/ReadinessPanel';
 import { NhcxDetails } from '@/components/case/NhcxDetails';
 import { StageTracker } from '@/components/case/StageTracker';
+import { CutPanel } from '@/components/case/CutPanel';
+import { cutOf } from '@/lib/rcm/cut';
 import { inr, shortDate, dateTime, useToast } from '@/components/ui';
 
 const TONE: Record<CaseAction['tone'], string> = {
@@ -97,7 +99,8 @@ export default function CasePage() {
 
   const raw = useMemo(() => (c ? nextStep(c) : null), [c]);
   const stage = c && raw ? stageOf(c, m, raw) : 'preauth';
-  const step = raw ? paymentStep(raw, stage, m) : null;
+  const cutNow = useMemo(() => (c ? cutOf(c, m) : null), [c, m]);
+  const step = raw ? paymentStep(raw, stage, m, cutNow) : null;
   const shown = view ?? stage;
   const states = c ? stageStates(c, stage) : null;
   const route = routeFor(c?.clm_payers, centreOnNhcx);
@@ -175,7 +178,7 @@ export default function CasePage() {
         await addAdjustment(m.receivable_id, { kind: 'rounding', amount: Math.round(m.balance * 100) / 100, reason_text: 'Small difference closed' });
       } else {
         if (!why.text.trim()) throw new Error('Write why you are disputing it.');
-        await setDisputed(m.receivable_id, why.text.trim());
+        await decideCut(c!.id, 'fight', why.text.trim());
       }
       setWhy({ cat: '', text: '' }); flash('Saved'); await reload();
     } catch (e) { setError((e as Error).message); }
@@ -317,7 +320,15 @@ export default function CasePage() {
             ))}
           </ul>
         )}
-        {shown === 'payment' && isNow && canWrite && m && m.balance > 1 && m.allocated > 0 && m.recon_status !== 'disputed' && (
+        {/* The insurer's cut: Accept the cut, or Fight it */}
+        {(shown === 'payment' || shown === 'closed') && cutNow && cutNow.state !== 'none' && (
+          <CutPanel c={c} cut={cutNow} canWrite={canWrite}
+            reason={pay?.adjustments.filter((a) => a.kind === 'deduction').map((a) => a.reason_text ?? (a.category ? DISALLOWANCE_CATEGORIES[a.category as keyof typeof DISALLOWANCE_CATEGORIES]?.label ?? a.category : null)).pop() ?? null}
+            shortfall={m && m.allocated > 0 && !pay?.adjustments.some((a) => a.kind === 'deduction') ? m.balance : 0}
+            onDone={async (msg) => { flash(msg); await reload(); }} />
+        )}
+        {shown === 'payment' && isNow && canWrite && m && m.balance > 1 && m.allocated > 0 && m.recon_status !== 'disputed'
+          && !(cutNow && (cutNow.state === 'pending' || cutNow.state === 'fought')) && (
           <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
             {m.balance <= 100 ? (
               <button onClick={() => payAction('small')} disabled={busy} className="min-h-12 rounded-xl bg-slate-700 px-5 text-base font-semibold text-white">Close the small difference of {money(m.balance)}</button>
@@ -330,13 +341,13 @@ export default function CasePage() {
               <input value={why.text} onChange={(e) => setWhy((w) => ({ ...w, text: e.target.value }))} placeholder="What the letter says" className={field} />
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => payAction('reason')} disabled={busy} className="min-h-12 rounded-xl bg-teal-600 px-5 text-base font-semibold text-white">Save reason</button>
-                <button onClick={() => payAction('dispute')} disabled={busy} className="min-h-12 rounded-xl bg-amber-500 px-5 text-base font-semibold text-white">We will fight it</button>
+                <button onClick={() => payAction('dispute')} disabled={busy} className="min-h-12 rounded-xl bg-amber-500 px-5 text-base font-semibold text-white">Fight it</button>
               </div>
             </>}
             {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-base text-rose-800">{error}</p>}
           </div>
         )}
-        {shown === 'payment' && m?.recon_status === 'disputed' && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-base text-amber-900">Disputed with the insurer — follow up until it is paid.</p>}
+        {shown === 'payment' && m?.recon_status === 'disputed' && cutNow?.state !== 'fought' && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-base text-amber-900">Disputed with the insurer — follow up until it is paid.</p>}
         {shown === 'payment' && isNow && m && m.allocated === 0 && <p className="mt-4 text-base text-slate-700">When the payment letter or PMJAY sheet comes, upload it on <Link href="/pay" className="font-semibold text-teal-700 underline">Upload payments</Link> — it lands here by itself.</p>}
 
         {/* NHCX replies sit on the stage they answer */}

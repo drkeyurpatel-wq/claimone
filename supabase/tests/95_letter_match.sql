@@ -15,8 +15,12 @@ set role authenticated;
 
 select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'letter.xlsx',
   '[{"source":"letter","claim_ref":"DEMO-CLM-X","patient_name":"TEST MATCHNAME","approved_amount":42000,"tds_amount":840,"deduction_amount":2000,"deduction_reason":"Non-payable items","net_amount":41160,"utr":"UTR-M1","payment_date":"2026-10-28"}]'::jsonb);
+select t.check((select recon_status = 'settled' from clm_v_receivable_balance where claim_id = (select id from clm_claims where admission_ref = 'IPS-M1')),
+               'letter found the case by patient and balanced its bill');
+select t.check((select status = 'claim_approved' from clm_claims where admission_ref = 'IPS-M1'), 'the ₹2,000 cut waits for a decision');
+select clm_decide_cut((select id from clm_claims where admission_ref = 'IPS-M1'), 'accept');
 select t.check((select status = 'settled' and settled_amount = 41160 and deduction_amount = 2000 from clm_claims where admission_ref = 'IPS-M1'),
-               'letter found the case by patient and closed it');
+               'accepted → the file closes');
 select t.check((select count(*) = 0 from clm_receivables where claim_ref = 'DEMO-CLM-X'), 'no stray bill made');
 
 -- a letter for nobody we know makes a bill that owes approved + deduction, not a false "paid more"

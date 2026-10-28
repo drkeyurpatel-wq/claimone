@@ -35,6 +35,8 @@ select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'letter.pdf',
   '[{"source":"letter","claim_ref":"CL-A1","approved_amount":80000,"claimed_amount":100000,"tds_amount":8000,"deduction_amount":20000,"deduction_reason":"Room rent","net_amount":72000,"utr":"UTR-A1","payment_date":"2026-10-20"}]'::jsonb);
 select t.check((select recon_status = 'settled' and deduction = 0 and balance = 0 from clm_v_receivable_balance where bill_no = 'IPB-A1'),
                'the approval cut is not booked again — bill settles, not "paid more"');
+select t.check((select status = 'claim_partial' from clm_claims where admission_ref = 'IPS-A1'), 'the ₹20,000 cut waits for a decision');
+select clm_decide_cut((select id from clm_claims where admission_ref = 'IPS-A1'), 'accept');
 select t.check((select status = 'settled' and deduction_amount = 20000 from clm_claims where admission_ref = 'IPS-A1'), 'claim settled, deduction ₹20,000 once');
 select t.check((select sum(amount) - (select s from leak0) = 20000 from clm_v_leakage), 'leakage counts ₹20,000 once');
 

@@ -24,12 +24,15 @@ insert into clm_adjustments (tenant_id, receivable_id, kind, amount, reason_text
 select tenant_id, id, 'tds', 800, 'TDS' from clm_receivables where claim_id = (select id from clm_claims where admission_ref = 'IPS-S1');
 select t.check((select status = 'claim_partial' from clm_claims where admission_ref = 'IPS-S1'), 'still open while ₹2,200 is unexplained');
 
--- the desk gives the reason for the short payment → the claim settles itself
+-- the desk gives the reason for the short payment, then accepts the cut → the claim settles itself
 set role authenticated;
 select t.act_as('00000000-0000-0000-0000-0000000000d1');
 insert into clm_adjustments (tenant_id, receivable_id, kind, amount, category, reason_text)
 select tenant_id, id, 'deduction', 2200, 'tariff_excess', 'above package' from clm_receivables
 where claim_id = (select id from clm_claims where admission_ref = 'IPS-S1');
+select t.check((select status = 'claim_partial' from clm_claims where admission_ref = 'IPS-S1'),
+               'a ₹4,200 cut waits for a person to accept or fight it');
+select clm_decide_cut((select id from clm_claims where admission_ref = 'IPS-S1'), 'accept', 'agreed with TPA');
 select t.check((select status = 'settled' and settled_amount = 37000 and tds_amount = 800 and deduction_amount = 4200
                        and approved_amount = 40000 and settlement_utr = 'UTR-S1'
                 from clm_claims where admission_ref = 'IPS-S1'), 'claim settled from the money: net 37,000, TDS 800, deduction 4,200');

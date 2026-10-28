@@ -85,6 +85,10 @@ export interface Claim {
   bed_category?: string | null;
   sponsor_name?: string | null;
   status_changed_at?: string | null;
+  /** Accept / Fight on the insurer's cut (0019). */
+  cut_decision?: 'accepted' | 'fought' | null;
+  cut_note?: string | null;
+  cut_decided_at?: string | null;
   // NHCX case details (0014)
   patient_gender?: 'male' | 'female' | 'other' | 'unknown' | null;
   patient_age_years?: number | null;
@@ -197,7 +201,7 @@ export interface LeakageRow {
   payer_id: string;
   payer_name: string;
   doctor_name: string;
-  kind: 'deduction' | 'rejection';
+  kind: 'deduction' | 'rejection' | 'fighting';
   category: string;
   is_preventable: boolean;
   month: string;
