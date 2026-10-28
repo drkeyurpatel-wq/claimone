@@ -1,13 +1,14 @@
 {
   "name": "claimone-bot",
   "version": "1.0.0",
-  "description": "ClaimOne portal bot \u2014 status polling, pre-auth filing and letter download on payer portals",
+  "description": "ClaimOne portal bot — status polling, pre-auth filing and letter download on payer portals",
   "private": true,
   "scripts": {
     "build": "tsc",
     "start": "node dist/scheduler.js",
     "once": "node dist/scheduler.js --once",
-    "install:browser": "npx playwright install chromium --with-deps"
+    "install:browser": "npx playwright install chromium --with-deps",
+    "test": "tsc && node --test dist/*.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -15,7 +16,8 @@
     "node-cron": "^3.0.3",
     "dotenv": "^16.4.0",
     "pino": "^9.0.0",
-    "pino-pretty": "^11.0.0"
+    "pino-pretty": "^11.0.0",
+    "read-excel-file": "5.8.6"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

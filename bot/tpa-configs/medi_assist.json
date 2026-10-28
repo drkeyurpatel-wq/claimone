@@ -189,6 +189,73 @@
           ]
         }
       ]
+    },
+    "download_payments": {
+      "description": "Download the hospital's settlement / payment statement for {{from_date}}–{{to_date}}. UNVERIFIED: menu path and selectors are guesses until watched on the live portal.",
+      "timeout_seconds": 120,
+      "steps": [
+        {
+          "action": "goto",
+          "url": "/payments/settlement-report"
+        },
+        {
+          "action": "wait",
+          "selector": "input[name='fromDate'], #fromDate, input[placeholder*='From']"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='fromDate'], #fromDate, input[placeholder*='From']",
+          "value": "{{from_date}}"
+        },
+        {
+          "action": "fill",
+          "selector": "input[name='toDate'], #toDate, input[placeholder*='To']",
+          "value": "{{to_date}}"
+        },
+        {
+          "action": "click",
+          "selector": "button.search, #btnSearch, button:has-text('Search')"
+        },
+        {
+          "action": "sleep",
+          "ms": 2000
+        },
+        {
+          "action": "screenshot",
+          "name": "payments_report"
+        },
+        {
+          "action": "if_visible",
+          "selector": "button:has-text('Excel'), a:has-text('Excel'), #btnExport",
+          "then": [
+            {
+              "action": "download",
+              "selector": "button:has-text('Excel'), a:has-text('Excel'), #btnExport",
+              "output": "payments_file"
+            }
+          ],
+          "else": [
+            {
+              "action": "extract_table",
+              "selector": "table tbody tr",
+              "columns": [
+                "Claim No",
+                "Patient Name",
+                "Bill No",
+                "Claimed",
+                "Approved",
+                "TDS",
+                "Deduction",
+                "Deduction Reason",
+                "Net Paid",
+                "UTR",
+                "Payment Date"
+              ],
+              "output": "payments_table"
+            }
+          ]
+        }
+      ]
     }
   },
   "status_mapping": {

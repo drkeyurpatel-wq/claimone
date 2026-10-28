@@ -36,6 +36,9 @@ export interface TPAConfig {
     check_status: FlowDefinition;      // required — minimum viable
     download_letter?: FlowDefinition;
     check_preauth_status?: FlowDefinition;
+    /** Downloads the hospital's payment / settlement statement. Its last step must be a
+     *  'download' with output "payments_file", or an 'extract_table' with output "payments_table". */
+    download_payments?: FlowDefinition;
     enhancement?: FlowDefinition;
   };
   status_mapping: Record<string, string>;  // portal status → clm_status enum
@@ -72,7 +75,7 @@ export type FlowStep =
 
 // ═══ Bot Run Types ═══
 
-export type BotAction = 'submit_preauth' | 'submit_claim' | 'check_status' | 'download_letter' | 'poll_all';
+export type BotAction = 'submit_preauth' | 'submit_claim' | 'check_status' | 'download_letter' | 'download_payments' | 'poll_all';
 export type BotRunStatus = 'running' | 'success' | 'partial' | 'failed' | 'timeout' | 'captcha_blocked' | 'skipped';
 
 export interface BotRunRecord {

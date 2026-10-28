@@ -166,3 +166,19 @@ export async function acceptPaidAmount(id: string, newExpected: number) {
   const { error } = await sb().from('clm_receivables').update({ expected_amount: Math.max(0, Math.round(newExpected * 100) / 100) }).eq('id', id);
   if (error) throw new Error(error.message);
 }
+
+// ─── Statements the portal bot downloaded ───────────────────────────
+
+export interface InboxItem { id: string; source_label: string; file_name: string; rows: string[][]; row_count: number; created_at: string }
+
+export async function fetchInbox(centreId: string): Promise<InboxItem[]> {
+  const { data, error } = await sb().from('clm_bot_inbox').select('id, source_label, file_name, rows, row_count, created_at')
+    .eq('centre_id', centreId).is('used_at', null).order('created_at').limit(50);
+  if (error) { console.error('fetchInbox', error.code); return []; }
+  return (data ?? []) as InboxItem[];
+}
+
+export async function markInboxUsed(id: string) {
+  const { error } = await sb().from('clm_bot_inbox').update({ used_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw new Error(error.message);
+}

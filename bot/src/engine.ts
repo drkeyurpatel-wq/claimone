@@ -5,13 +5,18 @@ import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TPAConfig, FlowStep, FlowDefinition, BotAction, BotRunRecord, ClaimData } from './types';
-import { fetchPendingClaims, applyPortalResult, recordEvent, logBotRun, updateBotRun, uploadLetter, findPayerId, letterCodeFor } from './supabase';
+import { fetchPendingClaims, applyPortalResult, recordEvent, logBotRun, updateBotRun, uploadLetter, findPayerId, letterCodeFor, dropStatement } from './supabase';
+import { statementRows, statementWindow } from './statement';
 import { logger } from './logger';
 
 // ═══ Config Loader ═══
 
+// TPA_CONFIG_DIR lets a test point the bot at a practice portal; normally unset.
+const configDir = () => process.env.TPA_CONFIG_DIR || path.join(__dirname, '..', 'tpa-configs');
+
 export function loadTPAConfig(tpaCode: string): TPAConfig {
-  const configPath = path.join(__dirname, '..', 'tpa-configs', `${tpaCode}.json`);
+  if (!/^[a-z0-9_]+$/.test(tpaCode)) throw new Error('Bad TPA code');
+  const configPath = path.join(configDir(), `${tpaCode}.json`);
   if (!fs.existsSync(configPath)) {
     throw new Error(`TPA config not found: ${configPath}`);
   }
@@ -19,7 +24,7 @@ export function loadTPAConfig(tpaCode: string): TPAConfig {
 }
 
 export function listAvailableTPAs(): string[] {
-  const dir = path.join(__dirname, '..', 'tpa-configs');
+  const dir = configDir();
   return fs.readdirSync(dir)
     .filter(f => f.endsWith('.json'))
     .map(f => f.replace('.json', ''));
@@ -56,6 +61,7 @@ export class BotEngine {
     logger.info({ tpa: this.config.tpa_code }, 'Initializing browser');
     this.browser = await chromium.launch({
       headless: process.env.HEADLESS !== 'false',
+      executablePath: process.env.CHROMIUM_PATH || undefined, // optional: use an already-installed Chromium
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     });
     this.context = await this.browser.newContext({
@@ -378,6 +384,24 @@ export class BotEngine {
     return { processed, updated };
   }
 
+  /** Download this week's payment statement and drop it in the inbox for staff. */
+  async downloadPayments(payerId: string): Promise<{ processed: number; updated: number }> {
+    const flow = this.config.flows.download_payments;
+    if (!flow) throw new Error('download_payments flow not defined');
+    // {{from_date}} / {{to_date}} in the flow: the last 14 days, so a missed week is caught next time
+    const result = await this.executeFlow('download_payments', flow, statementWindow(new Date(), 14) as unknown as ClaimData);
+    if (!result.success) return { processed: 0, updated: 0 };
+    const rows = await statementRows(result.outputs);
+    if (rows.length < 2) {
+      logger.info({ tpa: this.config.tpa_code }, 'Statement has no payment rows');
+      return { processed: 1, updated: 0 };
+    }
+    const name = result.outputs.payments_file_filename || `${this.config.tpa_code}_payments.xlsx`;
+    const fresh = await dropStatement(this.centreId, payerId, `${this.config.tpa_name} website`, name, rows);
+    logger.info({ tpa: this.config.tpa_code, rows: rows.length, fresh }, fresh ? 'Statement ready for staff' : 'Statement already in the inbox');
+    return { processed: 1, updated: fresh ? 1 : 0 };
+  }
+
   // ─── Rate Limiter ───
   private lastRequest = 0;
   private async rateLimit(): Promise<void> {
@@ -429,9 +453,10 @@ export async function runBotCycle(tpaCode: string, action: BotAction, centreId: 
     if (act === 'check_status') result = await engine.pollClaimStatuses(payerId);
     else if (act === 'submit_preauth') result = await engine.submitPreauths(payerId);
     else if (act === 'download_letter') result = await engine.downloadLetters(payerId);
+    else if (act === 'download_payments') result = await engine.downloadPayments(payerId);
 
     await updateBotRun(runId, {
-      status: result.processed > 0 && result.updated === 0 && act !== 'check_status' ? 'partial' : 'success',
+      status: result.processed > 0 && result.updated === 0 && act !== 'check_status' && act !== 'download_payments' ? 'partial' : 'success',
       completed_at: new Date().toISOString(), duration_ms: Date.now() - startTime,
       claims_processed: result.processed, claims_updated: result.updated,
     });

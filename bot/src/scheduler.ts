@@ -54,6 +54,9 @@ const SCHEDULE = {
   // Letter download: twice daily
   letter_download: '0 10,16 * * 1-6',   // Mon-Sat, 10 AM and 4 PM
 
+  // Payment statements: every morning; staff find them on "Upload payments"
+  payments_download: '20 9 * * 1-6',    // Mon-Sat, 9:20 AM
+
   // Health check: every 5 minutes (just logs)
   health_check: '*/5 * * * *',
 };
@@ -109,6 +112,19 @@ async function main() {
     }
   }), { timezone: 'Asia/Kolkata' });
 
+  // ─── Payment statements (daily) ───
+  cron.schedule(SCHEDULE.payments_download, () => serial(async () => {
+    logger.info('─── Payment Statement Cycle ───');
+    for (const tpa of tpas) {
+      try {
+        const config = loadTPAConfig(tpa);
+        if (config.flows.download_payments) await runBotCycle(tpa, 'download_payments', CENTRE_ID);
+      } catch (e: any) {
+        logger.error({ tpa, error: e.message }, 'Payment statement download failed');
+      }
+    }
+  }), { timezone: 'Asia/Kolkata' });
+
   // ─── Housekeeping ───
   cron.schedule('15 2 * * *', () => pruneScreenshots(), { timezone: 'Asia/Kolkata' });
   pruneScreenshots();
@@ -123,6 +139,7 @@ async function main() {
       status_poll: SCHEDULE.status_poll,
       preauth_submit: SCHEDULE.preauth_submit,
       letter_download: SCHEDULE.letter_download,
+      payments_download: SCHEDULE.payments_download,
     }
   }, 'Cron jobs scheduled');
 

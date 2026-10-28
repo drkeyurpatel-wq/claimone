@@ -45,6 +45,7 @@ const PENDING_STATUSES: Record<Exclude<BotAction, 'poll_all'>, string[]> = {
   check_status: ['preauth_pending', 'preauth_query', 'preauth_approved', 'preauth_enhanced',
     'claim_submitted', 'claim_under_review', 'claim_query', 'claim_approved', 'claim_partial', 'settlement_pending'],
   download_letter: ['preauth_approved', 'preauth_enhanced', 'claim_approved', 'claim_partial'],
+  download_payments: [],
 };
 
 const CLAIM_FIELDS = 'id, claim_number, status, patient_name, patient_phone, patient_uhid, abha_id, primary_diagnosis, icd_code, procedure_name, treating_doctor_name, department_name, admission_date, discharge_date, estimated_amount, approved_amount, claimed_amount, tpa_claim_number, tpa_preauth_number, policy_number, policy_holder_name';
@@ -134,4 +135,21 @@ export async function uploadLetter(claimId: string, docCode: string, fileName: s
     file_path: path, file_size_bytes: buffer.length, mime_type: mimeType, source: 'bot',
   });
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Drop a downloaded payment statement into the inbox. Staff see it on
+ * "Upload payments" and press Save; the bot itself never writes to bills.
+ * Returns false when the same statement was already dropped.
+ */
+export async function dropStatement(centreId: string, payerId: string | null, sourceLabel: string, fileName: string,
+  rows: string[][]): Promise<boolean> {
+  const sb = await getSupabase();
+  const { error } = await sb.from('clm_bot_inbox').insert({
+    tenant_id: tenantId, centre_id: centreId, payer_id: payerId, source_label: sourceLabel,
+    file_name: fileName.slice(0, 200), rows, row_count: rows.length,
+  });
+  if (error?.code === '23505') return false;
+  if (error) throw new Error(`Could not save the statement (${error.code})`); // no row contents in errors
+  return true;
 }

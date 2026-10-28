@@ -5,14 +5,14 @@
 // add up goes to the Check list.
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Upload, Loader2, CheckCircle2, FileText, X, ClipboardPaste, ArrowRight } from 'lucide-react';
+import { Upload, Loader2, CheckCircle2, FileText, X, ClipboardPaste, ArrowRight, Bot, Plus } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { parseCsv } from '@/lib/recon/parse';
 import { cellsToRows, parsePaymentSheet, summarise, type Cell, type PaymentLine } from '@/lib/recon/payments';
-import { applyPayments, readLetter, fetchExceptions, type ApplyResult } from '@/lib/recon/api';
-import { NoCentre, inrShort } from '@/components/ui';
+import { applyPayments, readLetter, fetchExceptions, fetchInbox, markInboxUsed, type ApplyResult, type InboxItem } from '@/lib/recon/api';
+import { NoCentre, inrShort, shortDate } from '@/components/ui';
 
-type Item = { id: number; name: string; state: 'reading' | 'ready' | 'error'; lines: PaymentLine[]; error?: string };
+type Item = { id: number; name: string; state: 'reading' | 'ready' | 'error'; lines: PaymentLine[]; error?: string; inboxId?: string };
 
 /** Phone photos are big: shrink to ~2000px JPEG before upload. */
 async function shrinkImage(file: File): Promise<Blob> {
@@ -40,6 +40,10 @@ export default function UploadPayments() {
   const [result, setResult] = useState<ApplyResult | null>(null);
   const [failMsg, setFailMsg] = useState('');
   const [toCheck, setToCheck] = useState<number | null>(null);
+  const [inbox, setInbox] = useState<InboxItem[]>([]);
+
+  const loadInbox = useCallback(async () => { if (centreId) setInbox(await fetchInbox(centreId)); }, [centreId]);
+  useEffect(() => { loadInbox(); }, [loadInbox]);
 
   const countChecks = useCallback(async () => { if (centreId) setToCheck((await fetchExceptions(centreId)).length); }, [centreId]);
   useEffect(() => { countChecks(); }, [countChecks]);
@@ -85,6 +89,20 @@ export default function UploadPayments() {
     } catch (e) { update(id, { state: 'error', error: (e as Error).message }); }
   };
 
+  // a statement the bot downloaded from a TPA website: read it like an uploaded file
+  const addFromInbox = (b: InboxItem) => {
+    setResult(null); setFailMsg('');
+    const id = ++seq;
+    try {
+      const r = parsePaymentSheet(b.rows, b.source_label.replace(/ website$/, ''));
+      if (!r.rows.length) throw new Error('No payments found in this statement.');
+      setItems((xs) => [...xs, { id, name: `${b.source_label} — ${b.file_name}`, state: 'ready', lines: r.rows, inboxId: b.id }]);
+    } catch (e) {
+      setItems((xs) => [...xs, { id, name: `${b.source_label} — ${b.file_name}`, state: 'error', lines: [], error: (e as Error).message, inboxId: b.id }]);
+    }
+  };
+  const added = new Set(items.map((x) => x.inboxId).filter(Boolean));
+
   const ready = items.filter((x) => x.state === 'ready');
   const busy = items.some((x) => x.state === 'reading');
 
@@ -97,11 +115,12 @@ export default function UploadPayments() {
         setSaving(`Saving ${it.name}…`);
         const r = await applyPayments(centreId, it.name, it.lines, (k) => setSaving(`Saving ${it.name}: ${n(k)} of ${n(it.lines.length)}`));
         for (const k of Object.keys(total) as (keyof ApplyResult)[]) total[k] += r[k];
+        if (it.inboxId) await markInboxUsed(it.inboxId).catch(() => {});
       }
       setResult(total);
       setItems([]);
     } catch (e) { setFailMsg((e as Error).message); }
-    await countChecks();
+    await Promise.all([countChecks(), loadInbox()]);
     setSaving('');
   };
 
@@ -130,6 +149,23 @@ export default function UploadPayments() {
           <input type="file" multiple accept=".xlsx,.xls,.csv,.pdf,image/*" className="hidden"
             onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
         </label>
+
+        {inbox.filter((b) => !added.has(b.id)).length > 0 && (
+          <div className="mt-4 rounded-xl border border-teal-200 bg-teal-50 p-4">
+            <p className="flex items-center gap-2 text-base font-semibold text-teal-900"><Bot className="h-5 w-5" /> Downloaded from TPA websites</p>
+            <ul className="mt-2 space-y-2">
+              {inbox.filter((b) => !added.has(b.id)).map((b) => (
+                <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-3">
+                  <span className="text-base text-slate-800"><b>{b.source_label}</b> · {shortDate(b.created_at)}</span>
+                  <button onClick={() => addFromInbox(b)}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-600 px-4 text-base font-semibold text-white hover:bg-teal-700">
+                    <Plus className="h-5 w-5" /> Add
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <button onClick={() => setShowPaste((v) => !v)}
           className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-base font-medium text-teal-700 hover:bg-teal-50">
