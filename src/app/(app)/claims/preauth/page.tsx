@@ -60,7 +60,7 @@ export default function PreauthQueue() {
                   {shown.map((c) => {
                     const h = c.status === 'preauth_pending' ? hoursWaiting(c) : null;
                     return (
-                      <tr key={c.id} onClick={() => router.push(`/claims/${c.id}`)} className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-teal-50/40">
+                      <tr key={c.id} onClick={() => router.push(`/case/${c.id}`)} className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-teal-50/40">
                         <td className="px-4 py-3"><p className="font-medium">{c.patient_name}</p><p className="font-mono text-[11px] text-slate-500">{c.claim_number}</p></td>
                         <td className="px-4 py-3 text-xs text-slate-600">{c.clm_payers?.name}</td>
                         <td className="max-w-xs truncate px-4 py-3 text-xs text-slate-600">{c.primary_diagnosis ?? '—'}</td>

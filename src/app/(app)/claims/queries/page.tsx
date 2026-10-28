@@ -74,7 +74,7 @@ export default function QueryDesk() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                      <Link href={`/claims/${x.claim_id}`} className="font-semibold text-slate-900 hover:underline">{x.patient_name}</Link>
+                      <Link href={`/case/${x.claim_id}`} className="font-semibold text-slate-900 hover:underline">{x.patient_name}</Link>
                       <span className="font-mono text-slate-400">{x.claim_number}</span>
                       <span className="text-slate-500">· {x.payer_name}</span>
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${p.bg} ${p.color}`}>{p.label}</span>
@@ -107,7 +107,7 @@ export default function QueryDesk() {
               <table className="w-full text-sm"><tbody>
                 {rejected.map((c) => (
                   <tr key={c.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3"><Link href={`/claims/${c.id}`} className="font-medium hover:underline">{c.patient_name}</Link><p className="font-mono text-[11px] text-slate-400">{c.claim_number}</p></td>
+                    <td className="px-4 py-3"><Link href={`/case/${c.id}`} className="font-medium hover:underline">{c.patient_name}</Link><p className="font-mono text-[11px] text-slate-400">{c.claim_number}</p></td>
                     <td className="px-4 py-3 text-xs text-slate-600">{c.clm_payers?.name}</td>
                     <td className="px-4 py-3"><StatusPill status={c.status} /></td>
                     <td className="tabular px-4 py-3 text-right font-semibold">{inrShort(c.claimed_amount ?? c.estimated_amount)}</td>

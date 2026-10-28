@@ -64,7 +64,7 @@ export default function ReceivablePage() {
         <p className="mt-1 text-xs text-slate-500">
           {rv.debtor_name} ({rv.debtor_type}) · bill {rv.bill_no ?? '—'} · {shortDate(rv.bill_date)} · {rv.age_days} days
           {rv.claim_ref ? ` · claim ${rv.claim_ref}` : ''}{rv.care_of ? ` · ${rv.care_of}` : ''}
-          {rv.claim_id && <> · <Link href={`/claims/${rv.claim_id}`} className="text-teal-700 underline">open claim</Link></>}
+          {rv.claim_id && <> · <Link href={`/case/${rv.claim_id}`} className="text-teal-700 underline">open patient file</Link></>}
         </p>
         {rv.recorded_utr && <p className="mt-1 text-xs text-slate-500">UTR recorded by the team: <span className="font-mono">{rv.recorded_utr}</span></p>}
       </div>

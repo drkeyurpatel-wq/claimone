@@ -60,7 +60,7 @@ export default function ClaimsDesk() {
         <button className={btn.ghost} onClick={() => { refreshStats(); loadClaims(useClaimsStore.getState().lastFilters); }}>
           <RefreshCw className={`h-3.5 w-3.5 ${claimsLoading ? 'animate-spin' : ''}`} /> Refresh
         </button>
-        <button className={btn.primary} onClick={() => router.push('/claims/new')}><Plus className="h-4 w-4" /> New claim</button>
+        <button className={btn.primary} onClick={() => router.push('/cases/new')}><Plus className="h-4 w-4" /> Add patient</button>
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 px-6 pt-4 md:grid-cols-3 xl:grid-cols-6">
@@ -105,7 +105,7 @@ export default function ClaimsDesk() {
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           {!ready || claimsLoading ? <Skeleton rows={8} /> : claims.length === 0 ? (
             <Empty icon={Shield} title="No claims here" sub="Create a claim or change the filters">
-              <Link href="/claims/new" className={btn.primary}><Plus className="h-4 w-4" /> New claim</Link>
+              <Link href="/cases/new" className={btn.primary}><Plus className="h-4 w-4" /> Add patient</Link>
             </Empty>
           ) : (
             <div className="overflow-x-auto">
@@ -121,7 +121,7 @@ export default function ClaimsDesk() {
                   {claims.map((c) => {
                     const amount = c.settled_amount ?? c.approved_amount ?? c.claimed_amount ?? c.estimated_amount;
                     return (
-                      <tr key={c.id} onClick={() => router.push(`/claims/${c.id}`)}
+                      <tr key={c.id} onClick={() => router.push(`/case/${c.id}`)}
                         className={`cursor-pointer border-b border-slate-100 last:border-0 hover:bg-teal-50/40 ${c.priority === 'critical' ? 'bg-rose-50/30' : ''}`}>
                         <td className="px-4 py-3 font-mono text-xs text-slate-500">{c.claim_number}</td>
                         <td className="px-4 py-3"><p className="font-medium text-slate-900">{c.patient_name}</p><p className="text-xs text-slate-500">{c.patient_uhid ?? ''}</p></td>
