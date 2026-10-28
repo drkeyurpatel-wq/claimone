@@ -20,6 +20,8 @@ export interface CaseLike {
   preauth_submitted_at?: string | null;
   submitted_at?: string | null;
   updated_at: string;
+  /** When the status last changed (0017); due clocks run from here, not from any edit. */
+  status_changed_at?: string | null;
   created_at: string;
   estimated_amount?: number | null;
   approved_amount?: number | null;
@@ -61,7 +63,7 @@ export function nextStep(c: CaseLike, now = new Date()): Step {
   const pmjay = c.claim_type === 'pmjay';
   const admitted = t(c.admitted_at) ?? t(c.admission_date) ?? t(c.created_at);
   const discharged = t(c.discharged_at) ?? t(c.discharge_date);
-  const changed = t(c.updated_at);
+  const changed = t(c.status_changed_at) ?? t(c.updated_at);
   const where = pmjay ? 'TMS' : 'insurer';
 
   switch (c.status) {

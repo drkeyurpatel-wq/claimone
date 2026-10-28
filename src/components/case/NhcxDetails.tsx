@@ -15,7 +15,7 @@ export function NhcxDetails({ c, kind, canWrite, onSaved }: { c: Claim; kind: Nh
     patient_gender: c.patient_gender ?? '', patient_age_years: c.patient_age_years?.toString() ?? '', policy_number: c.policy_number ?? '',
     member_id: c.member_id ?? '', abha_id: c.abha_id ?? '', icd_code: c.icd_code ?? '', primary_diagnosis: c.primary_diagnosis ?? '',
     treating_doctor_hpr_id: c.treating_doctor_hpr_id ?? '', treatment_type: c.treatment_type ?? 'medical',
-    package_code: c.package_code ?? '', package_name: c.package_name ?? '',
+    package_code: c.package_code ?? '', package_name: c.package_name ?? '', estimated_amount: c.estimated_amount?.toString() ?? '',
   });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -30,6 +30,7 @@ export function NhcxDetails({ c, kind, canWrite, onSaved }: { c: Claim; kind: Nh
         policy_number: t(f.policy_number), member_id: t(f.member_id), abha_id: t(f.abha_id), icd_code: t(f.icd_code)?.toUpperCase() ?? null,
         primary_diagnosis: t(f.primary_diagnosis), treating_doctor_hpr_id: t(f.treating_doctor_hpr_id),
         treatment_type: f.treatment_type as Claim['treatment_type'], package_code: t(f.package_code), package_name: t(f.package_name),
+        ...(kind === 'preauth' ? { estimated_amount: f.estimated_amount ? Number(f.estimated_amount) : null } : {}),
       });
       await onSaved(); setMsg('Saved');
     } catch { setMsg('Could not save — check the HPR ID format (12-3456-7890-1234) and age.'); }
@@ -55,6 +56,7 @@ export function NhcxDetails({ c, kind, canWrite, onSaved }: { c: Claim; kind: Nh
         <label className="text-base font-medium text-slate-800">Diagnosis<input value={f.primary_diagnosis} onChange={set('primary_diagnosis')} disabled={!canWrite} className={field} /></label>
         <label className="text-base font-medium text-slate-800">Doctor’s HPR ID<input value={f.treating_doctor_hpr_id} onChange={set('treating_doctor_hpr_id')} disabled={!canWrite} placeholder="71-8422-5818-7201" className={field} /></label>
         <label className="text-base font-medium text-slate-800">Package code (if any)<input value={f.package_code} onChange={set('package_code')} disabled={!canWrite} className={field} /></label>
+        {kind === 'preauth' && <label className="text-base font-medium text-slate-800">Estimate (₹)<input type="number" min="0" value={f.estimated_amount} onChange={set('estimated_amount')} disabled={!canWrite} className={field} /></label>}
         <label className="text-base font-medium text-slate-800 sm:col-span-2">Package / procedure name<input value={f.package_name} onChange={set('package_name')} disabled={!canWrite} className={field} /></label>
       </div>
       {canWrite && <div className="mt-4 flex items-center gap-3">

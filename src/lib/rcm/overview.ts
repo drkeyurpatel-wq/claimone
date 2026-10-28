@@ -17,7 +17,7 @@ export interface OpenBill {
 }
 export interface PayerInfo { id: string; code: string; name: string }
 export interface DeductionAdj { category: string | null; amount: number; created_at: string }
-export interface ReceiptLite { value_date: string; amount: number; source: string }
+export interface ReceiptLite { value_date: string; amount: number; source: string; bank_receipt_id?: string | null }
 export interface TransitionLite { claim_id: string; from_status: string | null; to_status: string; created_at: string }
 
 export function categoryOf(b: Pick<OpenBill, 'debtor_type' | 'payer_id'>, payers: Map<string, PayerInfo>): Category {
@@ -111,10 +111,9 @@ export function collections(receipts: ReceiptLite[], months = 6, now = new Date(
     keys.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
   }
   const m = new Map(keys.map((k) => [k, 0]));
-  // a bank credit and its advice are the same money: count bank credits, and advices only when no bank statement was loaded
-  const hasBank = receipts.some((r) => r.source === 'bank');
+  // a payment letter tied to its bank credit is the same money: count the bank credit only
   for (const r of receipts) {
-    if (hasBank && r.source === 'advice') continue;
+    if (r.source === 'advice' && r.bank_receipt_id) continue;
     const k = r.value_date.slice(0, 7);
     if (m.has(k)) m.set(k, m.get(k)! + r.amount);
   }

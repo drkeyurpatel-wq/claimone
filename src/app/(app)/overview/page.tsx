@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Loader2, ChevronRight } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { sb } from '@/lib/supabase/browser';
+import { allRows } from '@/lib/supabase/pages';
 import { fetchAllPayers, fetchOpenCases } from '@/lib/rcm/api';
 import {
   ageing, collections, deductions, pipeline, turnaround, BUCKETS,
@@ -23,15 +24,16 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 async function load(centreId: string): Promise<Data> {
   const [bills, payers, adj, rcpt, trans, cases] = await Promise.all([
-    sb().from('clm_v_receivable_balance')
+    allRows<Record<string, unknown>>((f, t) => sb().from('clm_v_receivable_balance')
       .select('debtor_type, payer_id, debtor_name, doctor_name, balance, age_days, billed_amount, expected_amount, deduction, recon_status, status')
-      .eq('centre_id', centreId).limit(20000),
+      .eq('centre_id', centreId).order('id').range(f, t)),
     fetchAllPayers(),
-    sb().from('clm_v_leakage').select('kind, category, doctor_name, amount, month')
-      .eq('centre_id', centreId).gte('month', since(365).slice(0, 10)).limit(20000),
-    sb().from('clm_receipts').select('value_date, amount, source').eq('centre_id', centreId).gte('value_date', since(200).slice(0, 10)).limit(20000),
-    sb().from('clm_state_transitions').select('claim_id, from_status, to_status, created_at, clm_claims!inner(centre_id)')
-      .eq('clm_claims.centre_id', centreId).gte('created_at', since(180)).limit(20000),
+    allRows<Record<string, unknown>>((f, t) => sb().from('clm_v_leakage').select('kind, category, doctor_name, amount, month')
+      .eq('centre_id', centreId).gte('month', since(365).slice(0, 10)).order('month').order('payer_id').order('doctor_name').order('category').range(f, t)),
+    allRows<Record<string, unknown>>((f, t) => sb().from('clm_receipts').select('value_date, amount, source, bank_receipt_id')
+      .eq('centre_id', centreId).gte('value_date', since(200).slice(0, 10)).order('id').range(f, t)),
+    allRows<Record<string, unknown>>((f, t) => sb().from('clm_state_transitions').select('claim_id, from_status, to_status, created_at, clm_claims!inner(centre_id)')
+      .eq('clm_claims.centre_id', centreId).gte('created_at', since(180)).order('id').range(f, t)),
     fetchOpenCases(centreId),
   ]);
   if (bills.error) throw new Error('Could not load money owed');
@@ -43,7 +45,7 @@ async function load(centreId: string): Promise<Data> {
     age: ageing(B, pm),
     pipe: pipeline(cases.map((x) => x.step)),
     ded: deductions(((adj.data ?? []) as unknown as LeakLite[]).map((a) => ({ ...a, amount: N(a.amount) }))),
-    coll: collections(((rcpt.data ?? []) as ReceiptLite[]).map((r) => ({ ...r, amount: N(r.amount) }))),
+    coll: collections(((rcpt.data ?? []) as unknown as ReceiptLite[]).map((r) => ({ ...r, amount: N(r.amount) }))),
     tat: turnaround((trans.data ?? []) as unknown as TransitionLite[]),
   };
 }

@@ -215,6 +215,12 @@ export async function respondToQuery(queryId: string, responseText: string) {
 
 const SAFE_NAME = /[^a-zA-Z0-9_-]/g;
 
+/** Tick (or untick) a paper as attached on the insurer website. A file is optional. */
+export async function tickDocument(claimId: string, docCode: string, label: string, on: boolean) {
+  const { error } = await sb().rpc('clm_tick_document', { p_claim: claimId, p_doc_code: docCode, p_label: label, p_on: on });
+  if (error) throw new Error(error.message);
+}
+
 export async function uploadClaimDocument(p: {
   tenant_id: string; claim_id: string; file: File; document_name: string;
   document_category: ClaimDocument['document_category']; doc_code: string | null;

@@ -19,7 +19,7 @@ function Row({ j }: { j: Journey }) {
   const amount = stage === 'payment' && money ? money.balance : c.approved_amount ?? c.claimed_amount ?? c.estimated_amount;
   const line = stage === 'payment' && money
     ? (money.allocated > 0 ? `Received ${inrShort(money.allocated)} · ${inrShort(money.balance)} still due` : 'Approved — waiting for the money')
-    : stage === 'closed' ? 'Paid and reconciled' : step.label;
+    : stage === 'closed' ? ({ written_off: 'Written off', closed: 'Closed — patient paid' } as Record<string, string>)[c.status] ?? 'Paid and reconciled' : step.label;
   return (
     <li>
       <Link href={`/case/${c.id}`} className={`flex items-center gap-3 rounded-xl border bg-white p-4 transition hover:border-teal-400 hover:shadow-sm ${step.overdue && stage !== 'closed' ? 'border-rose-300' : 'border-slate-200'}`}>

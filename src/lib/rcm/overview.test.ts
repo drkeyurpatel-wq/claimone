@@ -46,10 +46,11 @@ describe('overview', () => {
     expect(d.byDoctor).toEqual([{ doctor: 'Dr A', amount: 7000 }, { doctor: 'Not recorded', amount: 1000 }]);
   });
   it('collections count bank credits, not the advice for the same money', () => {
-    const c = collections([{ value_date: '2026-10-05', amount: 100, source: 'bank' }, { value_date: '2026-10-05', amount: 100, source: 'advice' },
+    const c = collections([{ value_date: '2026-10-05', amount: 100, source: 'bank' }, { value_date: '2026-10-05', amount: 100, source: 'advice', bank_receipt_id: 'b1' },
       { value_date: '2026-09-01', amount: 50, source: 'manual' }], 3, new Date('2026-10-28'));
     expect(c).toEqual([{ month: '2026-08', amount: 0 }, { month: '2026-09', amount: 50 }, { month: '2026-10', amount: 100 }]);
-    expect(collections([{ value_date: '2026-10-05', amount: 70, source: 'advice' }], 1, new Date('2026-10-28'))[0].amount).toBe(70);
+    // a letter with no bank credit (other account, statement not loaded) still counts
+    expect(collections([{ value_date: '2026-10-05', amount: 100, source: 'bank' }, { value_date: '2026-10-06', amount: 70, source: 'advice' }], 1, new Date('2026-10-28'))[0].amount).toBe(170);
   });
   it('turnaround from the status history', () => {
     const t = turnaround([

@@ -2,6 +2,7 @@
 // Browser data access for the RCM desks. Reads go through RLS; the import
 // and sponsor mapping go through database functions that check access.
 import { sb } from '@/lib/supabase/browser';
+import { allRows } from '@/lib/supabase/pages';
 import type { Claim, Payer } from '@/lib/claims/types';
 import type { CaseRow } from './ecw';
 import { nextStep, type Step } from './worklist';
@@ -17,8 +18,8 @@ const OPEN = ['draft', 'preauth_pending', 'preauth_query', 'preauth_approved', '
   'claim_submitted', 'claim_under_review', 'claim_query', 'claim_approved', 'claim_partial', 'claim_rejected', 'settlement_pending'];
 
 export async function fetchOpenCases(centreId: string): Promise<CaseWithStep[]> {
-  const { data, error } = await sb().from('clm_claims').select(CASE_SELECT)
-    .eq('centre_id', centreId).in('status', OPEN).order('created_at', { ascending: false }).limit(3000);
+  const { data, error } = await allRows((from, to) => sb().from('clm_claims').select(CASE_SELECT)
+    .eq('centre_id', centreId).in('status', OPEN).order('created_at', { ascending: false }).order('id').range(from, to));
   if (error) throw new Error('Could not load cases');
   const now = new Date();
   return ((data ?? []) as unknown as Claim[]).map((c) => ({ c, step: nextStep(c, now) }));
@@ -86,8 +87,8 @@ const toMoney = (r: Record<string, unknown>): CaseMoney => ({
 
 /** Bills tied to cases at this centre, keyed by case. Patient-due bills are left out. */
 export async function fetchCaseMoney(centreId: string): Promise<Map<string, CaseMoney>> {
-  const { data } = await sb().from('clm_v_receivable_balance').select(MONEY_SELECT)
-    .eq('centre_id', centreId).not('claim_id', 'is', null).neq('debtor_type', 'patient').limit(20000);
+  const { data } = await allRows((from, to) => sb().from('clm_v_receivable_balance').select(MONEY_SELECT)
+    .eq('centre_id', centreId).not('claim_id', 'is', null).neq('debtor_type', 'patient').order('id').range(from, to));
   return new Map(((data ?? []) as Record<string, unknown>[]).map((r) => [r.claim_id as string, toMoney(r)]));
 }
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const calls: string[] = [];
 let unmet: { doc_label: string; doc_status: string }[] = [];
 let claim: Record<string, unknown>;
+let canWrite = true;
 const inserts: Record<string, unknown>[] = [];
 const fake = {
   from: (t: string) => ({
@@ -10,6 +11,7 @@ const fake = {
     insert: async (row: Record<string, unknown>) => { calls.push(`log:${row.status}`); inserts.push(row); return { error: null }; },
   }),
   rpc: async (fn: string, args: Record<string, unknown>) => {
+    if (fn === 'clm_can_write') return { data: canWrite, error: null };
     calls.push(fn === 'clm_transition' ? `move:${args.p_to_status}` : 'docs');
     return fn === 'clm_unmet_mandatory_docs' ? { data: unmet, error: null } : { data: { status: args.p_to_status }, error: null };
   },
@@ -27,7 +29,7 @@ const ready = {
 const post = async (body: unknown) => (await import('./route')).POST(new Request('https://x/api/nhcx/send', { method: 'POST', body: JSON.stringify(body) }));
 
 beforeEach(() => {
-  calls.length = 0; inserts.length = 0; unmet = []; claim = { ...ready };
+  calls.length = 0; inserts.length = 0; unmet = []; claim = { ...ready }; canWrite = true;
   Object.assign(process.env, { NHCX_PARTICIPANT_CODE: '1000004446@hcx', NHCX_HFR_ID: 'IN24', NHCX_PROVIDER_NAME: 'H1', NHCX_CLIENT_ID: 'c',
     NHCX_CLIENT_SECRET: 's', NHCX_PRIVATE_KEY: 'k', NHCX_CALLBACK_SECRET: 'x'.repeat(40) });
 });
@@ -56,6 +58,11 @@ describe('send on NHCX', () => {
   it('a case at another step is refused', async () => {
     claim = { ...ready, status: 'claim_submitted' };
     expect((await post({ claimId: ready.id, kind: 'preauth' })).status).toBe(409);
+  });
+  it('a view-only login cannot send anything', async () => {
+    canWrite = false;
+    expect((await post({ claimId: ready.id, kind: 'preauth' })).status).toBe(403);
+    expect(calls).toEqual([]);
   });
   it('without NHCX settings it says to use the website', async () => {
     delete process.env.NHCX_PRIVATE_KEY;

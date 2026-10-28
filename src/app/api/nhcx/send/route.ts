@@ -30,6 +30,10 @@ export async function POST(req: Request): Promise<Response> {
   if (!parsed.success) return fail(400, 'Check the values entered.');
   const { claimId, kind, amount, note } = parsed.data;
 
+  // only desk, manager and admin logins may send anything to an insurer
+  const { data: canWrite } = await supabase.rpc('clm_can_write');
+  if (canWrite !== true) return fail(403, 'Your login can only view.');
+
   const { data, error } = await supabase.from('clm_claims').select(CASE_SELECT).eq('id', claimId).maybeSingle();
   if (error || !data) return fail(404, 'Case not found.');
   const c = data as unknown as Claim;

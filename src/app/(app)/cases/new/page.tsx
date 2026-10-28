@@ -40,7 +40,7 @@ export default function NewCase() {
         patient_uhid: f.patient_uhid.trim() || null, patient_phone: f.patient_phone.trim() || null,
         treating_doctor_name: f.treating_doctor_name.trim() || null, policy_number: f.policy_number.trim() || null,
         estimated_amount: f.estimated_amount ? Number(f.estimated_amount) : null,
-        admitted_at: at.toISOString(), admission_date: at.toISOString().slice(0, 10), case_source: 'manual',
+        admitted_at: at.toISOString(), admission_date: f.admitted_at ? f.admitted_at.slice(0, 10) : new Date().toLocaleDateString('en-CA'), case_source: 'manual',
       });
       router.push(`/case/${id}`);
     } catch (err) {

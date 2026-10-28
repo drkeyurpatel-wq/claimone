@@ -103,9 +103,13 @@ export default function CasePage() {
   const route = routeFor(c?.clm_payers, centreOnNhcx);
   const actions = useMemo(() => (c && raw ? actionsFor(raw, c, route).filter((a) => !a.managerOnly || isManager) : []), [c, raw, route, isManager]);
   const actionStage = raw ? STAGE_OF_STEP[raw.key] : undefined;
-  const replies = msgs.filter((x) => x.direction === 'in' && x.status === 'received');
+  // a reply belongs to the stage it answers; once used or seen it is gone
+  const replyStages: Record<string, StageKey[]> = { preauth: ['preauth', 'stay'], claim: ['claim'], communication: ['preauth', 'stay', 'claim'] };
+  const replies = msgs.filter((x) => x.direction === 'in' && x.status === 'received' && (replyStages[x.api_call] ?? []).includes(actionStage ?? 'closed'));
+  const [fromReply, setFromReply] = useState<string | null>(null);
 
   const start = (a: CaseAction, prefill?: { amount?: number; ref?: string; note?: string }) => {
+    if (!prefill) setFromReply(null);
     setOpen(a); setBlockers([]); setError('');
     setAmount(String(prefill?.amount ?? a.amount?.value ?? ''));
     setRef(prefill?.ref ?? a.ref?.value ?? ''); setNote(prefill?.note ?? '');
@@ -131,7 +135,8 @@ export default function CasePage() {
         if (open.ref && ref.trim()) fields[open.ref.field] = ref.trim();
         await transition(c.id, open.to, fields, fullNote || (open.ref ? `Sent via ${ROUTE_WORDS[route].label}` : undefined));
       }
-      setOpen(null); setView(null); flash('Saved'); await reload();
+      if (fromReply) await markNhcxHandled(fromReply, 'applied').catch(() => {});
+      setFromReply(null); setOpen(null); setView(null); flash('Saved'); await reload();
     } catch (e) {
       const err = e as Error & { blockers?: string[] };
       if (err.blockers?.length) setBlockers(err.blockers);
@@ -143,9 +148,9 @@ export default function CasePage() {
   const applyReply = (x: NhcxMessage) => {
     const s = x.summary as { outcome?: string; approved_amount?: number; reference?: string; message?: string };
     const o = s.outcome ?? '';
-    const want = /partial/i.test(o) ? ['part'] : /approv/i.test(o) ? ['approved', 'full', 'enhanced'] : /quer/i.test(o) ? ['query'] : /reject/i.test(o) ? ['rejected'] : [];
+    const want = /partial/i.test(o) ? ['part', 'approved', 'enhanced'] : /approv/i.test(o) ? ['approved', 'full', 'enhanced'] : /quer/i.test(o) ? ['query'] : /reject/i.test(o) ? ['rejected'] : [];
     const a = actions.find((y) => want.includes(y.id));
-    if (a) { setView(actionStage ?? null); start(a, { amount: s.approved_amount, ref: s.reference, note: s.message }); }
+    if (a) { setView(actionStage ?? null); start(a, { amount: s.approved_amount, ref: s.reference, note: s.message }); setFromReply(x.id); }
     else flash('Nothing to apply for this reply — mark it as seen.', 'err');
   };
 
@@ -153,7 +158,8 @@ export default function CasePage() {
     if (!c || !discharge) return;
     try {
       const d = new Date(discharge);
-      await updateClaimFields(c.id, { discharged_at: d.toISOString(), discharge_date: d.toISOString().slice(0, 10) } as Partial<Claim>);
+      // the date as typed (IST), not the UTC date
+      await updateClaimFields(c.id, { discharged_at: d.toISOString(), discharge_date: discharge.slice(0, 10) } as Partial<Claim>);
       flash('Discharge saved'); setDischarge(''); setView(null); await reload();
     } catch { flash('Could not save the discharge date', 'err'); }
   };
@@ -342,7 +348,7 @@ export default function CasePage() {
                 <p className="text-base text-slate-900">{replyWords(x)}</p><p className="text-sm text-slate-500">{dateTime(x.created_at)}</p>
                 {canWrite && <div className="mt-2 flex gap-2">
                   <button onClick={() => applyReply(x)} className="min-h-11 rounded-lg bg-indigo-600 px-4 text-base font-semibold text-white">Use this reply</button>
-                  <button onClick={async () => { await markNhcxHandled(x.id, 'ignored'); await reload(); }} className="min-h-11 rounded-lg bg-slate-100 px-4 text-base text-slate-700">Seen</button>
+                  <button onClick={async () => { try { await markNhcxHandled(x.id, 'ignored'); await reload(); } catch { flash('Could not save. Try again.', 'err'); } }} className="min-h-11 rounded-lg bg-slate-100 px-4 text-base text-slate-700">Seen</button>
                 </div>}
               </li>))}</ul>
           </div>

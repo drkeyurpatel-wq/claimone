@@ -13,7 +13,7 @@ const ICD10 = /^[A-TV-Z][0-9][0-9AB](\.[0-9A-TV-Z]{1,4})?$/i;
 const HPR = /^\d{2}-\d{4}-\d{4}-\d{4}$/;
 const ist = (s: string) => (s.length === 10 ? `${s}T00:00:00+05:30` : s);
 
-export function nhcxMissing(c: NhcxCase, kind: NhcxKind): string[] {
+export function nhcxMissing(c: NhcxCase, kind: NhcxKind, amountOverride?: number): string[] {
   const m: string[] = [];
   if (!c.clm_payers?.nhcx_code) m.push('Insurer NHCX code (Payers page)');
   if (!c.patient_uhid) m.push('UHID');
@@ -26,9 +26,9 @@ export function nhcxMissing(c: NhcxCase, kind: NhcxKind): string[] {
   if (!c.treating_doctor_name) m.push('Doctor');
   if (!c.treating_doctor_hpr_id || !HPR.test(c.treating_doctor_hpr_id.trim())) m.push("Doctor's HPR ID (12-3456-7890-1234)");
   if (!c.admitted_at && !c.admission_date) m.push('Admission date');
-  if (kind === 'preauth' && !(Number(c.estimated_amount) > 0)) m.push('Estimate');
+  if (kind === 'preauth' && !(Number(amountOverride ?? c.estimated_amount) > 0)) m.push('Estimate');
   if (kind === 'claim') {
-    if (!(Number(c.claimed_amount ?? c.bill_amount) > 0)) m.push('Final bill amount');
+    if (!(Number(amountOverride ?? c.claimed_amount ?? c.bill_amount) > 0)) m.push('Final bill amount');
     if (!c.discharged_at && !c.discharge_date) m.push('Discharge date');
   }
   return m;
@@ -36,7 +36,7 @@ export function nhcxMissing(c: NhcxCase, kind: NhcxKind): string[] {
 
 export function caseToNhcx(c: NhcxCase, kind: NhcxKind, provider: ProviderInput, amountOverride?: number):
   { input: PreauthInput | ClaimInput | null; missing: string[] } {
-  const missing = nhcxMissing(c, kind);
+  const missing = nhcxMissing(c, kind, amountOverride);
   if (missing.length) return { input: null, missing };
   const surgical = c.treatment_type === 'surgical';
   const amount = amountOverride ?? Number(kind === 'preauth' ? c.estimated_amount : c.claimed_amount ?? c.bill_amount);

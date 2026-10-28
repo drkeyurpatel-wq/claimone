@@ -84,6 +84,7 @@ export interface Claim {
   patient_paid?: number | null;
   bed_category?: string | null;
   sponsor_name?: string | null;
+  status_changed_at?: string | null;
   // NHCX case details (0014)
   patient_gender?: 'male' | 'female' | 'other' | 'unknown' | null;
   patient_age_years?: number | null;
@@ -103,7 +104,9 @@ export interface ClaimDocument {
   doc_code: string | null;
   document_name: string;
   document_category: 'clinical' | 'billing' | 'identity' | 'insurance' | 'correspondence' | 'other';
-  file_path: string;
+  file_path: string | null;
+  /** Ticked as attached on the insurer website — no file kept. */
+  attested?: boolean;
   file_size_bytes: number | null;
   mime_type: string | null;
   source: 'manual' | 'bot' | 'nhcx' | 'hmis';
