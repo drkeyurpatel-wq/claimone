@@ -41,6 +41,9 @@ If a field is not on the letter, leave it out — do not guess. If nothing on it
 export async function POST(req: Request) {
   const auth = await requireUser();
   if ('error' in auth) return auth.error;
+  // only people who can save payments may send letters out to be read
+  const { data: canWrite } = await auth.supabase.rpc('clm_can_write');
+  if (canWrite !== true) return fail(403, 'Your login is read-only.');
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return fail(503, 'Reading PDFs and photos is not switched on yet — ask the admin to add the Anthropic API key. Excel files still work.');
 

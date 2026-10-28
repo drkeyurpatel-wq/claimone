@@ -109,34 +109,31 @@ export function parsePmjay(rows: string[][]): { rows: PaymentLine[]; skipped: nu
 /**
  * In the PMJAY sheet a case ID with several invoices (dialysis, repeat day-care)
  * repeats the case's TOTAL paid and TDS on every invoice row. Counting each row
- * would multiply the payment. Rows of one case with the same paid/TDS/UTR become
- * one payment line that lists its invoices.
+ * would multiply the payment. So every PMJAY payment is sent per case: rows of
+ * one case paid by the same transfer (UTR + amount) become one line listing its
+ * invoices; the case's not-yet-paid rows become one unpaid line. A single-invoice
+ * case is the same shape with one invoice, so next week's sheet — where the case
+ * may have gained an invoice — is still recognised as the same payment.
  */
 export function groupByCase(lines: PaymentLine[]): PaymentLine[] {
-  const by = new Map<string, PaymentLine[]>();
+  const groups = new Map<string, PaymentLine[]>();
   const out: PaymentLine[] = [];
   for (const l of lines) {
     if (!l.claim_ref || !l.bill_no) { out.push(l); continue; }
-    const k = l.claim_ref;
-    if (!by.has(k)) { by.set(k, []); out.push(l); }
-    by.get(k)!.push(l);
+    const k = l.net_amount > 0 ? `${l.claim_ref}|${(l.utr ?? '').toUpperCase()}|${l.net_amount}|${l.tds_amount}` : `${l.claim_ref}|unpaid`;
+    let g = groups.get(k);
+    if (!g) { g = []; groups.set(k, g); out.push(l); }
+    g.push(l);
   }
   return out.map((l) => {
-    const g = l.claim_ref && l.bill_no ? by.get(l.claim_ref)! : [l];
-    if (g.length < 2) return l;
-    const same = g.every((x) => x.net_amount === l.net_amount && x.tds_amount === l.tds_amount && x.utr === l.utr);
-    if (!same) return l;   // genuinely separate payments: keep (only the first is emitted below)
+    if (!l.claim_ref || !l.bill_no) return l;
+    const g = groups.get(l.net_amount > 0 ? `${l.claim_ref}|${(l.utr ?? '').toUpperCase()}|${l.net_amount}|${l.tds_amount}` : `${l.claim_ref}|unpaid`)!;
     const claimed = g.reduce((a, x) => a + (x.claimed_amount ?? 0), 0);
     return {
-      ...l, bill_no: null, claimed_amount: round2(claimed),
+      ...l, bill_no: g.length === 1 ? l.bill_no : null, claimed_amount: round2(claimed),
       bills: g.map((x) => ({ bill_no: x.bill_no!, bill_date: x.bill_date, ip_no: x.ip_no, uhid: x.uhid, patient_name: x.patient_name,
         doctor_name: x.doctor_name, claimed_amount: x.claimed_amount })),
     };
-  }).flatMap((l) => {
-    // a case whose rows differ: emit every row as its own payment
-    if (l.bills || !l.claim_ref || !l.bill_no) return [l];
-    const g = by.get(l.claim_ref)!;
-    return g.length > 1 ? g : [l];
   });
 }
 
@@ -153,6 +150,12 @@ export function parseLetterSheet(rows: string[][], payerName: string | null): { 
       utr: a.utr, payment_date: a.advice_date,
     })),
   };
+}
+
+function claimedOf(total: number | null, discount: number | null, patientPaid: number | null, approved: number | null) {
+  if (total == null) return null;
+  const c = round2(total - (discount ?? 0) - (patientPaid ?? 0));
+  return approved != null && c < approved ? approved : c;
 }
 
 export function isBillsMaster(rows: string[][]): boolean {
@@ -172,7 +175,7 @@ export function parseBillsMaster(rows: string[][]): { rows: PaymentLine[]; skipp
   const c = {
     cat: at('Payer category'), uhid: at('UHID'), ip: at('IP no'), name: at('Patient name', 'Patient'), doc: at('Treating doctor', 'Doctor'),
     bill: at('Bill no'), bdate: at('Bill date'), dis: at('Discharge date', 'Discharge'), payer: at('Insurer / payer', 'Insurer'), tpa: at('TPA'),
-    claim: at('Claim no', 'Claim no / case ID'), billed: at('Total bill'), appr: at('Approved'), recv: at('Received from payer', 'Received'),
+    claim: at('Claim no', 'Claim no / case ID'), billed: at('Total bill'), disc: at('Discount'), ptpaid: at('Paid by patient'), appr: at('Approved'), recv: at('Received from payer', 'Received'),
     pdate: at('Payment date'), utr: at('UTR'), tds: at('TDS'), why: at('Short-pay reason'),
   };
   const get = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
@@ -193,7 +196,9 @@ export function parseBillsMaster(rows: string[][]): { rows: PaymentLine[]; skipp
       claim_ref: claim || null, bill_no: bill || null, patient_name: get(r, c.name) || null, ip_no: get(r, c.ip) || null,
       uhid: get(r, c.uhid) || null, doctor_name: get(r, c.doc) || null,
       bill_date: parseDate(get(r, c.bdate)) ?? parseDate(get(r, c.dis)),
-      claimed_amount: null, approved_amount: approved ?? parseAmount(get(r, c.billed)),
+      // what the hospital claimed from the payer: deduction = claimed − approved shows as a short payment
+      claimed_amount: claimedOf(parseAmount(get(r, c.billed)), parseAmount(get(r, c.disc)), parseAmount(get(r, c.ptpaid)), approved),
+      approved_amount: approved ?? parseAmount(get(r, c.billed)),
       tds_amount: round2(tds), deduction_amount: gap > 1 && why ? gap : 0, deduction_reason: gap > 1 ? why : null,
       net_amount: round2(net), utr: net > 0 ? get(r, c.utr) || null : null,
       payment_date: net > 0 ? parseDate(get(r, c.pdate)) : null,
@@ -212,8 +217,8 @@ export function parsePaymentSheet(rows: string[][], payerName: string | null = n
 /** Lines Claude read off a letter: fill gaps, drop what can't be matched. */
 export function cleanLetterLines(raw: unknown): PaymentLine[] {
   if (!Array.isArray(raw)) return [];
-  const s = (v: unknown) => (v == null ? null : String(v).trim() || null);
-  const n = (v: unknown) => (v == null || v === '' ? null : parseAmount(String(v)));
+  const s = (v: unknown) => (v == null ? null : String(v).trim().slice(0, 300) || null);
+  const n = (v: unknown) => { const a = v == null || v === '' ? null : parseAmount(String(v)); return a == null ? null : Math.abs(a); };
   const out: PaymentLine[] = [];
   for (const x of raw as Record<string, unknown>[]) {
     if (!x || typeof x !== 'object') continue;

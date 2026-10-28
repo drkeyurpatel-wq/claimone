@@ -103,5 +103,44 @@ select t.act_as('00000000-0000-0000-0000-0000000000d2');
 select t.expect_error($$ select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'x', '[]') $$, 'No access');
 select t.check((select count(*) = 0 from clm_v_exceptions), 'other hospital sees no mismatches');
 
+-- ─── 6. Review fixes ────────────────────────────────────────────────
+select t.act_as('00000000-0000-0000-0000-0000000000d1');
+
+-- 6a. a case that gains an invoice next week is the same payment; the new invoice is created and stays due
+select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'w1', $j$[
+  {"source":"pmjay","claim_ref":"7770000000000001","claimed_amount":4840,"tds_amount":96.8,"net_amount":4743.2,"utr":"U77","payment_date":"2026-10-20",
+   "bills":[{"bill_no":"Q1","claimed_amount":2420},{"bill_no":"Q2","claimed_amount":2420}]}]$j$::jsonb);
+select t.check((select (r->>'duplicate')::int = 1 and (r->>'created')::int = 1 and (r->>'unpaid')::int = 1
+                from (select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'w2', $j$[
+  {"source":"pmjay","claim_ref":"7770000000000001","claimed_amount":4840,"tds_amount":96.8,"net_amount":4743.2,"utr":"u77","payment_date":"2026-10-20",
+   "bills":[{"bill_no":"Q2","claimed_amount":2420},{"bill_no":"Q1","claimed_amount":2420}]},
+  {"source":"pmjay","claim_ref":"7770000000000001","claimed_amount":2420,"net_amount":0,"bills":[{"bill_no":"Q3","claimed_amount":2420}]}]$j$::jsonb) r) x),
+  'case re-sent with rows reordered + a new unpaid invoice: payment not repeated, new invoice created');
+select t.check((select sum(amount) = 4743.2 from clm_receipts where upper(reference) = 'U77'), 'case cash counted once');
+select t.check((select recon_status = 'open' and balance = 2420 from clm_v_receivable_balance where bill_no = 'Q3'), 'new invoice still due');
+
+-- 6b. same payment from a PDF and later from the TPA Excel (claim no written differently, no bill no)
+select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'letter.pdf', $j$[
+  {"source":"letter","payer_name":"HDFC ERGO","claim_ref":"CLM/2026/991","bill_no":"IPB-55","claimed_amount":50000,"tds_amount":1000,"net_amount":49000,"utr":"HDFC991","payment_date":"2026-10-21"}]$j$::jsonb);
+select t.check((select (r->>'duplicate')::int = 1 from (select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'tpa.xlsx', $j$[
+  {"source":"letter","payer_name":"HDFC ERGO","claim_ref":"CLM2026991","claimed_amount":50000,"tds_amount":1000,"net_amount":49000,"utr":"hdfc991","payment_date":"2026-10-21"}]$j$::jsonb) r) x),
+  'PDF then Excel of the same payment: second is a duplicate');
+select t.check((select allocated = 49000 and recon_status = 'settled' from clm_v_receivable_balance where bill_no = 'IPB-55'), 'bill paid once');
+
+-- 6c. letter first, bank statement later: the credit is tied to the letter, not left as new money
+insert into clm_receipts (tenant_id, centre_id, source, bank_account, value_date, amount, reference, narration)
+values ('a0000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001', 'bank', 'KOTAK', '2026-10-22', 49000, 'HDFC991', 'NEFT HDFC991 HDFC ERGO');
+select t.check((select unallocated = 0 from clm_v_receipt_balance where source = 'bank' and reference = 'HDFC991'),
+               'bank credit arriving after the letter shows as already used');
+select t.check((select bank_confirmed_on = '2026-10-22' from clm_receipts where source = 'advice' and upper(reference) = 'HDFC991'),
+               'letter marked as seen in the bank');
+
+-- 6d. payer from a letter: whole name, not the first word
+select t.check((select string_agg(coalesce((select name from clm_payers where id = clm_match_payer(null, v, null)), '—'), ' | ' order by o)
+                = 'Vidal Health TPA | Heritage Health TPA | Raksha Health Insurance TPA | Health India Insurance TPA | Star Health and Allied Insurance'
+                from (values (1, 'VIDAL HEALTH TPA PVT LTD'), (2, 'Heritage Health TPA'), (3, 'Raksha Health Insurance TPA Pvt Ltd'),
+                             (4, 'Health India Insurance TPA Services'), (5, 'Star Health')) x(o, v)),
+               'TPAs named "… Health" are told apart');
+
 reset role;
 select 'ALL WEEKLY UPLOAD TESTS PASSED' as result;

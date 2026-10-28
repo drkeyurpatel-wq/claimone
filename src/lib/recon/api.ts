@@ -17,7 +17,7 @@ export interface ReceivableRow {
 }
 
 export interface ReceiptRow {
-  id: string; centre_id: string; source: 'bank' | 'manual'; bank_account: string | null; value_date: string; amount: number;
+  id: string; centre_id: string; source: 'bank' | 'manual' | 'advice'; bank_account: string | null; value_date: string; amount: number;
   reference: string | null; narration: string | null; payer_id: string | null; allocated: number; unallocated: number;
 }
 
@@ -126,13 +126,20 @@ export async function fetchExceptions(centreId: string): Promise<ExceptionRow[]>
     num(r, ['expected_amount', 'allocated', 'tds', 'deduction', 'balance', 'age_days']) as unknown as ExceptionRow);
 }
 
-export interface ApplyResult { matched: number; created: number; unpaid: number; duplicate: number; skipped: number }
+export interface ApplyResult { matched: number; created: number; unpaid: number; duplicate: number; skipped: number; invalid: number }
 
 /** Send lines in chunks so a 2,600-row PMJAY sheet stays inside the database time limit. */
 export async function applyPayments(centre_id: string, file_name: string, lines: PaymentLine[], onProgress?: (done: number) => void): Promise<ApplyResult> {
-  const total: ApplyResult = { matched: 0, created: 0, unpaid: 0, duplicate: 0, skipped: 0 };
+  const total: ApplyResult = { matched: 0, created: 0, unpaid: 0, duplicate: 0, skipped: 0, invalid: 0 };
   for (let i = 0; i < lines.length; i += 250) {
-    const r = await post<ApplyResult>('/api/recon/apply', { centre_id, file_name, lines: lines.slice(i, i + 250) });
+    let r: ApplyResult;
+    try {
+      r = await post<ApplyResult>('/api/recon/apply', { centre_id, file_name, lines: lines.slice(i, i + 250) });
+    } catch (e) {
+      // earlier chunks are saved; uploading the same file again finishes the rest without double counting
+      throw new Error(`${file_name}: stopped after ${i.toLocaleString('en-IN')} of ${lines.length.toLocaleString('en-IN')} lines `
+        + `(${total.matched.toLocaleString('en-IN')} payments saved). ${(e as Error).message} Upload the same file again to finish.`);
+    }
     for (const k of Object.keys(total) as (keyof ApplyResult)[]) total[k] += Number(r[k] ?? 0);
     onProgress?.(Math.min(i + 250, lines.length));
   }

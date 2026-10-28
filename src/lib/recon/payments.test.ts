@@ -42,6 +42,18 @@ describe('PMJAY settlement sheet', () => {
     expect(summarise(r.rows).paidAmount).toBe(13068 + 4900);
   });
 
+  it('a case with one more unpaid invoice is still one payment, never one per row', () => {
+    const r = parsePmjay(cellsToRows([HEAD,
+      [1, 'Q1', '01/10/2026', 'I1', 'R1', 'T', '', '', 7770000000000001, 'Dr', 2420, 2420, 96.8, 4743.2, 'U77', new Date(Date.UTC(2026, 9, 20))],
+      [2, 'Q2', '02/10/2026', 'I2', 'R1', 'T', '', '', 7770000000000001, 'Dr', 2420, 2420, 96.8, 4743.2, 'U77', new Date(Date.UTC(2026, 9, 20))],
+      [3, 'Q3', '03/10/2026', 'I3', 'R1', 'T', '', '', 7770000000000001, 'Dr', 2420, 2420, 0, 0, '', new Date(Date.UTC(2026, 9, 20))],
+    ]));
+    expect(r.rows).toHaveLength(2);
+    expect(summarise(r.rows).paidAmount).toBe(4743.2);
+    expect(r.rows[0].bills?.map((b) => b.bill_no)).toEqual(['Q1', 'Q2']);
+    expect(r.rows[1]).toMatchObject({ net_amount: 0, bill_no: 'Q3' });
+  });
+
   it('routes other sheets to the letter reader', () => {
     const tpa = cellsToRows([['Claim No', 'Patient Name', 'Approved', 'TDS', 'Deduction', 'Deduction Reason', 'Net Paid', 'UTR', 'Payment Date'],
       ['CL-1', 'Test C', 100000, 2000, 3000, 'Room rent', 95000, 'UTR1', '22/10/2026']]);
@@ -63,6 +75,15 @@ describe('credit master Bills tab', () => {
     expect(r.rows[0]).toMatchObject({ bill_no: 'IPB125/4867', approved_amount: 320534, net_amount: 300000, deduction_amount: 20534, deduction_reason: 'Room rent', payment_date: '2026-03-14' });
     expect(r.rows[1]).toMatchObject({ claim_ref: 'CL9', net_amount: 0, utr: null, approved_amount: 90000 });
   });
+  it('claimed = total bill − discount − paid by patient, so a cut at approval shows', () => {
+    const r = parsePaymentSheet(cellsToRows([
+      ['Bill no', 'Payer category', 'Insurer / payer', 'Total bill', 'Discount', 'Paid by patient', 'Approved', 'Received from payer', 'TDS', 'Bill date'],
+      ['B1', 'TPA / Insurance', 'Tata AIG', 100000, 0, 0, 80000, 78400, 1600, '01/10/2026'],
+      ['B2', 'TPA / Insurance', 'Tata AIG', 375250, 45266, 9450, 320534, 320534, null, '01/10/2026'],
+    ]));
+    expect(r.rows[0]).toMatchObject({ claimed_amount: 100000, approved_amount: 80000 });
+    expect(r.rows[1]).toMatchObject({ claimed_amount: 320534 });
+  });
 });
 
 describe('lines read off a letter', () => {
@@ -74,6 +95,11 @@ describe('lines read off a letter', () => {
     ]);
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ claim_ref: 'RC-1', net_amount: 98000, payment_date: '2026-10-23' });
+  });
+  it('makes amounts positive and clips long text so one line cannot block an upload', () => {
+    const out = cleanLetterLines([{ claim_ref: 'RC-2', net_amount: 900, deduction_amount: '-500', deduction_reason: 'x'.repeat(900) }]);
+    expect(out[0].deduction_amount).toBe(500);
+    expect(out[0].deduction_reason).toHaveLength(300);
   });
   it('tolerates non-arrays', () => expect(cleanLetterLines({})).toEqual([]));
 });

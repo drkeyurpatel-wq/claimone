@@ -39,6 +39,7 @@ export default function WeeklyUpload() {
   const [drag, setDrag] = useState(false);
   const [saving, setSaving] = useState<string>('');
   const [result, setResult] = useState<ApplyResult | null>(null);
+  const [failMsg, setFailMsg] = useState('');
   const [problems, setProblems] = useState<ExceptionRow[] | null>(null);
 
   const loadProblems = useCallback(async () => { if (centreId) setProblems(await fetchExceptions(centreId)); }, [centreId]);
@@ -92,7 +93,8 @@ export default function WeeklyUpload() {
 
   const matchAll = async () => {
     if (!centreId || !ready.length) return;
-    const total: ApplyResult = { matched: 0, created: 0, unpaid: 0, duplicate: 0, skipped: 0 };
+    setFailMsg('');
+    const total: ApplyResult = { matched: 0, created: 0, unpaid: 0, duplicate: 0, skipped: 0, invalid: 0 };
     try {
       for (const it of ready) {
         setSaving(`${it.name}…`);
@@ -102,7 +104,7 @@ export default function WeeklyUpload() {
       setResult(total);
       setItems([]);
       await loadProblems();
-    } catch (e) { flash((e as Error).message, 'err'); }
+    } catch (e) { setFailMsg((e as Error).message); await loadProblems(); }
     setSaving('');
   };
 
@@ -175,6 +177,7 @@ export default function WeeklyUpload() {
               {saving && <span className="text-sm text-slate-500">{saving}</span>}
             </div>
 
+            {failMsg && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{failMsg}</p>}
             {result && (
               <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                 <p className="flex items-center gap-2 font-semibold"><CheckCircle2 className="h-4 w-4" /> Done. {result.matched.toLocaleString('en-IN')} payments matched to bills.</p>
@@ -182,6 +185,7 @@ export default function WeeklyUpload() {
                   {result.created > 0 && <>{result.created.toLocaleString('en-IN')} new bills were added (not on file before). </>}
                   {result.duplicate > 0 && <>{result.duplicate.toLocaleString('en-IN')} were already uploaded before (skipped). </>}
                   {result.unpaid > 0 && <>{result.unpaid.toLocaleString('en-IN')} lines show no payment yet. </>}
+                  {result.invalid + result.skipped > 0 && <>{(result.invalid + result.skipped).toLocaleString('en-IN')} lines could not be read (no bill / claim no., or bad amounts) and were left out. </>}
                   Anything that does not add up is listed below.
                 </p>
               </div>

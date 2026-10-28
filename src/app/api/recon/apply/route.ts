@@ -18,7 +18,7 @@ const Line = z.object({
     claimed_amount: money.nullable(),
   })).max(60).optional(),
 });
-const Body = z.object({ centre_id: uuid, file_name: z.string().trim().max(300), lines: z.array(Line).min(1).max(6000) });
+const Body = z.object({ centre_id: uuid, file_name: z.string().trim().max(300), lines: z.array(z.unknown()).min(1).max(6000) });
 
 export async function POST(req: Request) {
   const auth = await requireUser();
@@ -26,7 +26,15 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return fail(400, 'Some lines could not be read.', { issues: parsed.error.issues.slice(0, 3).map((i) => i.path.join('.')) });
   const b = parsed.data;
-  const { data, error } = await auth.supabase.rpc('clm_apply_payments', { p_centre: b.centre_id, p_file: b.file_name, p_lines: b.lines });
+  // one unreadable line is set aside; it does not block the rest of the file
+  const good: z.infer<typeof Line>[] = [];
+  let invalid = 0;
+  for (const raw of b.lines) {
+    const l = Line.safeParse(raw);
+    if (l.success) good.push(l.data); else invalid++;
+  }
+  if (!good.length) return fail(400, 'None of the lines could be read.', { invalid });
+  const { data, error } = await auth.supabase.rpc('clm_apply_payments', { p_centre: b.centre_id, p_file: b.file_name, p_lines: good });
   if (error) return fromDbError(error);
-  return NextResponse.json({ ok: true, ...(data as Record<string, unknown>) });
+  return NextResponse.json({ ok: true, ...(data as Record<string, unknown>), invalid });
 }
