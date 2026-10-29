@@ -52,7 +52,7 @@ export default function NewCase() {
 
   return (
     <div className="mx-auto max-w-xl px-4 py-8 md:px-6">
-      <Link href="/patients" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Patients</Link>
+      <Link href="/ledger" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Ledger</Link>
       <h1 className="mt-2 text-2xl font-bold text-slate-900">Add a patient</h1>
       <p className="mt-1 text-base text-slate-600">Only insurance, scheme or company patients. Cash patients are not needed here.</p>
 

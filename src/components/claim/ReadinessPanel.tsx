@@ -157,10 +157,10 @@ export function ReadinessPanel({ claim, rules, documents, defaultStage, canWrite
       </ul>
 
       {!result.canSubmit && (
-        <div className="mt-4 flex gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
-          <p className="text-[13px] leading-relaxed text-rose-900">
-            {STAGE_LABEL[stage]} cannot be sent yet: {result.blockers.length} paper{result.blockers.length > 1 ? 's are' : ' is'} not ticked.
+        <div className="mt-4 flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <p className="text-[13px] leading-relaxed text-amber-900">
+            {STAGE_LABEL[stage]}: {result.blockers.length} paper{result.blockers.length > 1 ? 's are' : ' is'} not ticked yet.
             Tick each paper once it is attached on the insurer website. Uploading a copy here is optional.
           </p>
         </div>

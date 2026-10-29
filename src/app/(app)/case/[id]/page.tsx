@@ -186,7 +186,7 @@ export default function CasePage() {
   };
 
   if (c === undefined) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-teal-600" /></div>;
-  if (!c || !step || !states) return <div className="py-20 text-center text-base text-slate-500">Patient not found, or not at your centre. <Link href="/patients" className="text-teal-700 underline">Back</Link></div>;
+  if (!c || !step || !states) return <div className="py-20 text-center text-base text-slate-500">Patient not found, or not at your centre. <Link href="/ledger" className="text-teal-700 underline">Back to the ledger</Link></div>;
 
   const due = dueText(step);
   const st = states[shown];
@@ -235,7 +235,7 @@ export default function CasePage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 md:px-6">
       {toastNode}
-      <Link href={`/patients?stage=${stage}`} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Patients</Link>
+      <Link href="/ledger" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Ledger</Link>
 
       {/* The file cover */}
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">

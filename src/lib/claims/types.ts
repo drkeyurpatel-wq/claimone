@@ -89,6 +89,8 @@ export interface Claim {
   cut_decision?: 'accepted' | 'fought' | null;
   cut_note?: string | null;
   cut_decided_at?: string | null;
+  /** The pre-auth approval, kept apart from the claim approval (0020). */
+  preauth_approved_amount?: number | null;
   // NHCX case details (0014)
   patient_gender?: 'male' | 'female' | 'other' | 'unknown' | null;
   patient_age_years?: number | null;

@@ -133,3 +133,20 @@ export async function decideCut(claimId: string, decision: 'accept' | 'fight', n
   const { error } = await sb().rpc('clm_decide_cut', { p_claim: claimId, p_decision: decision, p_note: note ?? null, p_category: category ?? null });
   if (error) throw new Error(error.message);
 }
+
+// ─── Ledger ─────────────────────────────────────────────────────────
+
+/** A payment typed in for one patient (clm_record_case_payment): booked like an uploaded letter line. */
+export async function recordCasePayment(claimId: string, p: { net: number; tds: number; utr: string; date: string }) {
+  const { error } = await sb().rpc('clm_record_case_payment', {
+    p_claim: claimId, p_net: p.net, p_tds: p.tds, p_utr: p.utr.trim() || null, p_date: p.date || null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Dates as the desk types them: a day in IST. Today keeps the real time it was saved. */
+export function istDate(day: string): string | null {
+  if (!day) return null;
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return day === today ? null : new Date(`${day}T12:00:00+05:30`).toISOString();
+}

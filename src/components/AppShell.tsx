@@ -5,23 +5,24 @@ import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import {
   ShieldCheck, LayoutDashboard, Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut, Wallet, ClipboardCheck, GitMerge, Upload,
-  Gauge, FileSpreadsheet, Users, KeyRound, ChevronDown,
+  Gauge, FileSpreadsheet, Users, KeyRound, ChevronDown, Table2, MoreHorizontal,
 } from 'lucide-react';
 import type { Session } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/store/auth';
 import { sb } from '@/lib/supabase/browser';
 
-// Everyone works from the patient's file journey. Desk logins see only these;
-// managers also get the overview and, under More, the older detail screens.
+// Everyone works from the ledger. Everything else sits under "More":
+// the upload screens and patient files for all, the manager screens for managers.
 type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean };
-const WORK_NAV: NavItem[] = [
-  { href: '/patients', label: 'Patients', icon: Users },
+const MAIN_NAV: NavItem[] = [{ href: '/ledger', label: 'Ledger', icon: Table2 }];
+const MORE_WORK: NavItem[] = [
+  { href: '/patients', label: 'Patient files', icon: Users },
   { href: '/cases/upload', label: 'Upload eCW file', icon: FileSpreadsheet },
   { href: '/pay', label: 'Upload payments', icon: Upload, exact: true },
   { href: '/pay/check', label: 'Payments to check', icon: ClipboardCheck, exact: true },
 ];
-const MANAGER_NAV: NavItem[] = [{ href: '/overview', label: 'Overview', icon: Gauge }, ...WORK_NAV];
-const MORE_NAV: NavItem[] = [
+const MORE_MANAGER: NavItem[] = [
+  { href: '/overview', label: 'Overview', icon: Gauge },
   { href: '/claims/payers', label: 'Payers', icon: Building2 },
   { href: '/claims/rules', label: 'Document rules', icon: ListChecks },
   { href: '/claims/mis', label: 'MIS', icon: BarChart3 },
@@ -48,11 +49,15 @@ export function AppShell({ session, children }: { session: Session; children: Re
   useEffect(() => { hydrate(session); }, [session, hydrate]);
 
   const isManager = session.role === 'admin' || session.role === 'manager';
-  const nav = isManager ? MANAGER_NAV : WORK_NAV;
-  const current = activeHref(pathname, [...nav, ...(isManager ? MORE_NAV : []), { href: '/case', label: '', icon: Users }])
-    ?.replace(/^\/case$/, '/patients');
-  const inMore = MORE_NAV.some((n) => n.href === current);
-  const [moreOpen, setMoreOpen] = useState(false);
+  const more = isManager ? [...MORE_WORK, ...MORE_MANAGER] : MORE_WORK;
+  // a patient's file counts as Patient files; anything not in the menu lights nothing
+  const current = activeHref(pathname.startsWith('/case/') ? '/patients' : pathname, [...MAIN_NAV, ...more]);
+  const inMore = more.some((n) => n.href === current);
+  // desk menu: open by default while on a More screen, but the button always toggles
+  const [moreOpen, setMoreOpen] = useState<boolean | null>(null);
+  const [phoneMore, setPhoneMore] = useState(false);
+  useEffect(() => { setMoreOpen(null); setPhoneMore(false); }, [pathname]);
+  const showMore = moreOpen ?? inMore;
   const signOut = async () => { await sb().auth.signOut(); router.replace('/login'); router.refresh(); };
   const item = (n: NavItem, small = false) => {
     const active = n.href === current;
@@ -83,16 +88,14 @@ export function AppShell({ session, children }: { session: Session; children: Re
           </div>
         )}
         <nav className="mt-4 flex-1 space-y-0.5 overflow-y-auto px-3">
-          {nav.map((n) => item(n))}
-          {isManager && (
-            <div className="pt-3">
-              <button onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen || inMore}
-                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50">
-                More <ChevronDown className={`h-4 w-4 transition ${moreOpen || inMore ? 'rotate-180' : ''}`} />
-              </button>
-              {(moreOpen || inMore) && <div className="space-y-0.5">{MORE_NAV.map((n) => item(n, true))}</div>}
-            </div>
-          )}
+          {MAIN_NAV.map((n) => item(n))}
+          <div className="pt-3">
+            <button type="button" onClick={() => setMoreOpen(!showMore)} aria-expanded={showMore}
+              className="flex min-h-11 w-full items-center justify-between rounded-lg px-3 text-sm font-medium text-slate-500 hover:bg-slate-50">
+              More <ChevronDown className={`h-4 w-4 transition ${showMore ? 'rotate-180' : ''}`} />
+            </button>
+            {showMore && <div className="space-y-0.5">{more.map((n) => item(n, true))}</div>}
+          </div>
         </nav>
         <div className="border-t border-slate-100 px-4 py-4">
           <p className="truncate text-sm font-semibold text-slate-800">{staff?.full_name ?? session.fullName}</p>
@@ -121,11 +124,15 @@ export function AppShell({ session, children }: { session: Session; children: Re
             </div>
           </div>
           <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
-            {nav.map((n) => {
-              const active = n.href === current;
-              return <Link key={n.href} href={n.href} className={`whitespace-nowrap rounded-lg px-4 py-2.5 text-base font-medium ${active ? 'bg-teal-50 text-teal-700' : 'text-slate-600'}`}>{n.label}</Link>;
-            })}
+            {MAIN_NAV.map((n) => (
+              <Link key={n.href} href={n.href} className={`whitespace-nowrap rounded-lg px-4 py-2.5 text-base font-medium ${n.href === current ? 'bg-teal-50 text-teal-700' : 'text-slate-600'}`}>{n.label}</Link>
+            ))}
+            <button type="button" onClick={() => setPhoneMore((v) => !v)} aria-expanded={phoneMore}
+              className={`inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-4 py-2.5 text-base font-medium ${inMore ? 'bg-teal-50 text-teal-700' : 'text-slate-600'}`}>
+              <MoreHorizontal className="h-5 w-5" /> {inMore ? more.find((n) => n.href === current)?.label : 'More'}
+            </button>
           </nav>
+          {phoneMore && <div className="grid grid-cols-2 gap-1 border-t border-slate-100 px-3 py-2">{more.map((n) => item(n, true))}</div>}
         </div>
         {children}
       </div>
