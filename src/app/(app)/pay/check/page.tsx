@@ -23,11 +23,11 @@ export default function CheckPage() {
       {toastNode}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Payments to check</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Settlement review</h1>
           <p className="mt-1 text-base text-slate-600">Only the bills where the money does not match. Fix them one group at a time.</p>
         </div>
         <Link href="/pay" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-slate-100 px-4 text-base font-medium text-slate-700 hover:bg-slate-200">
-          <Upload className="h-5 w-5" /> Upload payments
+          <Upload className="h-5 w-5" /> Import settlements
         </Link>
       </div>
       <div className="mt-6"><CheckList rows={rows} canWrite={canWrite} onChanged={load} flash={flash} /></div>

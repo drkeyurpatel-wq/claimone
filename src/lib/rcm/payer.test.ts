@@ -17,3 +17,15 @@ describe('payer rules', () => {
     expect(routeFor(null, true)).toBe('portal');
   });
 });
+
+describe('payer groups on a new admission', () => {
+  it('sorts every payer type into one group', async () => {
+    const { payerGroup } = await import('./payer');
+    expect(payerGroup({ code: 'pmjay_gujarat', type: 'government' })).toBe('pmjay');
+    expect(payerGroup({ code: 'cghs', type: 'government' })).toBe('scheme');
+    expect(payerGroup({ code: 'medi_assist', type: 'tpa' })).toBe('tpa');
+    expect(payerGroup({ code: 'new_india', type: 'psu' })).toBe('insurer');
+    expect(payerGroup({ code: 'star_health', type: 'insurer' })).toBe('insurer');
+    expect(payerGroup({ code: 'ugvcl', type: 'corporate' })).toBe('corporate');
+  });
+});

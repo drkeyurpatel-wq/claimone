@@ -129,7 +129,7 @@ export default function UploadPayments() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 md:px-6">
-      <h1 className="text-2xl font-bold text-slate-900">Upload payments</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Import settlements</h1>
       <p className="mt-1 text-base text-slate-600">Add the files that came this week, then press <b>Save</b>.</p>
 
       {/* Step 1 */}
@@ -234,7 +234,7 @@ export default function UploadPayments() {
       {/* Next */}
       <Link href="/pay/check"
         className="mt-4 flex min-h-14 items-center justify-between rounded-2xl border border-amber-300 bg-amber-50 px-5 text-lg font-semibold text-amber-900 hover:bg-amber-100">
-        <span>Payments to check{toCheck != null && ` — ${n(toCheck)} bills need a look`}</span>
+        <span>Settlement review{toCheck != null && ` — ${n(toCheck)} bills need a look`}</span>
         <ArrowRight className="h-5 w-5" />
       </Link>
     </div>

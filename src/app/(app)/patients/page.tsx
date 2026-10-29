@@ -33,7 +33,7 @@ function Row({ j }: { j: Journey }) {
         </div>
         {due && stage !== 'closed' && (
           <span className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${step.overdue ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600'}`}>
-            {step.overdue ? (step.ours ? due : `Chase — ${due}`) : due}
+            {step.overdue ? (step.ours ? due : `Follow up — ${due}`) : due}
           </span>
         )}
         <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" />
@@ -83,7 +83,7 @@ function Patients() {
     <div className="mx-auto max-w-4xl px-4 py-8 md:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Patients</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Case files</h1>
           <p className="mt-1 text-base text-slate-600">Every insurance, scheme and company patient — from pre-auth to money received.</p>
         </div>
         <Link href="/cases/new" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"><UserPlus className="h-4 w-4" /> Add patient</Link>

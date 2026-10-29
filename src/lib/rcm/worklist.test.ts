@@ -11,7 +11,7 @@ describe('next step for a case', () => {
     expect(dueText(s, now)).toBe('in 3 h');
   });
   it('PMJAY pre-auth is filed in TMS', () => {
-    expect(nextStep({ ...base, claim_type: 'pmjay' }, now).label).toBe('File pre-auth in TMS');
+    expect(nextStep({ ...base, claim_type: 'pmjay' }, now).label).toBe('Submit pre-auth on TMS');
   });
   it('pre-auth unanswered after an hour is late for an insurer, not for PMJAY', () => {
     const c = { ...base, status: 'preauth_pending' as const, preauth_submitted_at: '2026-10-28T10:00:00+05:30' };

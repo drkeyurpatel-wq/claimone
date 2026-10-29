@@ -27,7 +27,7 @@ describe('case screen buttons', () => {
   it('NHCX payers get a real send; others record how it was sent', () => {
     const c = claim('draft', 'cashless', false);
     expect(actionsFor(nextStep(c), c, 'nhcx')[0]).toMatchObject({ nhcx: 'preauth', label: 'Send on NHCX' });
-    expect(actionsFor(nextStep(c), c, 'tms')[0]).toMatchObject({ label: 'I have filed it in TMS', ref: { field: 'tpa_preauth_number' } });
+    expect(actionsFor(nextStep(c), c, 'tms')[0]).toMatchObject({ label: 'Submitted on TMS', ref: { field: 'tpa_preauth_number' } });
   });
   it('the final claim is prefilled with the bill', () => {
     const c = claim('preauth_approved', 'cashless', true);

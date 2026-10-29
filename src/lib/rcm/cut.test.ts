@@ -31,7 +31,7 @@ describe('cut decisions', () => {
     expect(stageOf(c, paidShort)).toBe('payment');
     const step = paymentStep(nextStep(c), 'payment', paidShort, cut);
     expect(step.ours).toBe(true);
-    expect(step.label).toBe('Insurer cut ₹2,000 — accept or fight');
+    expect(step.label).toBe('Deduction ₹2,000 — accept or dispute');
   });
 
   it('an approval cut waits before any money comes', () => {
@@ -61,7 +61,7 @@ describe('cut decisions', () => {
     const s = cutStep(cut, new Date('2026-10-28T10:00:00+05:30'))!;
     expect(s.ours).toBe(false);
     expect(s.overdue).toBe(true);
-    expect(s.label).toBe('Fighting a cut of ₹2,000 — chase the insurer');
+    expect(s.label).toBe('Disputed deduction ₹2,000 — follow up with payer');
   });
 
   it('a won fight closes', () => {

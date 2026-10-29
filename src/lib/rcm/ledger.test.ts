@@ -38,7 +38,7 @@ describe('ledger row: cells fill left to right', () => {
   it('pre-auth sent: waiting on the insurer in the approval cell', () => {
     const r = row(c({ status: 'preauth_pending', preauth_submitted_at: '2026-10-29T09:00:00+05:30', tpa_preauth_number: 'PA-1' }));
     expect(r.cells.pa_sent).toMatchObject({ state: 'done', sub: 'PA-1', editable: false });
-    expect(r.cells.pa_ok).toMatchObject({ state: 'theirs', text: 'Waiting', editable: true });
+    expect(r.cells.pa_ok).toMatchObject({ state: 'theirs', text: 'Awaiting', editable: true });
     expect(r.next.ours).toBe(false);
   });
   it('a pre-auth query is red and ours', () => {
@@ -61,18 +61,18 @@ describe('ledger row: cells fill left to right', () => {
       approved_amount: 50000, preauth_approved_amount: 50000, discharged_at: 'x' }));
     expect(r.cells.pa_ok.text).toBe('₹50,000');
     expect(r.cells.cl_sent).toMatchObject({ state: 'done', sub: '₹52,000' });
-    expect(r.cells.cl_ok).toMatchObject({ state: 'theirs', text: 'Waiting' });
+    expect(r.cells.cl_ok).toMatchObject({ state: 'theirs', text: 'Awaiting' });
     expect(r.cells.disch.editable).toBe(false);
   });
   it('approved less: shows the cut at approval, then waits for money', () => {
     const r = row(c({ status: 'claim_partial', submitted_at: 'x', claimed_amount: 52000, approved_amount: 50000, discharged_at: 'x' }), money({}));
-    expect(r.cells.cl_ok).toMatchObject({ state: 'done', text: '₹50,000', sub: '₹2,000 less' });
+    expect(r.cells.cl_ok).toMatchObject({ state: 'done', text: '₹50,000', sub: '₹2,000 deducted' });
     // a ₹2,000 cut needs Accept / Fight once known — here at approval, the money comes first
     expect(r.cells.paid.editable).toBe(true);
   });
   it('a company patient skips pre-auth', () => {
     const r = row(c({ claim_type: 'corporate' }));
-    expect(r.cells.pa_sent).toMatchObject({ state: 'na', text: 'Not needed', editable: false });
+    expect(r.cells.pa_sent).toMatchObject({ state: 'na', text: 'Not applicable', editable: false });
     expect(r.cells.disch.editable).toBe(true);
   });
   it('a viewer can open nothing but the patient', () => {
@@ -94,26 +94,26 @@ describe('ledger row: money and cuts', () => {
   it('paid ₹500 short of the approval: still a decision, whatever the size', () => {
     const r = paid({ claimed_amount: 50000 }, { allocated: 49500, balance: 500, recon_status: 'part_received' });
     expect(r.cells.cut).toMatchObject({ state: 'ours', text: '₹500', editable: true });
-    expect(r.cells.paid).toMatchObject({ editable: true, sub: '₹500 due' });
+    expect(r.cells.paid).toMatchObject({ editable: true, sub: '₹500 outstanding' });
   });
   it('fighting: amber, can still take the payment', () => {
     const r = paid({ cut_decision: 'fought', cut_decided_at: '2026-10-29T11:00:00+05:30' },
       { allocated: 49000, tds: 1000, balance: 2000, expected_amount: 52000, recon_status: 'disputed' });
-    expect(r.cells.cut).toMatchObject({ tone: 'warn', sub: 'Fighting', editable: true });
+    expect(r.cells.cut).toMatchObject({ tone: 'warn', sub: 'Disputed', editable: true });
     expect(r.cells.paid.editable).toBe(true);
     expect(inFilter(r, 'cuts')).toBe(true);
   });
   it('fought and paid in full: shows Won, row closed', () => {
     const r = paid({ status: 'settled', claimed_amount: 52000, cut_decision: 'fought', cut_decided_at: 'x' },
       { allocated: 51000, tds: 1000, balance: 0, expected_amount: 52000, recon_status: 'settled' });
-    expect(r.cells.cut).toMatchObject({ text: 'Won', editable: false });
-    expect(r.next).toMatchObject({ done: true, text: 'Paid and closed' });
+    expect(r.cells.cut).toMatchObject({ text: 'Recovered', editable: false });
+    expect(r.next).toMatchObject({ done: true, text: 'Settled & closed' });
     expect(inFilter(r, 'cuts')).toBe(false);
   });
   it('paid in full and settled: closed row, nothing editable but the patient', () => {
     const r = paid({ status: 'settled', claimed_amount: 50000, settled_amount: 49000 }, { allocated: 49000, tds: 1000, balance: 0, recon_status: 'settled' });
-    expect(r.next).toMatchObject({ done: true, text: 'Paid and closed' });
-    expect(r.cells.cut).toMatchObject({ text: 'None', editable: false });
+    expect(r.next).toMatchObject({ done: true, text: 'Settled & closed' });
+    expect(r.cells.cut).toMatchObject({ text: 'Nil', editable: false });
     expect(Object.values(r.cells).filter((x) => x.editable).map((x) => x.key)).toEqual(['patient']);
     expect(inFilter(r, 'closed')).toBe(true);
   });
@@ -131,7 +131,7 @@ describe('ledger order and download', () => {
     const csv = toCsv([row(c({ patient_name: 'Shah, Ramesh' }))]);
     const lines = csv.replace('﻿', '').split('\r\n');
     expect(lines).toHaveLength(2);
-    expect(lines[0].startsWith('Admitted,Patient,IP No.')).toBe(true);
+    expect(lines[0].startsWith('Admission date,Patient,IP number')).toBe(true);
     expect(lines[1]).toContain('"Shah, Ramesh"');
   });
 });

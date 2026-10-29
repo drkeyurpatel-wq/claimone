@@ -348,7 +348,7 @@ export default function CasePage() {
           </div>
         )}
         {shown === 'payment' && m?.recon_status === 'disputed' && cutNow?.state !== 'fought' && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-base text-amber-900">Disputed with the insurer — follow up until it is paid.</p>}
-        {shown === 'payment' && isNow && m && m.allocated === 0 && <p className="mt-4 text-base text-slate-700">When the payment letter or PMJAY sheet comes, upload it on <Link href="/pay" className="font-semibold text-teal-700 underline">Upload payments</Link> — it lands here by itself.</p>}
+        {shown === 'payment' && isNow && m && m.allocated === 0 && <p className="mt-4 text-base text-slate-700">When the payment letter or PMJAY sheet comes, upload it on <Link href="/pay" className="font-semibold text-teal-700 underline">Import settlements</Link> — it lands here by itself.</p>}
 
         {/* NHCX replies sit on the stage they answer */}
         {replies.length > 0 && actionStage === shown && (

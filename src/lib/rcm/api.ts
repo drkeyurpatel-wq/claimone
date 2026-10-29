@@ -125,7 +125,7 @@ export function paymentStep(step: Step, stage: StageKey, m: CaseMoney | null, cu
   const c = cut && cutStep(cut);
   if (c) return { ...step, desk: 'payment', key: 'wait_payment', ...c };
   if (!m || m.allocated <= 0 || m.balance <= 100) return step;
-  return { ...step, ours: true, label: 'Paid less — find the reason on the letter', overdue: false, dueAt: null };
+  return { ...step, ours: true, label: 'Short settlement — record reason or dispute', overdue: false, dueAt: null };
 }
 
 /** Accept the insurer's cut (the file then closes from its payments) or fight it (the cut stays due). */

@@ -49,10 +49,10 @@ const FOLLOW_UP_MS = 15 * 86_400_000;
 
 /** The worklist line for a file whose cut is waiting or being fought; null when the cut needs nothing. */
 export function cutStep(cut: Cut, now = new Date()): { label: string; ours: boolean; dueAt: Date | null; overdue: boolean } | null {
-  if (cut.needsDecision) return { label: `Insurer cut ${rs(cut.amount)} — accept or fight`, ours: true, dueAt: null, overdue: false };
+  if (cut.needsDecision) return { label: `Deduction ${rs(cut.amount)} — accept or dispute`, ours: true, dueAt: null, overdue: false };
   if (cut.state === 'fought' && cut.amount >= 1) {
     const dueAt = cut.decidedAt ? new Date(new Date(cut.decidedAt).getTime() + FOLLOW_UP_MS) : null;
-    return { label: `Fighting a cut of ${rs(cut.amount)} — chase the insurer`, ours: false, dueAt, overdue: !!dueAt && now > dueAt };
+    return { label: `Disputed deduction ${rs(cut.amount)} — follow up with payer`, ours: false, dueAt, overdue: !!dueAt && now > dueAt };
   }
   return null;
 }

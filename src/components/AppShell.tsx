@@ -16,10 +16,10 @@ import { sb } from '@/lib/supabase/browser';
 type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean };
 const MAIN_NAV: NavItem[] = [{ href: '/master', label: 'Master', icon: Table2 }];
 const MORE_WORK: NavItem[] = [
-  { href: '/patients', label: 'Patient files', icon: Users },
-  { href: '/cases/upload', label: 'Upload eCW file', icon: FileSpreadsheet },
-  { href: '/pay', label: 'Upload payments', icon: Upload, exact: true },
-  { href: '/pay/check', label: 'Payments to check', icon: ClipboardCheck, exact: true },
+  { href: '/patients', label: 'Case files', icon: Users },
+  { href: '/cases/upload', label: 'Import admissions (eCW)', icon: FileSpreadsheet },
+  { href: '/pay', label: 'Import settlements', icon: Upload, exact: true },
+  { href: '/pay/check', label: 'Settlement review', icon: ClipboardCheck, exact: true },
 ];
 const MORE_MANAGER: NavItem[] = [
   { href: '/overview', label: 'Overview', icon: Gauge },

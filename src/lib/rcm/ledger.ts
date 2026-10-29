@@ -30,13 +30,13 @@ export interface Cell {
 
 export const COLUMNS: { key: ColKey; label: string; short: string }[] = [
   { key: 'patient', label: 'Patient', short: 'Patient' },
-  { key: 'pa_sent', label: 'Pre-auth sent', short: 'PA sent' },
+  { key: 'pa_sent', label: 'Pre-auth submitted', short: 'PA submitted' },
   { key: 'pa_ok', label: 'Pre-auth approved', short: 'PA approved' },
-  { key: 'disch', label: 'Discharged', short: 'Discharged' },
-  { key: 'cl_sent', label: 'Claim sent', short: 'Claim sent' },
+  { key: 'disch', label: 'Discharge', short: 'Discharge' },
+  { key: 'cl_sent', label: 'Claim submitted', short: 'Claim submitted' },
   { key: 'cl_ok', label: 'Claim approved', short: 'Approved' },
-  { key: 'paid', label: 'Received', short: 'Received' },
-  { key: 'cut', label: 'Cut', short: 'Cut' },
+  { key: 'paid', label: 'Settlement received', short: 'Settlement' },
+  { key: 'cut', label: 'Deduction', short: 'Deduction' },
 ];
 
 const IST = 'Asia/Kolkata';
@@ -103,7 +103,7 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
 
   // pre-auth sent
   const paSent: Cell = skippedPreauth
-    ? { key: 'pa_sent', state: 'na', text: corporate ? 'Not needed' : 'Skipped', editable: false }
+    ? { key: 'pa_sent', state: 'na', text: corporate ? 'Not applicable' : 'Not taken', editable: false }
     : { key: 'pa_sent', state: mark('pa_sent', preauthSent, false), text: preauthSent ? dd(c.preauth_submitted_at) : '',
         sub: c.tpa_preauth_number ?? undefined, editable: w && col === 'pa_sent' };
 
@@ -111,7 +111,7 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   const paAmt = c.preauth_approved_amount ?? (PREAUTH_DONE.has(c.status) ? c.approved_amount : null);
   const paDone = paAmt != null || PREAUTH_DONE.has(c.status);
   const paText = c.status === 'preauth_query' ? 'Query' : c.status === 'preauth_rejected' ? 'Rejected'
-    : paDone ? rs(paAmt) || 'Approved' : c.status === 'preauth_pending' ? 'Waiting' : '';
+    : paDone ? rs(paAmt) || 'Approved' : c.status === 'preauth_pending' ? 'Awaiting' : '';
   const paOk: Cell = skippedPreauth
     ? { key: 'pa_ok', state: 'na', text: '', editable: false }
     : { key: 'pa_ok', state: col === 'pa_ok' ? mark('pa_ok', false, false) : mark('pa_ok', paDone, false), text: paText,
@@ -127,34 +127,34 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
 
   // claim sent
   const clDone = !!c.submitted_at || inClaim;
-  const clSent: Cell = { key: 'cl_sent', state: mark('cl_sent', clDone, false), text: clDone ? dd(c.submitted_at) || 'Sent' : '',
+  const clSent: Cell = { key: 'cl_sent', state: mark('cl_sent', clDone, false), text: clDone ? dd(c.submitted_at) || 'Submitted' : '',
     sub: c.claimed_amount != null && clDone ? rs(c.claimed_amount) : undefined, editable: w && col === 'cl_sent' };
 
   // claim decision
   const clOkDone = APPROVED.has(c.status) || (c.status === 'closed' && c.approved_amount != null && inClaim);
   const clText = c.status === 'claim_query' ? 'Query' : c.status === 'claim_rejected' ? 'Rejected'
-    : clOkDone ? rs(c.approved_amount) : ['claim_submitted', 'claim_under_review'].includes(c.status) ? 'Waiting' : '';
+    : clOkDone ? rs(c.approved_amount) : ['claim_submitted', 'claim_under_review'].includes(c.status) ? 'Awaiting' : '';
   const approvalCut = clOkDone && c.claimed_amount != null && c.approved_amount != null && Number(c.claimed_amount) > Number(c.approved_amount)
     ? Number(c.claimed_amount) - Number(c.approved_amount) : 0;
   const clOk: Cell = { key: 'cl_ok', state: col === 'cl_ok' ? mark('cl_ok', false, false) : mark('cl_ok', clOkDone, false), text: clText,
-    sub: approvalCut >= 1 ? `${rs(approvalCut)} less` : undefined,
+    sub: approvalCut >= 1 ? `${rs(approvalCut)} deducted` : undefined,
     tone: c.status === 'claim_query' || c.status === 'claim_rejected' ? 'alert' : undefined, editable: w && col === 'cl_ok' };
 
   // received
   const got = m?.allocated ?? (c.status === 'settled' ? Number(c.settled_amount ?? 0) : 0);
   const moreDue = !!m && m.balance > 1 && APPROVED.has(c.status) && c.status !== 'settled';
   const paid: Cell = { key: 'paid', state: col === 'paid' ? mark('paid', false, false) : got > 0 ? 'done' : mark('paid', false, false),
-    text: got > 0 ? rs(got) : col === 'paid' ? 'Waiting' : '',
-    sub: got > 0 ? [m && m.tds ? `TDS ${rs(m.tds)}` : '', moreDue ? `${rs(m!.balance)} due` : ''].filter(Boolean).join(' · ') || undefined : undefined,
+    text: got > 0 ? rs(got) : col === 'paid' ? 'Awaiting' : '',
+    sub: got > 0 ? [m && m.tds ? `TDS ${rs(m.tds)}` : '', moreDue ? `${rs(m!.balance)} outstanding` : ''].filter(Boolean).join(' · ') || undefined : undefined,
     editable: w && APPROVED.has(c.status) && c.status !== 'settled' && (got === 0 || moreDue) };
 
   // cut
   const cutCell: Cell = cut.won
-    ? { key: 'cut', state: 'done', text: 'Won', sub: 'Paid in full after the fight', editable: false }
+    ? { key: 'cut', state: 'done', text: 'Recovered', sub: 'Paid in full after dispute', editable: false }
     : cut.state === 'none'
-    ? { key: 'cut', state: CLOSED.has(c.status) || got > 0 ? 'done' : 'blank', text: CLOSED.has(c.status) || got > 0 ? 'None' : '', editable: false }
+    ? { key: 'cut', state: CLOSED.has(c.status) || got > 0 ? 'done' : 'blank', text: CLOSED.has(c.status) || got > 0 ? 'Nil' : '', editable: false }
     : { key: 'cut', state: cut.needsDecision ? 'ours' : 'done', text: rs(cut.amount),
-        sub: cut.needsDecision ? 'Accept or fight' : cut.state === 'fought' ? 'Fighting' : cut.state === 'accepted' ? 'Accepted' : `Under ${rs(CUT_FLOOR)}`,
+        sub: cut.needsDecision ? 'Accept or dispute' : cut.state === 'fought' ? 'Disputed' : cut.state === 'accepted' ? 'Accepted' : `Below ${rs(CUT_FLOOR)}`,
         tone: cut.needsDecision ? 'alert' : cut.state === 'fought' ? 'warn' : undefined,
         editable: canWrite && c.status !== 'closed' && c.status !== 'written_off' && (cut.needsDecision || cut.state === 'fought' || (cut.state === 'pending' && c.status === 'settled')) };
 
@@ -164,11 +164,11 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   // the reminder
   let next: LedgerRow['next'];
   if (c.status === 'written_off') next = { text: 'Written off', due: null, late: false, ours: false, done: true };
-  else if (c.status === 'closed') next = { text: c.preauth_submitted_at && !inClaim ? 'Closed — patient paid' : 'Closed', due: null, late: false, ours: false, done: true };
-  else if (c.status === 'settled' && !cut.needsDecision && cut.state !== 'fought') next = { text: 'Paid and closed', due: null, late: false, ours: false, done: true };
+  else if (c.status === 'closed') next = { text: c.preauth_submitted_at && !inClaim ? 'Closed — self-pay' : 'Closed', due: null, late: false, ours: false, done: true };
+  else if (c.status === 'settled' && !cut.needsDecision && cut.state !== 'fought') next = { text: 'Settled & closed', due: null, late: false, ours: false, done: true };
   else {
     const due = dueText(step, now);
-    next = { text: step.label, due: due ? (step.overdue && !step.ours ? `Chase — ${due}` : due) : null,
+    next = { text: step.label, due: due ? (step.overdue && !step.ours ? `Follow up — ${due}` : due) : null,
       late: step.overdue, ours: step.ours, done: false };
   }
 
@@ -179,9 +179,9 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
 export type Filter = 'open' | 'mine' | 'chase' | 'cuts' | 'closed';
 export const FILTERS: { key: Filter; label: string }[] = [
   { key: 'open', label: 'All open' },
-  { key: 'mine', label: 'Our turn' },
-  { key: 'chase', label: 'Chase insurer' },
-  { key: 'cuts', label: 'Cuts & fights' },
+  { key: 'mine', label: 'Action due' },
+  { key: 'chase', label: 'Follow-up overdue' },
+  { key: 'cuts', label: 'Deductions & disputes' },
   { key: 'closed', label: 'Closed' },
 ];
 
@@ -213,8 +213,8 @@ const n = (v: number | null | undefined) => (v == null ? '' : Math.round(Number(
 const ymd = (d: string | null | undefined) => (d ? new Date(d.length === 10 ? `${d}T12:00:00+05:30` : d).toLocaleDateString('en-CA', { timeZone: IST }) : '');
 
 export function toCsv(rows: LedgerRow[]): string {
-  const head = ['Admitted', 'Patient', 'IP No.', 'UHID', 'Insurer', 'Pre-auth sent', 'Pre-auth no.', 'Pre-auth approved',
-    'Discharged', 'Claim sent', 'Claim no.', 'Claimed', 'Approved', 'Received', 'TDS', 'Still due', 'Cut', 'Cut status', 'Next', 'Due'];
+  const head = ['Admission date', 'Patient', 'IP number', 'UHID', 'Payer', 'Pre-auth submitted', 'Pre-auth number', 'Pre-auth approved',
+    'Discharge date', 'Claim submitted', 'Claim number', 'Claimed', 'Approved', 'Received', 'TDS', 'Outstanding', 'Deduction', 'Deduction status', 'Next action', 'Due'];
   const lines = rows.map(({ j: { c, money: m }, cut, next, cells }) => [
     ymd(c.admitted_at ?? c.admission_date), c.patient_name, c.admission_ref, c.patient_uhid, c.clm_payers?.name ?? c.sponsor_name,
     ymd(c.preauth_submitted_at), c.tpa_preauth_number, n(c.preauth_approved_amount), ymd(c.discharged_at ?? c.discharge_date),

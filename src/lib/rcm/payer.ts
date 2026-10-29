@@ -21,8 +21,26 @@ export function routeFor(p: { is_nhcx_live?: boolean; nhcx_code?: string | null;
 
 export const ROUTE_WORDS: Record<Route, { label: string; sent: string }> = {
   nhcx: { label: 'NHCX', sent: 'Send on NHCX' },
-  portal: { label: 'TPA / insurer website', sent: 'I have sent it on the website' },
-  email: { label: 'Email', sent: 'I have sent the email' },
-  tms: { label: 'TMS (PMJAY)', sent: 'I have filed it in TMS' },
-  direct: { label: 'Given to the company', sent: 'I have sent the bill' },
+  portal: { label: 'Payer portal', sent: 'Submitted on payer portal' },
+  email: { label: 'Email', sent: 'Submitted by email' },
+  tms: { label: 'TMS (PMJAY)', sent: 'Submitted on TMS' },
+  direct: { label: 'Direct to corporate', sent: 'Bill sent to corporate' },
 };
+
+/** The first choice on a new admission: what kind of payer, before which one. */
+export type PayerGroup = 'pmjay' | 'scheme' | 'tpa' | 'insurer' | 'corporate';
+export const PAYER_GROUPS: { key: PayerGroup; label: string; hint: string }[] = [
+  { key: 'pmjay', label: 'PMJAY / MA', hint: 'Ayushman Bharat & state scheme' },
+  { key: 'scheme', label: 'Govt. scheme', hint: 'CGHS · ECHS · ESIC' },
+  { key: 'tpa', label: 'TPA', hint: 'Third-party administrator' },
+  { key: 'insurer', label: 'Insurance company', hint: 'Direct cashless, incl. PSU' },
+  { key: 'corporate', label: 'Corporate', hint: 'Company credit' },
+];
+
+export function payerGroup(p: Pick<Payer, 'code' | 'type'>): PayerGroup {
+  if (p.code.startsWith('pmjay')) return 'pmjay';
+  if (p.type === 'government') return 'scheme';
+  if (p.type === 'tpa') return 'tpa';
+  if (p.type === 'corporate') return 'corporate';
+  return 'insurer'; // private and PSU insurers
+}

@@ -18,8 +18,8 @@ const GROUNDS = [
   'Items are payable as per the policy terms',
   'Room was within the eligible category',
   'Charges are as per the agreed tariff / package',
-  'All papers were sent — please recheck',
-  'Medically necessary as per treating doctor',
+  'All documents were submitted — please re-verify',
+  'Medically necessary as per the treating doctor',
 ];
 
 function appealText(c: Claim, cut: Cut, reason: string | null, grounds: string): string {
@@ -37,7 +37,7 @@ function appealText(c: Claim, cut: Cut, reason: string | null, grounds: string):
     `Kindly review and release the balance of ${inr(cut.amount)}.`,
     '',
     'Regards,',
-    'TPA / Claims Desk',
+    'Claims Desk',
   ].filter((l) => l !== null).join('\n');
 }
 
@@ -59,30 +59,30 @@ export function CutPanel({ c, cut, reason, shortfall, canWrite, onDone }: {
 
   if (cut.state === 'none') return null;
   if (cut.state === 'small') {
-    return <p className="mt-4 text-sm text-slate-500">Cut of {inr(cut.amount)} is under {inr(CUT_FLOOR)}, so it closes by itself.</p>;
+    return <p className="mt-4 text-sm text-slate-500">Deduction of {inr(cut.amount)} is below {inr(CUT_FLOOR)} and closes automatically.</p>;
   }
   if (cut.state === 'accepted') {
     return <p className="mt-4 rounded-xl bg-slate-50 p-3 text-base text-slate-700">
-      Cut of {inr(cut.amount)} accepted{cut.decidedAt ? ` on ${shortDate(cut.decidedAt)}` : ''}{c.cut_note ? ` — ${c.cut_note}` : ''}.
+      Deduction of {inr(cut.amount)} accepted{cut.decidedAt ? ` on ${shortDate(cut.decidedAt)}` : ''}{c.cut_note ? ` — ${c.cut_note}` : ''}.
     </p>;
   }
 
   const go = async (decision: 'accept' | 'fight') => {
     setError('');
-    if (decision === 'fight' && !text.trim()) { setError('Write why the cut is wrong (or tap one of the reasons).'); return; }
-    if (decision === 'accept' && shortfall > 1 && !cat) { setError('Pick the reason for the cut.'); return; }
+    if (decision === 'fight' && !text.trim()) { setError('Enter the grounds for dispute, or select one above.'); return; }
+    if (decision === 'accept' && shortfall > 1 && !cat) { setError('Select the deduction reason.'); return; }
     setBusy(true);
     try {
       await decideCut(c.id, decision, text.trim() || undefined, cat || undefined);
       setMode(null); setText(''); setCat('');
-      onDone(decision === 'fight' ? 'Fight started — the money stays due' : 'Cut accepted');
+      onDone(decision === 'fight' ? 'Dispute raised — amount remains outstanding' : 'Deduction accepted');
     } catch (e) { setError((e as Error).message); }
     setBusy(false);
   };
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(appealText(c, cut, reason, c.cut_note ?? text)); setCopied(true); setTimeout(() => setCopied(false), 2000); }
-    catch { setError('Could not copy — select the text and copy it.'); }
+    catch { setError('Copy failed — please select the text and copy it manually.'); }
   };
 
   const fighting = cut.state === 'fought';
@@ -90,42 +90,42 @@ export function CutPanel({ c, cut, reason, shortfall, canWrite, onDone }: {
     <div className={`mt-4 rounded-xl border-2 p-4 ${fighting ? 'border-amber-300 bg-amber-50' : 'border-rose-300 bg-rose-50'}`}>
       <p className="flex items-center gap-2 text-lg font-semibold text-slate-900">
         <Scale className="h-5 w-5" />
-        {fighting ? `Fighting the cut of ${inr(cut.amount)}` : `Insurer cut ${inr(cut.amount)}`}
+        {fighting ? `Disputed deduction — ${inr(cut.amount)}` : `Deduction — ${inr(cut.amount)}`}
       </p>
-      {reason && <p className="mt-1 text-base text-slate-700">Their reason: <b>{reason}</b></p>}
+      {reason && <p className="mt-1 text-base text-slate-700">Payer's reason: <b>{reason}</b></p>}
       {fighting ? (
         <p className="mt-1 text-base text-slate-700">
-          Started {cut.decidedAt ? shortDate(cut.decidedAt) : ''}{c.cut_note ? ` — our reason: ${c.cut_note}` : ''}.
-          The money stays due until the insurer pays it. Send the appeal on the insurer website or by email, and follow up.
+          Dispute raised{cut.decidedAt ? ` on ${shortDate(cut.decidedAt)}` : ''}{c.cut_note ? ` — grounds: ${c.cut_note}` : ''}.
+          The amount remains outstanding until the payer settles it. Submit the appeal on the payer portal or by email and follow up.
         </p>
       ) : (
         <p className="mt-1 text-base text-slate-700">
-          {c.status === 'settled' ? 'This file closed before cuts needed a decision. You can still fight it.' : 'This file stays open until you decide.'}
+          {c.status === 'settled' ? 'This case closed before deduction decisions were required. It can still be disputed.' : 'This case stays open until a decision is recorded.'}
         </p>
       )}
 
       {canWrite && !mode && (
         <div className="mt-3 flex flex-wrap gap-2">
-          {!fighting && <button onClick={() => setMode('fight')} className="min-h-12 rounded-xl bg-amber-500 px-5 text-base font-semibold text-white hover:bg-amber-600">Fight it</button>}
+          {!fighting && <button onClick={() => setMode('fight')} className="min-h-12 rounded-xl bg-amber-500 px-5 text-base font-semibold text-white hover:bg-amber-600">Dispute</button>}
           {fighting && <button onClick={copy} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-teal-600 px-5 text-base font-semibold text-white hover:bg-teal-700">
             {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />} {copied ? 'Copied' : 'Copy appeal letter'}</button>}
           <button onClick={() => setMode('accept')} className="min-h-12 rounded-xl border border-slate-300 bg-white px-5 text-base font-semibold text-slate-800 hover:bg-slate-50">
-            {fighting ? 'Give up — accept the cut' : 'Accept the cut'}</button>
+            {fighting ? 'Close dispute — accept deduction' : 'Accept deduction'}</button>
         </div>
       )}
 
       {mode === 'fight' && (
         <div className="mt-3 space-y-3 rounded-xl bg-white p-4">
-          <p className="text-base font-semibold text-slate-900">Why is the cut wrong?</p>
+          <p className="text-base font-semibold text-slate-900">Grounds for dispute</p>
           <div className="flex flex-wrap gap-2">
             {GROUNDS.map((g) => (
               <button key={g} type="button" onClick={() => setText(g)}
                 className={`min-h-11 rounded-full border px-3 text-sm ${text === g ? 'border-amber-500 bg-amber-100 font-semibold' : 'border-slate-300 bg-white'}`}>{g}</button>
             ))}
           </div>
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} className={`${field} py-2`} placeholder="Or write it in your words" />
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} className={`${field} py-2`} placeholder="Or enter the grounds" />
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => go('fight')} disabled={busy} className="min-h-12 rounded-xl bg-amber-500 px-5 text-base font-semibold text-white disabled:opacity-50">Start the fight</button>
+            <button onClick={() => go('fight')} disabled={busy} className="min-h-12 rounded-xl bg-amber-500 px-5 text-base font-semibold text-white disabled:opacity-50">Raise dispute</button>
             <button onClick={() => { setMode(null); setError(''); }} className="min-h-12 rounded-xl px-4 text-base text-slate-600">Back</button>
           </div>
         </div>
@@ -133,15 +133,15 @@ export function CutPanel({ c, cut, reason, shortfall, canWrite, onDone }: {
 
       {mode === 'accept' && (
         <div className="mt-3 space-y-3 rounded-xl bg-white p-4">
-          <p className="text-base font-semibold text-slate-900">Accept losing {inr(cut.amount)}? This cannot be claimed again.</p>
-          {shortfall > 1 && <label className="block text-base font-medium text-slate-800">Reason for the cut *
+          <p className="text-base font-semibold text-slate-900">Accept a deduction of {inr(cut.amount)}? It cannot be claimed later.</p>
+          {shortfall > 1 && <label className="block text-base font-medium text-slate-800">Deduction reason *
             <select value={cat} onChange={(e) => setCat(e.target.value)} className={field}>
               <option value="">Choose…</option>
               {Object.entries(DISALLOWANCE_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select></label>}
-          <input value={text} onChange={(e) => setText(e.target.value)} className={field} placeholder="Note (optional) — e.g. appeal refused" />
+          <input value={text} onChange={(e) => setText(e.target.value)} className={field} placeholder="Remarks (optional) — e.g. appeal declined" />
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => go('accept')} disabled={busy} className="min-h-12 rounded-xl bg-slate-700 px-5 text-base font-semibold text-white disabled:opacity-50">Yes, accept the cut</button>
+            <button onClick={() => go('accept')} disabled={busy} className="min-h-12 rounded-xl bg-slate-700 px-5 text-base font-semibold text-white disabled:opacity-50">Confirm & accept</button>
             <button onClick={() => { setMode(null); setError(''); }} className="min-h-12 rounded-xl px-4 text-base text-slate-600">Back</button>
           </div>
         </div>

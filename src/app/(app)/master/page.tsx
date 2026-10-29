@@ -27,9 +27,9 @@ function CellView({ cell, onOpen }: { cell: Cell; onOpen: () => void }) {
   const empty = !cell.text;
   const body = (
     <>
-      <span className="block truncate">{empty ? (cell.state === 'ours' ? 'Fill now' : cell.editable ? '' : '—') : cell.text}</span>
+      <span className="block truncate">{empty ? (cell.state === 'ours' ? 'Action due' : cell.editable ? '' : '—') : cell.text}</span>
       {cell.sub && <span className="block truncate text-xs font-normal opacity-80">{cell.sub}</span>}
-      {empty && cell.editable && cell.state !== 'ours' && <span className="inline-flex items-center gap-0.5 text-sm"><Plus className="h-3.5 w-3.5" />Add</span>}
+      {empty && cell.editable && cell.state !== 'ours' && <span className="inline-flex items-center gap-0.5 text-sm"><Plus className="h-3.5 w-3.5" />Update</span>}
     </>
   );
   if (!cell.editable) return <div className={`min-h-[52px] rounded-md px-2 py-1.5 text-sm ${cls}`}>{body}</div>;
@@ -61,7 +61,7 @@ function Ledger() {
   const load = useCallback(async () => {
     if (!centreId) return;
     try { setAll(await fetchJourneys(centreId)); setError(''); }
-    catch { setError('Could not load Master. Check the internet and refresh.'); }
+    catch { setError('Could not load Master. Please check the connection and refresh.'); }
   }, [centreId]);
   useEffect(() => { setAll(null); load(); const t = setInterval(load, 60_000); return () => clearInterval(t); }, [load]);
 
@@ -96,16 +96,20 @@ function Ledger() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Master{centreName && centres.length > 1 ? ` — ${centreName}` : ''}</h1>
-          <p className="mt-1 text-base text-slate-600">Tap a box to fill it. <span className="rounded bg-amber-100 px-1.5 font-semibold text-amber-900">Yellow</span> is ours to do now,{' '}
-            <span className="rounded bg-sky-100 px-1.5 text-sky-900">blue</span> waits on the insurer, <span className="rounded bg-rose-100 px-1.5 font-semibold text-rose-800">red</span> needs a decision.</p>
+          <p className="mt-1 text-base text-slate-600">Cashless and credit cases, admission to settlement. Select a cell to update it.</p>
+          <div className="mt-2 flex flex-wrap gap-2 text-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 font-medium text-amber-900 ring-1 ring-amber-300"><span className="h-2 w-2 rounded-full bg-amber-400" />Action due</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-0.5 font-medium text-sky-900 ring-1 ring-sky-300"><span className="h-2 w-2 rounded-full bg-sky-400" />Awaiting payer</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-0.5 font-medium text-rose-800 ring-1 ring-rose-300"><span className="h-2 w-2 rounded-full bg-rose-500" />Decision needed</span>
+          </div>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={download} disabled={!shown.length}
             className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40">
-            <Download className="h-4 w-4" /> Download Excel</button>
+            <Download className="h-4 w-4" /> Export to Excel</button>
           {canWrite && <button type="button" onClick={() => setAdding(true)}
             className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700">
-            <UserPlus className="h-4 w-4" /> Add patient</button>}
+            <UserPlus className="h-4 w-4" /> New admission</button>}
         </div>
       </div>
 
@@ -121,7 +125,7 @@ function Ledger() {
         </div>
         <label className="relative ml-auto w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, IP No., insurer, claim no." aria-label="Search Master"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search patient, IP no., payer, claim no." aria-label="Search Master"
             className="min-h-11 w-full rounded-full border border-slate-300 pl-9 pr-3 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100" />
         </label>
       </div>
@@ -131,8 +135,8 @@ function Ledger() {
 
       {all && shown.length === 0 && (
         <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-10 text-center">
-          <p className="text-base text-slate-600">{q ? 'No patient matches that search.' : all.length === 0 ? 'Master is empty.' : filter === 'open' ? 'All caught up — no open files.' : 'Nothing here right now.'}</p>
-          {canWrite && all.length === 0 && <button type="button" onClick={() => setAdding(true)} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white"><UserPlus className="h-4 w-4" /> Add the first patient</button>}
+          <p className="text-base text-slate-600">{q ? 'No case matches this search.' : all.length === 0 ? 'No cases yet.' : filter === 'open' ? 'All caught up — no open cases.' : 'Nothing here right now.'}</p>
+          {canWrite && all.length === 0 && <button type="button" onClick={() => setAdding(true)} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white"><UserPlus className="h-4 w-4" /> Add first admission</button>}
         </div>
       )}
 
@@ -142,11 +146,11 @@ function Ledger() {
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th scope="col" className="sticky left-0 z-10 w-48 border-b border-slate-200 bg-slate-50 px-3 py-2.5">Patient</th>
-                <th scope="col" className="w-32 border-b border-slate-200 px-3 py-2.5">Insurer</th>
+                <th scope="col" className="w-32 border-b border-slate-200 px-3 py-2.5">Payer</th>
                 {COLUMNS.slice(1).map((col) => (
                   <th key={col.key} scope="col" className="border-b border-slate-200 px-3 py-2.5">{col.label}</th>
                 ))}
-                <th scope="col" className="w-56 border-b border-slate-200 px-3 py-2.5">Next / reminder</th>
+                <th scope="col" className="w-56 border-b border-slate-200 px-3 py-2.5">Next action</th>
               </tr>
             </thead>
             <tbody>
@@ -173,11 +177,11 @@ function Ledger() {
           </table>
         </div>
       )}
-      {all && shown.length > 0 && <p className="mt-2 text-sm text-slate-500">{shown.length} patient{shown.length === 1 ? '' : 's'}{filter === 'closed' && !q ? ' closed in the last 60 days' : ''}</p>}
+      {all && shown.length > 0 && <p className="mt-2 text-sm text-slate-500">{shown.length} case{shown.length === 1 ? '' : 's'}{filter === 'closed' && !q ? ' closed in the last 60 days' : ''}</p>}
 
       {editing && edit && <CellEditor r={editing} col={edit.col} canWrite={canWrite} isManager={isManager} onClose={() => setEdit(null)} onSaved={saved} />}
       {adding && <AddPatient tenantId={tenantId} centreId={centreId} onClose={() => setAdding(false)}
-        onSaved={async (id) => { setAdding(false); setFresh(id); setQ(''); router.replace('/master', { scroll: false }); flash('Patient added'); await load(); }} />}
+        onSaved={async (id) => { setAdding(false); setFresh(id); setQ(''); router.replace('/master', { scroll: false }); flash('Admission added to Master'); await load(); }} />}
     </div>
   );
 }

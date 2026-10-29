@@ -85,7 +85,7 @@ export default function UploadCases() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 md:px-6">
-      <h1 className="text-2xl font-bold text-slate-900">Upload today’s admissions</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Import admissions (eCW)</h1>
       <p className="mt-1 text-base text-slate-600">Export the IPD / day-care list from eCW, add the file here and press <b>Save</b>. Do this every morning.</p>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">

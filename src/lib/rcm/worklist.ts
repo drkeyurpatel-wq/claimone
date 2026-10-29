@@ -64,46 +64,46 @@ export function nextStep(c: CaseLike, now = new Date()): Step {
   const admitted = t(c.admitted_at) ?? t(c.admission_date) ?? t(c.created_at);
   const discharged = t(c.discharged_at) ?? t(c.discharge_date);
   const changed = t(c.status_changed_at) ?? t(c.updated_at);
-  const where = pmjay ? 'TMS' : 'insurer';
+  const where = pmjay ? 'TMS' : 'payer';
 
   switch (c.status) {
     case 'draft':
       if (corporate && !discharged) {
-        return step('admission', 'in_hospital_approved', 'In hospital — bill the company after discharge', false, null, null, now);
+        return step('admission', 'in_hospital_approved', 'Admitted — raise bill to corporate after discharge', false, null, null, now);
       }
       if (discharged) {
-        return step('claims', 'send_claim', corporate ? 'Send the bill to the company' : 'Send the claim', true,
+        return step('claims', 'send_claim', corporate ? 'Raise final bill to corporate' : 'Submit final claim', true,
           discharged ?? admitted, corporate ? TARGETS.sendClaim.corporate : govt ? TARGETS.sendClaim.govt : TARGETS.sendClaim.insurer, now);
       }
-      return step('admission', 'send_preauth', pmjay ? 'File pre-auth in TMS' : 'Send pre-auth', true, admitted, TARGETS.sendPreauth, now);
+      return step('admission', 'send_preauth', pmjay ? 'Submit pre-auth on TMS' : 'Submit pre-authorisation', true, admitted, TARGETS.sendPreauth, now);
     case 'preauth_pending':
-      return step('admission', 'wait_preauth', `Waiting for pre-auth reply (${where})`, false,
+      return step('admission', 'wait_preauth', `Awaiting pre-auth decision (${where})`, false,
         t(c.preauth_submitted_at) ?? changed, govt ? TARGETS.preauthReply.govt : TARGETS.preauthReply.insurer, now);
     case 'preauth_query':
-      return step('admission', 'answer_preauth_query', 'Answer the pre-auth query', true, changed, TARGETS.answerQuery, now);
+      return step('admission', 'answer_preauth_query', 'Reply to pre-auth query', true, changed, TARGETS.answerQuery, now);
     case 'preauth_rejected':
-      return step('admission', 'preauth_rejected', 'Pre-auth rejected — tell the patient, or appeal', true, changed, TARGETS.answerQuery, now);
+      return step('admission', 'preauth_rejected', 'Pre-auth rejected — appeal or convert to self-pay', true, changed, TARGETS.answerQuery, now);
     case 'preauth_approved':
     case 'preauth_enhanced':
       if (!discharged) {
         const short = c.estimated_amount != null && c.approved_amount != null && c.estimated_amount > c.approved_amount;
         return step('admission', 'in_hospital_approved',
-          short ? 'Approved less than the estimate — ask for enhancement if the bill will be higher' : 'Approved — in hospital', false, null, null, now);
+          short ? 'Approved below estimate — request enhancement if required' : 'Pre-auth approved — patient admitted', false, null, null, now);
       }
-      return step('claims', 'send_claim', pmjay ? 'Submit the claim in TMS' : 'Send the final bill', true,
+      return step('claims', 'send_claim', pmjay ? 'Submit claim on TMS' : 'Submit final claim', true,
         discharged, govt ? TARGETS.sendClaim.govt : TARGETS.sendClaim.insurer, now);
     case 'claim_submitted':
     case 'claim_under_review':
-      return step('claims', 'wait_claim', `Waiting for claim decision (${where})`, false,
+      return step('claims', 'wait_claim', `Awaiting claim decision (${where})`, false,
         t(c.submitted_at) ?? changed, govt ? TARGETS.claimDecision.govt : TARGETS.claimDecision.insurer, now);
     case 'claim_query':
-      return step('claims', 'answer_claim_query', 'Answer the claim query', true, changed, 2 * DAY, now);
+      return step('claims', 'answer_claim_query', 'Reply to claim query', true, changed, 2 * DAY, now);
     case 'claim_rejected':
-      return step('claims', 'claim_rejected', 'Claim rejected — appeal, or ask a manager to write off', true, changed, 7 * DAY, now);
+      return step('claims', 'claim_rejected', 'Claim rejected — appeal or seek write-off approval', true, changed, 7 * DAY, now);
     case 'claim_approved':
     case 'claim_partial':
     case 'settlement_pending':
-      return step('payment', 'wait_payment', 'Approved — waiting for the money', false,
+      return step('payment', 'wait_payment', 'Claim approved — awaiting settlement', false,
         changed, govt ? TARGETS.payment.govt : TARGETS.payment.insurer, now);
     default:
       return step('done', 'done', 'Done', false, null, null, now);
@@ -124,14 +124,14 @@ export function dueText(s: Step, now = new Date()): string | null {
   const ms = s.dueAt.getTime() - now.getTime();
   const abs = Math.abs(ms);
   const txt = abs < HOUR ? `${Math.max(1, Math.round(abs / 60000))} min` : abs < 2 * DAY ? `${Math.round(abs / HOUR)} h` : `${Math.round(abs / DAY)} days`;
-  return ms < 0 ? `${txt} late` : `in ${txt}`;
+  return ms < 0 ? `${txt} overdue` : `in ${txt}`;
 }
 
 export const STATUS_WORDS: Record<ClaimStatus, string> = {
-  draft: 'Not sent yet',
-  preauth_pending: 'Pre-auth sent', preauth_query: 'Pre-auth query', preauth_approved: 'Pre-auth approved',
+  draft: 'Not submitted',
+  preauth_pending: 'Pre-auth submitted', preauth_query: 'Pre-auth query', preauth_approved: 'Pre-auth approved',
   preauth_enhanced: 'Enhancement approved', preauth_rejected: 'Pre-auth rejected',
-  claim_submitted: 'Claim sent', claim_under_review: 'Claim under review', claim_query: 'Claim query',
-  claim_approved: 'Claim approved', claim_partial: 'Part approved', claim_rejected: 'Claim rejected',
-  settlement_pending: 'Payment due', settled: 'Paid', closed: 'Closed', written_off: 'Written off',
+  claim_submitted: 'Claim submitted', claim_under_review: 'Claim under review', claim_query: 'Claim query',
+  claim_approved: 'Claim approved', claim_partial: 'Partially approved', claim_rejected: 'Claim rejected',
+  settlement_pending: 'Settlement due', settled: 'Settled', closed: 'Closed', written_off: 'Written off',
 };

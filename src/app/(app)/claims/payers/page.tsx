@@ -1,7 +1,7 @@
 'use client';
 // Payer master + scorecard (across every centre this login can see).
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Search, Pencil } from 'lucide-react';
+import { Building2, Search, Pencil, Plus } from 'lucide-react';
 import { sb } from '@/lib/supabase/browser';
 import { useAuthStore } from '@/lib/store/auth';
 import { ROUTE_WORDS } from '@/lib/rcm/payer';
@@ -46,6 +46,38 @@ function RouteCell({ p, isAdmin, onSaved }: { p: Payer; isAdmin: boolean; onSave
   );
 }
 
+/** Admins add a hospital-specific payer (a new corporate, a local TPA) in one line. */
+function AddPayer({ onSaved }: { onSaved: () => void }) {
+  const tenantId = useAuthStore((s) => s.tenantId);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [type, setType] = useState<Payer['type']>('corporate');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    const n = name.trim();
+    if (!n) { setErr('Enter the payer name.'); return; }
+    setBusy(true); setErr('');
+    const code = n.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'payer';
+    const { error } = await sb().from('clm_payers').insert({ tenant_id: tenantId, code, name: n, type, ...(type === 'corporate' ? { channel: 'direct' } : {}) });
+    setBusy(false);
+    if (error) { setErr(/duplicate|uq/i.test(error.message) ? 'A payer with this name already exists.' : 'Could not add the payer.'); return; }
+    setOpen(false); setName(''); onSaved();
+  };
+  if (!open) return <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700"><Plus className="h-3.5 w-3.5" /> Add payer</button>;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Payer name" aria-label="Payer name" className="w-56 rounded-lg border border-slate-200 px-3 py-1.5 text-xs" autoFocus />
+      <select value={type} onChange={(e) => setType(e.target.value as Payer['type'])} aria-label="Payer type" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs">
+        {(Object.keys(TYPE) as Payer['type'][]).map((k) => <option key={k} value={k}>{TYPE[k].label}</option>)}
+      </select>
+      <button onClick={save} disabled={busy} className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Save</button>
+      <button onClick={() => { setOpen(false); setErr(''); }} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs">Cancel</button>
+      {err && <span role="alert" className="text-xs text-rose-600">{err}</span>}
+    </div>
+  );
+}
+
 export default function Payers() {
   const isAdmin = useAuthStore((s) => s.staff?.role) === 'admin';
   const [reloadKey, setReloadKey] = useState(0);
@@ -73,6 +105,7 @@ export default function Payers() {
         <div className="relative"><Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search payers" className="w-56 rounded-lg border border-slate-200 py-1.5 pl-8 pr-3 text-xs" /></div>
         <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} /> Only payers with claims</label>
+        {isAdmin && <div className="ml-auto"><AddPayer onSaved={() => { setOnlyActive(false); setReloadKey((k) => k + 1); }} /></div>}
       </div>
       <div className="px-6 py-4">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">

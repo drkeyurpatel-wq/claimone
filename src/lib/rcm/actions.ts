@@ -26,8 +26,8 @@ const num = (x: unknown) => (x == null || x === '' ? null : Number(x));
 
 export function actionsFor(step: Step, c: Claim, route: Route): CaseAction[] {
   const w = ROUTE_WORDS[route];
-  const preauthRef = { field: 'tpa_preauth_number' as const, label: 'Pre-auth no. (if you have it)', value: c.tpa_preauth_number };
-  const claimRef = { field: 'tpa_claim_number' as const, label: 'Claim no. (if you have it)', value: c.tpa_claim_number };
+  const preauthRef = { field: 'tpa_preauth_number' as const, label: 'Pre-auth number (optional)', value: c.tpa_preauth_number };
+  const claimRef = { field: 'tpa_claim_number' as const, label: 'Claim number (optional)', value: c.tpa_claim_number };
   const billed = num(c.claimed_amount) ?? num(c.bill_amount) ?? null;
 
   switch (step.key) {
@@ -37,43 +37,43 @@ export function actionsFor(step: Step, c: Claim, route: Route): CaseAction[] {
       return [
         { id: 'approved', label: 'Approved', to: 'preauth_approved', tone: 'success',
           amount: { field: 'approved_amount', label: 'Approved amount (₹)', value: num(c.approved_amount) }, ref: preauthRef },
-        { id: 'query', label: 'Query came', to: 'preauth_query', tone: 'warning', note: { label: 'What did they ask?', required: true } },
-        { id: 'rejected', label: 'Rejected', to: 'preauth_rejected', tone: 'danger', note: { label: 'Reason given', required: true } },
+        { id: 'query', label: 'Query raised', to: 'preauth_query', tone: 'warning', note: { label: 'Query details', required: true } },
+        { id: 'rejected', label: 'Rejected', to: 'preauth_rejected', tone: 'danger', note: { label: 'Rejection reason', required: true } },
       ];
     case 'answer_preauth_query':
-      return [{ id: 'answered', label: route === 'nhcx' ? 'Send the answer on NHCX' : 'Answered — sent again', to: 'preauth_pending', tone: 'primary',
-        note: { label: 'What did you send?', required: true }, ...(route === 'nhcx' ? { nhcx: 'preauth' as const } : {}) }];
+      return [{ id: 'answered', label: route === 'nhcx' ? 'Send reply on NHCX' : 'Query replied & resubmitted', to: 'preauth_pending', tone: 'primary',
+        note: { label: 'Reply summary', required: true }, ...(route === 'nhcx' ? { nhcx: 'preauth' as const } : {}) }];
     case 'preauth_rejected':
       return [
-        { id: 'appeal', label: 'Send again (appeal)', to: 'preauth_pending', tone: 'primary', note: { label: 'What changed?', required: true } },
-        { id: 'close', label: 'Patient will pay — close', to: 'closed', tone: 'neutral', note: { label: 'Note', required: false } },
+        { id: 'appeal', label: 'Resubmit (appeal)', to: 'preauth_pending', tone: 'primary', note: { label: 'Grounds for appeal', required: true } },
+        { id: 'close', label: 'Convert to self-pay & close', to: 'closed', tone: 'neutral', note: { label: 'Remarks', required: false } },
       ];
     case 'in_hospital_approved':
       return c.status === 'preauth_approved'
         ? [{ id: 'enhanced', label: 'Enhancement approved', to: 'preauth_enhanced', tone: 'success',
-            amount: { field: 'approved_amount', label: 'New total approved (₹)', value: num(c.approved_amount) } }]
+            amount: { field: 'approved_amount', label: 'Revised approved amount (₹)', value: num(c.approved_amount) } }]
         : [];
     case 'send_claim':
       return [{ id: 'claim_sent', label: w.sent, to: 'claim_submitted', tone: 'primary',
-        amount: { field: 'claimed_amount', label: 'Final bill to claim (₹)', value: billed },
+        amount: { field: 'claimed_amount', label: 'Final bill amount claimed (₹)', value: billed },
         ...(route === 'nhcx' ? { nhcx: 'claim' as const } : { ref: claimRef }) }];
     case 'wait_claim':
       return [
         { id: 'full', label: 'Approved in full', to: 'claim_approved', tone: 'success',
           amount: { field: 'approved_amount', label: 'Approved amount (₹)', value: billed }, ref: claimRef },
-        { id: 'part', label: 'Approved less', to: 'claim_partial', tone: 'warning',
+        { id: 'part', label: 'Partially approved', to: 'claim_partial', tone: 'warning',
           amount: { field: 'approved_amount', label: 'Approved amount (₹)', value: null }, ref: claimRef,
-          note: { label: 'Why less? (as written in the letter)', required: true } },
-        { id: 'query', label: 'Query came', to: 'claim_query', tone: 'warning', note: { label: 'What did they ask?', required: true } },
-        { id: 'rejected', label: 'Rejected', to: 'claim_rejected', tone: 'danger', note: { label: 'Reason given', required: true } },
+          note: { label: 'Deduction details (as per approval letter)', required: true } },
+        { id: 'query', label: 'Query raised', to: 'claim_query', tone: 'warning', note: { label: 'Query details', required: true } },
+        { id: 'rejected', label: 'Rejected', to: 'claim_rejected', tone: 'danger', note: { label: 'Rejection reason', required: true } },
       ];
     case 'answer_claim_query':
-      return [{ id: 'answered', label: route === 'nhcx' ? 'Send the answer on NHCX' : 'Answered — sent again', to: 'claim_submitted', tone: 'primary',
-        note: { label: 'What did you send?', required: true }, ...(route === 'nhcx' ? { nhcx: 'claim' as const } : {}) }];
+      return [{ id: 'answered', label: route === 'nhcx' ? 'Send reply on NHCX' : 'Query replied & resubmitted', to: 'claim_submitted', tone: 'primary',
+        note: { label: 'Reply summary', required: true }, ...(route === 'nhcx' ? { nhcx: 'claim' as const } : {}) }];
     case 'claim_rejected':
       return [
-        { id: 'appeal', label: 'Appeal — send again', to: 'claim_submitted', tone: 'primary', note: { label: 'What changed?', required: true } },
-        { id: 'writeoff', label: 'Write off', to: 'written_off', tone: 'danger', managerOnly: true, note: { label: 'Why write off?', required: true } },
+        { id: 'appeal', label: 'Appeal & resubmit', to: 'claim_submitted', tone: 'primary', note: { label: 'Grounds for appeal', required: true } },
+        { id: 'writeoff', label: 'Write off', to: 'written_off', tone: 'danger', managerOnly: true, note: { label: 'Write-off reason', required: true } },
       ];
     default:
       return [];
