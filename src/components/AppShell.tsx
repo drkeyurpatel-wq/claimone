@@ -14,7 +14,7 @@ import { sb } from '@/lib/supabase/browser';
 // Everyone works from the ledger. Everything else sits under "More":
 // the upload screens and patient files for all, the manager screens for managers.
 type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean };
-const MAIN_NAV: NavItem[] = [{ href: '/ledger', label: 'Ledger', icon: Table2 }];
+const MAIN_NAV: NavItem[] = [{ href: '/master', label: 'Master', icon: Table2 }];
 const MORE_WORK: NavItem[] = [
   { href: '/patients', label: 'Patient files', icon: Users },
   { href: '/cases/upload', label: 'Upload eCW file', icon: FileSpreadsheet },

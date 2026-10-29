@@ -40,7 +40,7 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
       onSaved(id);
     } catch (err) {
       const m = (err as Error).message;
-      setError(/admission_uq|duplicate/i.test(m) ? 'This IP No. is already in the ledger — search for it.' : 'Could not save. Check the details and try again.');
+      setError(/admission_uq|duplicate/i.test(m) ? 'This IP No. is already in Master — search for it.' : 'Could not save. Check the details and try again.');
       setBusy(false);
     }
   };
@@ -61,7 +61,7 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
         <label className={label}>Estimate (₹)<input type="number" min="0" inputMode="numeric" value={f.estimated_amount} onChange={set('estimated_amount')} className={field} /></label>
         {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-base text-rose-800">{error}</p>}
         <button type="submit" disabled={busy} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-600 text-base font-bold text-white hover:bg-teal-700 disabled:opacity-50">
-          {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <UserPlus className="h-5 w-5" />} Add to ledger
+          {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <UserPlus className="h-5 w-5" />} Add to Master
         </button>
       </form>
     </Modal>
