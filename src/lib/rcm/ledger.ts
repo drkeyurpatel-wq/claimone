@@ -110,15 +110,16 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   // pre-auth decision
   const paAmt = c.preauth_approved_amount ?? (PREAUTH_DONE.has(c.status) ? c.approved_amount : null);
   const paDone = paAmt != null || PREAUTH_DONE.has(c.status);
+  const canEnhance = w && PREAUTH_DONE.has(c.status);
   const paText = c.status === 'preauth_query' ? 'Query' : c.status === 'preauth_rejected' ? 'Rejected'
     : paDone ? rs(paAmt) || 'Approved' : c.status === 'preauth_pending' ? 'Awaiting' : '';
   const paOk: Cell = skippedPreauth
     ? { key: 'pa_ok', state: 'na', text: '', editable: false }
     : { key: 'pa_ok', state: col === 'pa_ok' ? mark('pa_ok', false, false) : mark('pa_ok', paDone, false), text: paText,
-        sub: c.status === 'preauth_enhanced' ? 'Enhanced' : undefined,
+        // until the claim is submitted, an enhancement (or a further one) can be entered here
+        sub: canEnhance ? (c.status === 'preauth_enhanced' ? 'Enhanced · + add more' : '+ Add enhancement') : c.status === 'preauth_enhanced' ? 'Enhanced' : undefined,
         tone: c.status === 'preauth_query' || c.status === 'preauth_rejected' ? 'alert' : undefined,
-        // in hospital, an enhancement can still be entered
-        editable: w && (col === 'pa_ok' || c.status === 'preauth_approved') };
+        editable: w && (col === 'pa_ok' || canEnhance) };
 
   // discharge: can be typed any time before the claim goes
   const canDischarge = !inClaim && !CLOSED.has(c.status) && c.status !== 'preauth_rejected';
@@ -143,10 +144,14 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   // received
   const got = m?.allocated ?? (c.status === 'settled' ? Number(c.settled_amount ?? 0) : 0);
   const moreDue = !!m && m.balance > 1 && APPROVED.has(c.status) && c.status !== 'settled';
-  const paid: Cell = { key: 'paid', state: col === 'paid' ? mark('paid', false, false) : got > 0 ? 'done' : mark('paid', false, false),
+  // more recorded than approved: almost always a typing error (net entered as the gross amount)
+  const excess = !!m && m.balance < -1 && c.status !== 'settled' ? -m.balance : 0;
+  const paid: Cell = { key: 'paid', state: excess ? 'ours' : col === 'paid' ? mark('paid', false, false) : got > 0 ? 'done' : mark('paid', false, false),
     text: got > 0 ? rs(got) : col === 'paid' ? 'Awaiting' : '',
-    sub: got > 0 ? [m && m.tds ? `TDS ${rs(m.tds)}` : '', moreDue ? `${rs(m!.balance)} outstanding` : ''].filter(Boolean).join(' · ') || undefined : undefined,
-    editable: w && APPROVED.has(c.status) && c.status !== 'settled' && (got === 0 || moreDue) };
+    sub: excess ? `${rs(excess)} excess — review`
+      : got > 0 ? [m && m.tds ? `TDS ${rs(m.tds)}` : '', moreDue ? `${rs(m!.balance)} outstanding` : ''].filter(Boolean).join(' · ') || undefined : undefined,
+    tone: excess ? 'alert' : undefined,
+    editable: w && APPROVED.has(c.status) && c.status !== 'settled' && (got === 0 || moreDue || excess > 0) };
 
   // cut
   const cutCell: Cell = cut.won
@@ -166,6 +171,7 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   if (c.status === 'written_off') next = { text: 'Written off', due: null, late: false, ours: false, done: true };
   else if (c.status === 'closed') next = { text: c.preauth_submitted_at && !inClaim ? 'Closed — self-pay' : 'Closed', due: null, late: false, ours: false, done: true };
   else if (c.status === 'settled' && !cut.needsDecision && cut.state !== 'fought') next = { text: 'Settled & closed', due: null, late: false, ours: false, done: true };
+  else if (excess) next = { text: `Excess of ${rs(excess)} recorded — review the settlement entry`, due: null, late: false, ours: true, done: false };
   else {
     const due = dueText(step, now);
     next = { text: step.label, due: due ? (step.overdue && !step.ours ? `Follow up — ${due}` : due) : null,

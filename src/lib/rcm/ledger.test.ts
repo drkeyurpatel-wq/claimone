@@ -103,6 +103,18 @@ describe('ledger row: money and cuts', () => {
     expect(r.cells.paid.editable).toBe(true);
     expect(inFilter(r, 'cuts')).toBe(true);
   });
+  it('net entered as the gross: excess shows red, the entry can be reviewed', () => {
+    const r = paid({ claimed_amount: 72000, approved_amount: 72000 }, { expected_amount: 72000, allocated: 72000, tds: 1440, balance: -1440, recon_status: 'over_received' });
+    expect(r.cells.paid).toMatchObject({ tone: 'alert', sub: '₹1,440 excess — review', editable: true });
+    expect(r.next).toMatchObject({ ours: true, done: false });
+    expect(r.next.text).toContain('Excess of ₹1,440');
+  });
+  it('a further enhancement stays possible until the claim is submitted', () => {
+    const r = row(c({ status: 'preauth_enhanced', preauth_submitted_at: 'x', approved_amount: 82000, preauth_approved_amount: 82000, discharged_at: 'x' }));
+    expect(r.cells.pa_ok).toMatchObject({ text: '₹82,000', sub: 'Enhanced · + add more', editable: true });
+    const s = row(c({ status: 'claim_submitted', preauth_submitted_at: 'x', submitted_at: 'x', approved_amount: 82000, preauth_approved_amount: 82000, discharged_at: 'x' }));
+    expect(s.cells.pa_ok.editable).toBe(false);
+  });
   it('fought and paid in full: shows Won, row closed', () => {
     const r = paid({ status: 'settled', claimed_amount: 52000, cut_decision: 'fought', cut_decided_at: 'x' },
       { allocated: 51000, tds: 1000, balance: 0, expected_amount: 52000, recon_status: 'settled' });

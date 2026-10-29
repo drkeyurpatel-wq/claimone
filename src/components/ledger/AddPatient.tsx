@@ -4,11 +4,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, UserPlus } from 'lucide-react';
 import { createClaim } from '@/lib/claims/api';
-import { fetchAllPayers } from '@/lib/rcm/api';
-import { claimTypeFor, payerGroup, PAYER_GROUPS, type PayerGroup } from '@/lib/rcm/payer';
+import { fetchAllPayers, addPayer } from '@/lib/rcm/api';
+import { claimTypeFor, groupAsPayer, payerGroup, PAYER_GROUPS, type PayerGroup } from '@/lib/rcm/payer';
 import type { Payer } from '@/lib/claims/types';
 import { Modal, field, label } from './Modal';
 
+const NEW = '__new';
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
 export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
@@ -16,7 +17,7 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
 }) {
   const [payers, setPayers] = useState<Payer[] | null>(null);
   const [group, setGroup] = useState<PayerGroup | ''>('');
-  const [f, setF] = useState({ patient_name: '', admission_ref: '', payer_id: '', admitted: today(), estimated_amount: '' });
+  const [f, setF] = useState({ patient_name: '', admission_ref: '', payer_id: '', new_payer: '', admitted: today(), estimated_amount: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => { fetchAllPayers().then(setPayers).catch(() => setPayers([])); }, []);
@@ -27,23 +28,27 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
     setGroup(g);
     const list = (payers ?? []).filter((p) => payerGroup(p) === g);
     // a category with a single payer needs no second choice
-    setF((x) => ({ ...x, payer_id: list.length === 1 ? list[0].id : '' }));
+    setF((x) => ({ ...x, payer_id: list.length === 1 ? list[0].id : list.length === 0 ? NEW : '', new_payer: '' }));
     setError('');
   };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    const isNew = f.payer_id === NEW;
     const payer = payers?.find((p) => p.id === f.payer_id);
     if (!f.patient_name.trim()) { setError('Enter the patient name.'); return; }
     if (!f.admission_ref.trim()) { setError('Enter the IP number.'); return; }
     if (!group) { setError('Select the payer category.'); return; }
-    if (!payer) { setError('Select the payer.'); return; }
+    if (isNew && f.new_payer.trim().length < 3) { setError('Enter the full name of the new payer.'); return; }
+    if (!isNew && !payer) { setError('Select the payer.'); return; }
     if (f.admitted > today()) { setError('Admission date cannot be in the future.'); return; }
     setBusy(true); setError('');
     try {
       const day = f.admitted || today();
+      // a payer typed in is added to the payer list (or matched to one already there)
+      const payerId = isNew ? await addPayer(f.new_payer, group) : payer!.id;
       const { id } = await createClaim({
-        tenant_id: tenantId, centre_id: centreId, payer_id: payer.id, claim_type: claimTypeFor(payer),
+        tenant_id: tenantId, centre_id: centreId, payer_id: payerId, claim_type: claimTypeFor(payer ?? groupAsPayer(group)),
         patient_name: f.patient_name.trim(), admission_ref: f.admission_ref.trim(),
         estimated_amount: f.estimated_amount ? Number(f.estimated_amount) : null,
         admitted_at: day === today() ? new Date().toISOString() : new Date(`${day}T12:00:00+05:30`).toISOString(),
@@ -52,7 +57,8 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
       onSaved(id);
     } catch (err) {
       const m = (err as Error).message;
-      setError(/admission_uq|duplicate/i.test(m) ? 'This IP number already exists in Master.' : 'Could not save. Please check the details and try again.');
+      setError(/admission_uq|duplicate/i.test(m) ? 'This IP number already exists in Master.'
+        : /payer/i.test(m) ? m : 'Could not save. Please check the details and try again.');
       setBusy(false);
     }
   };
@@ -88,14 +94,23 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
         </fieldset>
 
         {group && (
-          <label className={label}>{PAYER_GROUPS.find((g) => g.key === group)!.label} — select payer *
-            {inGroup.length ? (
-              <select value={f.payer_id} onChange={set('payer_id')} className={field}>
-                <option value="">Select…</option>
-                {inGroup.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            ) : <p className="mt-1 rounded-lg bg-amber-50 p-3 text-sm font-normal text-amber-900">No payer is set up in this category yet. An admin can add one under More → Payers.</p>}
-          </label>
+          <div className="space-y-3">
+            {inGroup.length > 0 && (
+              <label className={label}>{PAYER_GROUPS.find((g) => g.key === group)!.label} — select payer *
+                <select value={f.payer_id} onChange={set('payer_id')} className={field}>
+                  <option value="">Select…</option>
+                  {inGroup.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  <option value={NEW}>+ Other — not in the list</option>
+                </select>
+              </label>
+            )}
+            {f.payer_id === NEW && (
+              <label className={label}>New {PAYER_GROUPS.find((g) => g.key === group)!.label.toLowerCase()} name *
+                <input value={f.new_payer} onChange={set('new_payer')} className={field} autoComplete="off" placeholder="Full name as on the card / letter" autoFocus />
+                <span className="mt-1 block text-sm font-normal text-slate-500">It is added to the payer list for next time.</span>
+              </label>
+            )}
+          </div>
         )}
 
         <label className={label}>Estimated amount (₹)<input type="number" min="0" inputMode="numeric" value={f.estimated_amount} onChange={set('estimated_amount')} className={field} /></label>

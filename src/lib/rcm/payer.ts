@@ -44,3 +44,9 @@ export function payerGroup(p: Pick<Payer, 'code' | 'type'>): PayerGroup {
   if (p.type === 'corporate') return 'corporate';
   return 'insurer'; // private and PSU insurers
 }
+
+/** Payer type and a code stand-in for a category, so a new payer's claim type is known before it is saved. */
+export function groupAsPayer(g: PayerGroup): Pick<Payer, 'code' | 'type'> {
+  return { pmjay: { code: 'pmjay', type: 'government' }, scheme: { code: 'scheme', type: 'government' }, tpa: { code: 'tpa', type: 'tpa' },
+    insurer: { code: 'insurer', type: 'insurer' }, corporate: { code: 'corporate', type: 'corporate' } }[g] as Pick<Payer, 'code' | 'type'>;
+}

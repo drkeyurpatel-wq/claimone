@@ -150,3 +150,30 @@ export function istDate(day: string): string | null {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   return day === today ? null : new Date(`${day}T12:00:00+05:30`).toISOString();
 }
+
+/** A further enhancement on an already-enhanced pre-auth (the first one is a status change). */
+export async function recordEnhancement(claimId: string, amount: number, note: string) {
+  const { error } = await sb().rpc('clm_record_enhancement', { p_claim: claimId, p_amount: amount, p_note: note || null });
+  if (error) throw new Error(error.message);
+}
+
+// ─── Payer master ───────────────────────────────────────────────────
+
+/** Add a payer that is not on the list (or get the one already there under that name). */
+export async function addPayer(name: string, group: string): Promise<string> {
+  const { data, error } = await sb().rpc('clm_add_payer', { p_name: name.trim(), p_group: group });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+export async function savePayer(id: string, name: string, group: string, active: boolean) {
+  const { error } = await sb().rpc('clm_save_payer', { p_id: id, p_name: name.trim(), p_group: group, p_active: active });
+  if (error) throw new Error(error.message);
+}
+
+/** Every payer, active or not, for Settings. */
+export async function fetchPayerMaster(): Promise<Payer[]> {
+  const { data, error } = await sb().from('clm_payers').select('*').order('name');
+  if (error) throw new Error('Could not load the payer list');
+  return (data ?? []) as Payer[];
+}

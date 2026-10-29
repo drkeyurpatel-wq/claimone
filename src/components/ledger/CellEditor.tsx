@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
 import type { Claim } from '@/lib/claims/types';
 import { transition, updateClaimFields } from '@/lib/claims/api';
-import { fetchReceivable } from '@/lib/recon/api';
-import { recordCasePayment, istDate } from '@/lib/rcm/api';
+import { fetchReceivable, reverse } from '@/lib/recon/api';
+import { recordCasePayment, recordEnhancement, istDate } from '@/lib/rcm/api';
 import { actionsFor, type CaseAction } from '@/lib/rcm/actions';
 import { routeFor } from '@/lib/rcm/payer';
 import { COLUMNS, rs, dd, stepColumn, type ColKey, type LedgerRow } from '@/lib/rcm/ledger';
@@ -28,7 +28,6 @@ const SENT_TO = new Set(['preauth_pending', 'claim_submitted']);
 export function cellActions(col: ColKey, r: LedgerRow): CaseAction[] {
   const { c, step } = r.j;
   const route = routeFor(c.clm_payers, false); // the ledger records what was done; it never sends on NHCX
-  if (col === 'pa_ok' && c.status === 'preauth_approved') return actionsFor({ ...step, key: 'in_hospital_approved' }, c, route);
   return stepColumn(step) === col ? actionsFor(step, c, route) : [];
 }
 
@@ -130,6 +129,38 @@ function StatusForm({ r, col, isManager, onClose, onSaved }: {
   );
 }
 
+// ─── Enhancement (first or further) ─────────────────────────────────
+function EnhancementForm({ r, onClose, onSaved }: { r: LedgerRow; onClose: () => void; onSaved: (msg: string) => void }) {
+  const c = r.j.c;
+  const current = Number(c.preauth_approved_amount ?? c.approved_amount ?? 0);
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const save = async () => {
+    const n = Number(amount);
+    if (!(n > 0)) { setError('Enter the revised approved amount.'); return; }
+    if (n <= current) { setError(`The revised amount must be above the current approval of ${rs(current)}.`); return; }
+    setBusy(true); setError('');
+    try {
+      if (c.status === 'preauth_approved') await transition(c.id, 'preauth_enhanced', { approved_amount: n }, note.trim() || undefined);
+      else await recordEnhancement(c.id, n, note.trim());
+      onSaved(`Enhancement recorded — approval now ${rs(n)}`);
+    } catch (e) { setError((e as Error).message); setBusy(false); }
+  };
+  return (
+    <div className="space-y-4">
+      <p className="text-base text-slate-700">Current approval: <b>{rs(current)}</b></p>
+      <label className={label}>Revised approved amount (₹) *
+        <input type="number" min="0" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={field} /></label>
+      <label className={label}>Remarks
+        <input value={note} onChange={(e) => setNote(e.target.value)} className={field} placeholder="e.g. ICU stay extended" /></label>
+      <Err text={error} />
+      <SaveRow busy={busy} onSave={save} onCancel={onClose} />
+    </div>
+  );
+}
+
 // ─── Discharge date ─────────────────────────────────────────────────
 function DischargeForm({ r, onClose, onSaved }: { r: LedgerRow; onClose: () => void; onSaved: (msg: string) => void }) {
   const c = r.j.c;
@@ -159,54 +190,101 @@ function DischargeForm({ r, onClose, onSaved }: { r: LedgerRow; onClose: () => v
 
 // ─── Money received ─────────────────────────────────────────────────
 type Pay = Awaited<ReturnType<typeof fetchReceivable>>;
-function PaymentForm({ r, onClose, onSaved }: { r: LedgerRow; onClose: () => void; onSaved: (msg: string) => void }) {
+function PaymentForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite: boolean; onClose: () => void; onSaved: (msg: string) => void }) {
   const { c, money: m } = r.j;
+  const outstanding = m ? Math.max(0, Math.round(m.balance * 100) / 100) : 0;
   const [pay, setPay] = useState<Pay | null>(null);
-  const [net, setNet] = useState(m && m.balance > 0 ? String(Math.round(m.balance)) : '');
   const [tds, setTds] = useState('');
+  const [net, setNet] = useState(outstanding > 0 ? String(Math.round(outstanding)) : '');
+  const [netTouched, setNetTouched] = useState(false);
   const [utr, setUtr] = useState('');
   const [day, setDay] = useState(today());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [undo, setUndo] = useState<string | null>(null);
   useEffect(() => { if (m) fetchReceivable(m.receivable_id).then(setPay).catch(() => setPay(null)); }, [m]);
 
+  // the payer pays the approved amount less TDS: net follows TDS until the desk types its own figure
+  const onTds = (v: string) => {
+    setTds(v);
+    if (!netTouched && outstanding > 0) setNet(String(Math.max(0, Math.round((outstanding - (Number(v) || 0)) * 100) / 100)));
+  };
+  const n = Number(net) || 0, t = Number(tds) || 0;
+  const over = outstanding > 0 && n + t > outstanding + 1;
+
   const save = async () => {
-    const n = Number(net), t = tds === '' ? 0 : Number(tds);
     if (!(n > 0)) { setError('Enter the net amount received.'); return; }
-    if (!(t >= 0)) { setError('TDS cannot be negative.'); return; }
+    if (t < 0) { setError('TDS cannot be negative.'); return; }
     if (day > today()) { setError('The date cannot be in the future.'); return; }
+    if (over) {
+      setError(`Net + TDS (${rs(n + t)}) is more than the outstanding ${rs(outstanding)}. The net received is normally the approved amount less TDS — ${rs(outstanding - t)}.`);
+      return;
+    }
     setBusy(true); setError('');
     try {
       await recordCasePayment(c.id, { net: n, tds: t, utr, date: day });
       onSaved('Settlement recorded');
     } catch (e) { setError((e as Error).message); setBusy(false); }
   };
+
+  // undo a wrong entry: the payment and its TDS line are reversed (kept on record)
+  const reverseEntry = async (allocId: string, remId: string | null) => {
+    setBusy(true); setError('');
+    try {
+      await reverse(allocId, 'Entered by mistake — corrected on Master', 'allocation');
+      const tdsLines = (pay?.adjustments ?? []).filter((a) => !a.reversed_at && a.kind === 'tds' && remId && (a as { remittance_line_id?: string }).remittance_line_id === remId);
+      for (const a of tdsLines) await reverse(a.id, 'Entered by mistake — corrected on Master', 'adjustment');
+      onSaved('Payment entry reversed — enter the correct figures');
+    } catch (e) { setError((e as Error).message); setBusy(false); }
+  };
+
   const done = (pay?.allocations ?? []).filter((a) => !a.reversed_at);
+  const excess = m && m.balance < -1 ? -m.balance : 0;
   return (
     <div className="space-y-4">
       {m && <dl className="grid grid-cols-3 gap-2 text-center">
-        {[['Approved', m.expected_amount], ['Received incl. TDS', m.allocated + m.tds], ['Outstanding', m.balance]].map(([k, v]) => (
-          <div key={k as string} className="rounded-xl bg-slate-50 p-2"><dt className="text-sm text-slate-500">{k}</dt><dd className="text-base font-bold text-slate-900">{rs(v as number)}</dd></div>
+        {[['Approved', m.expected_amount], ['Received incl. TDS', m.allocated + m.tds], [excess ? 'Excess' : 'Outstanding', excess || m.balance]].map(([k, v]) => (
+          <div key={k as string} className={`rounded-xl p-2 ${k === 'Excess' ? 'bg-rose-50' : 'bg-slate-50'}`}><dt className="text-sm text-slate-500">{k}</dt><dd className={`text-base font-bold ${k === 'Excess' ? 'text-rose-700' : 'text-slate-900'}`}>{rs(v as number)}</dd></div>
         ))}
       </dl>}
+      {excess > 0 && <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">More has been recorded than approved. If an entry was wrong, reverse it below and enter the correct figures.</p>}
       {done.length > 0 && <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 text-sm">
-        {done.map((a) => <li key={a.id} className="flex justify-between gap-2 p-2.5"><span>{dd(a.clm_receipts?.value_date)}{a.clm_receipts?.reference ? ` · UTR ${a.clm_receipts.reference}` : ''}</span><b>{rs(a.amount)}</b></li>)}
+        {done.map((a) => {
+          const remId = (a as { remittance_line_id?: string | null }).remittance_line_id ?? null;
+          const tdsOf = (pay?.adjustments ?? []).filter((x) => !x.reversed_at && x.kind === 'tds' && remId && (x as { remittance_line_id?: string }).remittance_line_id === remId)
+            .reduce((s, x) => s + Number(x.amount), 0);
+          return (
+            <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 p-2.5">
+              <span>{dd(a.clm_receipts?.value_date)}{a.clm_receipts?.reference ? ` · UTR ${a.clm_receipts.reference}` : ''}{tdsOf ? ` · TDS ${rs(tdsOf)}` : ''}</span>
+              <span className="flex items-center gap-3"><b>{rs(a.amount)}</b>
+                {canWrite && (undo === a.id
+                  ? <span className="flex gap-1"><button type="button" onClick={() => reverseEntry(a.id, remId)} disabled={busy} className="rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">Confirm reverse</button>
+                      <button type="button" onClick={() => setUndo(null)} className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs">Keep</button></span>
+                  : <button type="button" onClick={() => setUndo(a.id)} className="text-xs font-medium text-rose-700 underline">Reverse entry</button>)}
+              </span>
+            </li>
+          );
+        })}
       </ul>}
-      <div className="grid grid-cols-2 gap-3">
-        <label className={label}>Net amount received (₹) *
-          <input type="number" min="0" inputMode="decimal" value={net} onChange={(e) => setNet(e.target.value)} className={field} /></label>
-        <label className={label}>TDS deducted (₹)
-          <input type="number" min="0" inputMode="decimal" value={tds} onChange={(e) => setTds(e.target.value)} className={field} placeholder="0" /></label>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <label className={label}>UTR / reference no.
-          <input value={utr} onChange={(e) => setUtr(e.target.value)} className={field} autoComplete="off" /></label>
-        <label className={label}>Credit date
-          <input type="date" value={day} max={today()} onChange={(e) => setDay(e.target.value)} className={field} /></label>
-      </div>
-      <p className="text-sm text-slate-500">Any shortfall against the claim appears under Deduction, to accept or dispute.</p>
+      {outstanding > 0 && <>
+        <div className="grid grid-cols-2 gap-3">
+          <label className={label}>TDS deducted (₹)
+            <input type="number" min="0" inputMode="decimal" value={tds} onChange={(e) => onTds(e.target.value)} className={field} placeholder="0" /></label>
+          <label className={label}>Net amount received (₹) *
+            <input type="number" min="0" inputMode="decimal" value={net} onChange={(e) => { setNet(e.target.value); setNetTouched(true); }} className={`${field} ${over ? 'border-rose-400' : ''}`} /></label>
+        </div>
+        <p className={`text-sm ${over ? 'font-semibold text-rose-700' : 'text-slate-500'}`}>Net + TDS = {rs(n + t)} against {rs(outstanding)} outstanding.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <label className={label}>UTR / reference no.
+            <input value={utr} onChange={(e) => setUtr(e.target.value)} className={field} autoComplete="off" /></label>
+          <label className={label}>Credit date
+            <input type="date" value={day} max={today()} onChange={(e) => setDay(e.target.value)} className={field} /></label>
+        </div>
+        <p className="text-sm text-slate-500">Any shortfall against the claim appears under Deduction, to accept or dispute.</p>
+      </>}
       <Err text={error} />
-      <SaveRow busy={busy} onSave={save} onCancel={onClose} />
+      {outstanding > 0 ? <SaveRow busy={busy} onSave={save} onCancel={onClose} />
+        : <button type="button" onClick={onClose} className="min-h-12 w-full rounded-xl bg-slate-100 text-base font-medium text-slate-700">Close</button>}
     </div>
   );
 }
@@ -295,15 +373,18 @@ export function CellEditor({ r, col, canWrite, isManager, onClose, onSaved }: {
 }) {
   const [view, setView] = useState<ColKey>(col);
   const c = r.j.c;
-  const title = view === 'patient' ? c.patient_name : view === 'cut' ? 'Deduction' : COLUMNS.find((x) => x.key === view)!.label;
+  // once the pre-auth is approved, this cell records enhancements
+  const enhance = view === 'pa_ok' && (c.status === 'preauth_approved' || c.status === 'preauth_enhanced');
+  const title = view === 'patient' ? c.patient_name : view === 'cut' ? 'Deduction' : enhance ? 'Enhancement' : COLUMNS.find((x) => x.key === view)!.label;
   const sub = view === 'patient' ? (c.clm_payers?.name ?? undefined) : `${c.patient_name}${c.admission_ref ? ` · ${c.admission_ref}` : ''} · ${c.clm_payers?.name ?? ''}`;
   return (
     <Modal title={title} sub={sub} onClose={onClose}>
       {view === 'patient' && <PatientForm r={r} canWrite={canWrite} onClose={onClose} onSaved={onSaved} />}
-      {(view === 'pa_sent' || view === 'pa_ok' || view === 'cl_sent' || view === 'cl_ok') &&
+      {enhance && <EnhancementForm r={r} onClose={onClose} onSaved={onSaved} />}
+      {(view === 'pa_sent' || (view === 'pa_ok' && !enhance) || view === 'cl_sent' || view === 'cl_ok') &&
         <StatusForm r={r} col={view} isManager={isManager} onClose={onClose} onSaved={onSaved} />}
       {view === 'disch' && <DischargeForm r={r} onClose={onClose} onSaved={onSaved} />}
-      {view === 'paid' && <PaymentForm r={r} onClose={onClose} onSaved={onSaved} />}
+      {view === 'paid' && <PaymentForm r={r} canWrite={canWrite} onClose={onClose} onSaved={onSaved} />}
       {view === 'cut' && <CutForm r={r} canWrite={canWrite} onPay={() => setView('paid')} onSaved={onSaved} />}
     </Modal>
   );

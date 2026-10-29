@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import {
   ShieldCheck, LayoutDashboard, Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut, Wallet, ClipboardCheck, GitMerge, Upload,
-  Gauge, FileSpreadsheet, Users, KeyRound, ChevronDown, Table2, MoreHorizontal,
+  Gauge, FileSpreadsheet, Users, KeyRound, ChevronDown, Table2, MoreHorizontal, Settings,
 } from 'lucide-react';
 import type { Session } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/store/auth';
@@ -23,7 +23,8 @@ const MORE_WORK: NavItem[] = [
 ];
 const MORE_MANAGER: NavItem[] = [
   { href: '/overview', label: 'Overview', icon: Gauge },
-  { href: '/claims/payers', label: 'Payers', icon: Building2 },
+  { href: '/settings', label: 'Settings — payer master', icon: Settings },
+  { href: '/claims/payers', label: 'Payer performance', icon: Building2 },
   { href: '/claims/rules', label: 'Document rules', icon: ListChecks },
   { href: '/claims/mis', label: 'MIS', icon: BarChart3 },
   { href: '/claims/leakage', label: 'Leakage', icon: TrendingDown },
