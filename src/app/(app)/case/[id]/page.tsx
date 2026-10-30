@@ -244,7 +244,7 @@ export default function CasePage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 md:px-6">
       {toastNode}
-      <Link href="/master" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Master</Link>
+      <Link href="/master" className="inline-flex min-h-11 items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Master</Link>
 
       {/* The file cover */}
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">

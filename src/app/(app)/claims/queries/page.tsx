@@ -51,14 +51,14 @@ export default function QueryDesk() {
       </div>
       <div className="flex flex-wrap items-center gap-2 px-6 pt-4">
         {(['open', 'rejected'] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${tab === t ? 'bg-teal-600 text-white' : 'border bg-white text-slate-600'}`}>
+          <button key={t} onClick={() => setTab(t)} className={`inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-medium ${tab === t ? 'bg-teal-600 text-white' : 'border bg-white text-slate-600'}`}>
             {t === 'open' ? 'Open queries' : 'Rejected claims'}
           </button>
         ))}
         {tab === 'open' && <>
           <div className="relative"><Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="w-48 rounded-lg border border-slate-200 py-1.5 pl-8 pr-3 text-xs" /></div>
-          <select value={role2} onChange={(e) => setRole2(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs">
+            <input aria-label="Search queries" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="w-48 min-h-11 rounded-lg border border-slate-200 pl-8 pr-3 text-sm" /></div>
+          <select aria-label="Routed to" value={role2} onChange={(e) => setRole2(e.target.value)} className="min-h-11 rounded-lg border border-slate-200 px-2 text-sm">
             <option value="">Everyone</option><option value="doctor">Treating doctor</option><option value="billing">Billing</option><option value="mrd">Medical records</option>
           </select>
         </>}
@@ -74,7 +74,7 @@ export default function QueryDesk() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                      <Link href={`/case/${x.claim_id}`} className="font-semibold text-slate-900 hover:underline">{x.patient_name}</Link>
+                      <Link href={`/case/${x.claim_id}`} className="inline-flex min-h-10 items-center font-semibold text-slate-900 hover:underline">{x.patient_name}</Link>
                       <span className="font-mono text-slate-400">{x.claim_number}</span>
                       <span className="text-slate-500">· {x.payer_name}</span>
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${p.bg} ${p.color}`}>{p.label}</span>
@@ -97,7 +97,7 @@ export default function QueryDesk() {
                         {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Save reply</button>
                     </div>
                   </div>
-                ) : <button onClick={() => { setReplying(x.id); setText(''); }} className="mt-3 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Reply</button>)}
+                ) : <button onClick={() => { setReplying(x.id); setText(''); }} className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700">Reply</button>)}
               </div>
             );
           })

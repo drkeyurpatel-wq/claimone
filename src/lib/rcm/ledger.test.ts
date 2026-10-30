@@ -94,11 +94,11 @@ describe('ledger row: money and cuts', () => {
   it('paid ₹500 short of the approval: still a decision, whatever the size', () => {
     const r = paid({ claimed_amount: 50000 }, { allocated: 49500, balance: 500, recon_status: 'part_received' });
     expect(r.cells.cut).toMatchObject({ state: 'ours', text: '₹500', editable: true });
-    expect(r.cells.paid).toMatchObject({ editable: true, sub: '₹500 outstanding' });
+    expect(r.cells.paid).toMatchObject({ editable: true, sub: '₹500 due' });
   });
   it('paid in two parts, more expected: balance awaited, no deduction yet, next part can be entered', () => {
     const r = paid({}, { allocated: 30000, tds: 0, balance: 20000, recon_status: 'part_received', parts: 2, last_paid: '2026-10-20' });
-    expect(r.cells.paid).toMatchObject({ text: '₹30,000', sub: '2 payments · ₹20,000 awaited', editable: true });
+    expect(r.cells.paid).toMatchObject({ text: '₹30,000', sub: '₹20,000 awaited · 2 payments', editable: true });
     expect(r.cells.cut).toMatchObject({ state: 'theirs', text: 'Awaited', sub: 'Part-paid · decide after 19 Nov', editable: true });
     expect(r.next).toMatchObject({ ours: false, done: false, text: 'Part-paid (2 payments) — ₹20,000 balance awaited from the payer' });
     expect(inFilter(r, 'cuts')).toBe(false);
@@ -185,9 +185,9 @@ describe('ageing, bank and letters', () => {
   it('settlement cell says whether the money is in the bank', () => {
     const base = { status: 'claim_approved' as const, submitted_at: 'x', claimed_amount: 50000, approved_amount: 50000, discharged_at: 'x' };
     const notYet = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 0 }));
-    expect(notYet.cells.paid.sub).toBe('TDS ₹1,000 · Not in bank yet');
+    expect(notYet.cells.paid.sub).toBe('Not in bank');
     const inBank = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 49000 }));
-    expect(inBank.cells.paid.sub).toBe('TDS ₹1,000 · In bank ✓');
+    expect(inBank.cells.paid.sub).toBe('In bank ✓');
   });
   it('a letter sent shows on the deduction cell', () => {
     const r = row(c({ status: 'claim_approved', submitted_at: 'x', claimed_amount: 52000, approved_amount: 50000, discharged_at: 'x',

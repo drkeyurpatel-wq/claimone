@@ -43,6 +43,8 @@ select clm_apply_payments('a1000000-0000-0000-0000-000000000001', 'part3.xlsx', 
 ]$$::jsonb);
 select t.check((select status = 'settled' and settled_amount = 100000 and deduction_amount = 0 from clm_claims where admission_ref = 'IPS-SP1'),
                'closed when the last part makes up the whole');
+select t.check((select settlement_utr = 'UTR-SP1-A, UTR-SP1-B, UTR-SP1-C' from clm_claims where admission_ref = 'IPS-SP1'),
+               'the settlement keeps every part''s UTR');
 
 -- 3 · parts typed on Master add up the same way
 select clm_record_case_payment((select id from clm_claims where admission_ref = 'IPS-SP2'), 50000, 0, 'UTR-SP2-A', '2026-10-05');

@@ -15,8 +15,8 @@ const Body = z.object({
     'settlement_pending', 'closed', 'written_off',
   ]), // 'settled' only via /settle
   fields: z.object({
-    approved_amount: z.number().nonnegative().optional(),
-    claimed_amount: z.number().nonnegative().optional(),
+    approved_amount: z.number().positive().optional(),
+    claimed_amount: z.number().positive().optional(),
     tpa_claim_number: z.string().trim().max(80).optional(),
     tpa_preauth_number: z.string().trim().max(80).optional(),
   }).strict().default({}),

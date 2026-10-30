@@ -69,7 +69,7 @@ export default function Leakage() {
   return (
     <div>
       <PageHeader title="Leakage" sub="Money claimed but not paid, by reason — approval cuts, short payments and settlement deductions" icon={TrendingDown}>
-        <select value={months} onChange={(e) => setMonths(Number(e.target.value))} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs">
+        <select aria-label="Period" value={months} onChange={(e) => setMonths(Number(e.target.value))} className="min-h-11 rounded-lg border border-slate-200 px-2 text-sm">
           <option value={3}>Last 3 months</option><option value={6}>Last 6 months</option><option value={12}>Last 12 months</option>
         </select>
       </PageHeader>

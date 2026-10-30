@@ -46,7 +46,7 @@ export default function PreauthQueue() {
       </div>
       <div className="px-6 py-4">
         <div className="mb-2 flex gap-2">
-          <button onClick={() => setFilter('all')} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${filter === 'all' ? 'bg-teal-600 text-white' : 'border bg-white text-slate-600'}`}>All · {rows.length}</button>
+          <button onClick={() => setFilter('all')} className={`inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-medium ${filter === 'all' ? 'bg-teal-600 text-white' : 'border bg-white text-slate-600'}`}>All · {rows.length}</button>
         </div>
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           {loading ? <Skeleton /> : shown.length === 0 ? <Empty icon={Shield} title="Nothing in this queue" /> : (

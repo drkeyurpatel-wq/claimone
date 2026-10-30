@@ -89,11 +89,13 @@ const toMoney = (r: Record<string, unknown>): CaseMoney => ({
 
 /** Bills tied to cases at this centre, keyed by case. Patient-due bills are left out. */
 export async function fetchCaseMoney(centreId: string): Promise<Map<string, CaseMoney>> {
-  const [{ data }, banked] = await Promise.all([
+  const [{ data, error }, banked] = await Promise.all([
     allRows((from, to) => sb().from('clm_v_receivable_balance').select(MONEY_SELECT)
       .eq('centre_id', centreId).not('claim_id', 'is', null).neq('debtor_type', 'patient').order('id').range(from, to)),
     allRows((from, to) => sb().from('clm_v_case_banked').select('claim_id, banked, parts').eq('centre_id', centreId).order('claim_id').range(from, to)),
   ]);
+  // a failed read must not show every case as unpaid
+  if (error || banked.error) throw new Error('Could not load payments');
   const inBank = new Map(((banked.data ?? []) as { claim_id: string; banked: number; parts: number }[]).map((b) => [b.claim_id, b]));
   return new Map(((data ?? []) as Record<string, unknown>[]).map((r) => {
     const m = toMoney(r);
@@ -113,14 +115,18 @@ export interface Journey extends CaseWithStep { money: CaseMoney | null; stage: 
 /** Every file still moving, plus files closed in the last 60 days. */
 export async function fetchJourneys(centreId: string): Promise<Journey[]> {
   const since = new Date(Date.now() - 60 * 86_400_000).toISOString();
-  const [open, closed, money] = await Promise.all([
+  const [open, closed, fought, money] = await Promise.all([
     fetchOpenCases(centreId),
-    sb().from('clm_claims').select(CASE_SELECT).eq('centre_id', centreId).in('status', ['settled', 'closed', 'written_off'])
-      .gte('updated_at', since).limit(1000),
+    allRows((from, to) => sb().from('clm_claims').select(CASE_SELECT).eq('centre_id', centreId).in('status', ['settled', 'closed', 'written_off'])
+      .gte('updated_at', since).order('id').range(from, to)),
+    // a settled file whose cut is being disputed is still being chased, however old
+    allRows((from, to) => sb().from('clm_claims').select(CASE_SELECT).eq('centre_id', centreId).eq('status', 'settled')
+      .eq('cut_decision', 'fought').lt('updated_at', since).order('id').range(from, to)),
     fetchCaseMoney(centreId),
   ]);
+  if (closed.error || fought.error) throw new Error('Could not load closed cases');
   const now = new Date();
-  const all = [...open, ...((closed.data ?? []) as unknown as Claim[]).map((c) => ({ c, step: nextStep(c, now) }))];
+  const all = [...open, ...([...closed.data, ...fought.data] as unknown as Claim[]).map((c) => ({ c, step: nextStep(c, now) }))];
   return all.map((x) => {
     const m = money.get(x.c.id) ?? null;
     const stage = stageOf(x.c, m, x.step);
@@ -133,7 +139,8 @@ export function paymentStep(step: Step, stage: StageKey, m: CaseMoney | null, cu
   if (stage !== 'payment') return step;
   const c = cut && cutStep(cut);
   if (c) return { ...step, desk: 'payment', key: 'wait_payment', ...c };
-  if (!m || m.allocated <= 0 || m.balance <= 100) return step;
+  // same rule as the ledger: any shortfall after a payment, once it is no longer awaited, is a decision
+  if (!m || m.allocated <= 0 || m.balance <= 1) return step;
   return { ...step, ours: true, label: 'Short settlement — record reason or dispute', overdue: false, dueAt: null };
 }
 
@@ -150,6 +157,12 @@ export async function recordCasePayment(claimId: string, p: { net: number; tds: 
   const { error } = await sb().rpc('clm_record_case_payment', {
     p_claim: claimId, p_net: p.net, p_tds: p.tds, p_utr: p.utr.trim() || null, p_date: p.date || null,
   });
+  if (error) throw new Error(error.message);
+}
+
+/** Reverse one wrong payment entry: the payment on every invoice it covered and its TDS, in one step. */
+export async function reversePayment(allocationId: string, reason: string) {
+  const { error } = await sb().rpc('clm_reverse_payment', { p_alloc: allocationId, p_reason: reason });
   if (error) throw new Error(error.message);
 }
 

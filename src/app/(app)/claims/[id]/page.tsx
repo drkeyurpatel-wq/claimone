@@ -101,7 +101,7 @@ export default function ClaimPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 pb-10 pt-4 md:px-6">
       {toastNode}
-      <Link href="/claims" className="mb-3 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800"><ArrowLeft className="h-3.5 w-3.5" /> Claims</Link>
+      <Link href="/claims" className="mb-1 inline-flex min-h-11 items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-3.5 w-3.5" /> Claims</Link>
 
       {/* Header */}
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
@@ -125,9 +125,9 @@ export default function ClaimPage() {
           {canWrite && (
             <div className="flex flex-wrap justify-end gap-1.5">
               {actions.map((a) => (
-                <button key={a.to} onClick={() => start(a)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white ${TONE[a.tone]}`}>{a.label}</button>
+                <button key={a.to} onClick={() => start(a)} className={`min-h-10 rounded-lg px-3.5 text-sm font-semibold text-white ${TONE[a.tone]}`}>{a.label}</button>
               ))}
-              {canSettle && <button onClick={() => setTab('settlement')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Record settlement</button>}
+              {canSettle && <button onClick={() => setTab('settlement')} className="min-h-10 rounded-lg bg-emerald-600 px-3.5 text-sm font-semibold text-white hover:bg-emerald-700">Record settlement</button>}
             </div>
           )}
         </div>

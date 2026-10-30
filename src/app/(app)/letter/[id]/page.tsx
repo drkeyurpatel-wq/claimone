@@ -55,7 +55,9 @@ function Letter() {
     (async () => {
       const [cc, mm, tn] = await Promise.all([fetchCase(id), fetchMoneyFor(id), sb().from('clm_tenants').select('name').maybeSingle()]);
       setC(cc); setM(mm);
-      const hosp = [(tn.data as { name?: string } | null)?.name, centre].filter(Boolean).join(', ');
+      // the hospital the patient was treated at (the case's centre, not the one selected now)
+      const at = centres.find((x) => x.id === cc?.centre_id)?.name ?? centre;
+      const hosp = [(tn.data as { name?: string } | null)?.name, at].filter(Boolean).join(', ');
       setHospital(hosp);
       // the payer's reason: the deduction booked from the letter, else the note on the partial approval
       let reason = '';
@@ -76,7 +78,7 @@ function Letter() {
       setSignName(level === 3 ? cc?.patient_name ?? '' : staff?.full_name ?? '');
       setLoading(false);
     })().catch(() => { setError('Could not load this case.'); setLoading(false); });
-  }, [id, level, centre, staff?.full_name]);
+  }, [id, level, centre, centres, staff?.full_name]);
 
   const cut = useMemo(() => (c ? cutOf(c, m) : null), [c, m]);
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-teal-600" /></div>;

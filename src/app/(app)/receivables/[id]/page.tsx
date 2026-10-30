@@ -58,13 +58,13 @@ export default function ReceivablePage() {
   return (
     <div className="mx-auto max-w-5xl px-4 pb-10 pt-4 md:px-6">
       {toastNode}
-      <Link href="/receivables" className="mb-3 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800"><ArrowLeft className="h-3.5 w-3.5" /> Receivables</Link>
+      <Link href="/receivables" className="mb-1 inline-flex min-h-11 items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-3.5 w-3.5" /> Receivables</Link>
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
         <h1 className="flex items-center gap-2 text-xl font-bold"><Wallet className="h-5 w-5 text-teal-600" /> {rv.patient_name ?? rv.debtor_name}</h1>
         <p className="mt-1 text-xs text-slate-500">
           {rv.debtor_name} ({rv.debtor_type}) · bill {rv.bill_no ?? '—'} · {shortDate(rv.bill_date)} · {rv.age_days} days
           {rv.claim_ref ? ` · claim ${rv.claim_ref}` : ''}{rv.care_of ? ` · ${rv.care_of}` : ''}
-          {rv.claim_id && <> · <Link href={`/case/${rv.claim_id}`} className="text-teal-700 underline">open patient file</Link></>}
+          {rv.claim_id && <> · <Link href={`/case/${rv.claim_id}`} className="inline-flex min-h-10 items-center text-teal-700 underline">open patient file</Link></>}
         </p>
         {rv.recorded_utr && <p className="mt-1 text-xs text-slate-500">UTR recorded by the team: <span className="font-mono">{rv.recorded_utr}</span></p>}
       </div>
@@ -90,7 +90,7 @@ export default function ReceivablePage() {
                     <span className="tabular w-28 font-semibold">{inr(a.amount)}</span>
                     <span className="text-xs text-slate-500">{shortDate(a.clm_receipts?.value_date)} · {a.clm_receipts?.reference ?? 'no ref'} · {a.method}</span>
                     {a.reversed_at ? <span className="text-xs text-rose-600">reversed: {a.reverse_reason}</span>
-                      : canWrite && <button onClick={() => undo(a.id, 'allocation')} className="ml-auto inline-flex items-center gap-1 text-xs text-slate-500 hover:text-rose-600"><Undo2 className="h-3 w-3" /> Reverse</button>}
+                      : canWrite && <button onClick={() => undo(a.id, 'allocation')} className="ml-auto inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-sm text-slate-500 hover:bg-rose-50 hover:text-rose-600"><Undo2 className="h-3 w-3" /> Reverse</button>}
                   </li>
                 ))}
               </ul>
@@ -128,7 +128,7 @@ export default function ReceivablePage() {
                     <span className="w-32 font-medium">{KIND[a.kind] ?? a.kind}</span>
                     <span className="tabular w-24 text-right">{inr(Math.abs(Number(a.amount)))}</span>
                     <span className="text-xs text-slate-500">{a.category ? `${DISALLOWANCE_CATEGORIES[a.category as keyof typeof DISALLOWANCE_CATEGORIES]?.label ?? a.category} · ` : ''}{a.reason_text ?? ''} · {dateTime(a.created_at)}</span>
-                    {!a.reversed_at && canWrite && <button onClick={() => undo(a.id, 'adjustment')} className="ml-auto inline-flex items-center gap-1 text-xs text-slate-500 hover:text-rose-600"><Undo2 className="h-3 w-3" /> Reverse</button>}
+                    {!a.reversed_at && canWrite && <button onClick={() => undo(a.id, 'adjustment')} className="ml-auto inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-sm text-slate-500 hover:bg-rose-50 hover:text-rose-600"><Undo2 className="h-3 w-3" /> Reverse</button>}
                   </li>
                 ))}
               </ul>

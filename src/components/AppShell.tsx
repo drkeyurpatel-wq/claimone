@@ -121,8 +121,8 @@ export function AppShell({ session, children }: { session: Session; children: Re
                   {centres.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               )}
-              <Link href="/account" aria-label="Change password" className="text-slate-500"><KeyRound className="h-5 w-5" /></Link>
-              <button onClick={signOut} aria-label="Sign out" className="text-slate-500"><LogOut className="h-5 w-5" /></button>
+              <Link href="/account" aria-label="Change password" className="-m-2 inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><KeyRound className="h-5 w-5" /></Link>
+              <button type="button" onClick={signOut} aria-label="Sign out" className="-m-2 inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><LogOut className="h-5 w-5" /></button>
             </div>
           </div>
           <nav className="flex gap-1 overflow-x-auto px-3 pb-2">

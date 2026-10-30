@@ -97,11 +97,11 @@ export default function Receivables() {
 
       <div className="flex flex-wrap items-center gap-2 px-6 pt-4">
         {([['payers', 'Payers'], ['patients', 'Patients & referrers'], ['all', 'All'], ['settled', 'Settled']] as const).map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${tab === k ? 'bg-teal-600 text-white' : 'border bg-white text-slate-600'}`}>{l}</button>
+          <button key={k} onClick={() => setTab(k)} className={`inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-medium ${tab === k ? 'bg-teal-600 text-white' : 'border bg-white text-slate-600'}`}>{l}</button>
         ))}
         <div className="relative"><Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Patient, bill, claim no." className="w-52 rounded-lg border border-slate-200 py-1.5 pl-8 pr-3 text-xs" /></div>
-        <select value={debtor} onChange={(e) => setDebtor(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs">
+          <input aria-label="Search bills" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Patient, bill, claim no." className="w-52 min-h-11 rounded-lg border border-slate-200 pl-8 pr-3 text-sm" /></div>
+        <select aria-label="Who owes" value={debtor} onChange={(e) => setDebtor(e.target.value)} className="min-h-11 rounded-lg border border-slate-200 px-2 text-sm">
           <option value="">All debtors</option>{debtors.map((d) => <option key={d}>{d}</option>)}
         </select>
       </div>

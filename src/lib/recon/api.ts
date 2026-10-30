@@ -1,6 +1,7 @@
 'use client';
 // Browser data access for receivables and reconciliation.
 import { sb } from '@/lib/supabase/browser';
+import { allRows } from '@/lib/supabase/pages';
 import type { AdviceRow, OpenReceipt, OpenReceivable, Proposal } from './match';
 import type { PaymentLine } from './payments';
 
@@ -39,11 +40,13 @@ const num = <T extends Record<string, unknown>>(r: T, keys: string[]) => {
 const RV_NUM = ['billed_amount', 'expected_amount', 'allocated', 'tds', 'deduction', 'discount', 'write_off', 'refund_due', 'other_adj', 'balance', 'age_days'];
 
 export async function fetchReceivables(centreId: string, opts: { openOnly?: boolean } = {}): Promise<ReceivableRow[]> {
-  let q = sb().from('clm_v_receivable_balance').select('*').eq('centre_id', centreId).order('bill_date', { ascending: true }).limit(5000);
-  if (opts.openOnly) q = q.neq('recon_status', 'settled');
-  const { data, error } = await q;
-  if (error) { console.error('fetchReceivables', error.code); return []; }
-  return (data ?? []).map((r: Record<string, unknown>) => num(r, RV_NUM) as unknown as ReceivableRow);
+  const { data, error } = await allRows((from, to) => {
+    let q = sb().from('clm_v_receivable_balance').select('*').eq('centre_id', centreId).order('bill_date', { ascending: true }).order('id');
+    if (opts.openOnly) q = q.neq('recon_status', 'settled');
+    return q.range(from, to);
+  });
+  if (error) { console.error('fetchReceivables failed'); return []; }
+  return (data as Record<string, unknown>[]).map((r) => num(r, RV_NUM) as unknown as ReceivableRow);
 }
 
 export async function fetchReceivable(id: string) {
@@ -60,17 +63,23 @@ export async function fetchReceivable(id: string) {
 }
 
 export async function fetchReceipts(centreId: string, opts: { unallocatedOnly?: boolean } = {}): Promise<ReceiptRow[]> {
-  let q = sb().from('clm_v_receipt_balance').select('*').eq('centre_id', centreId).order('value_date', { ascending: false }).limit(5000);
-  if (opts.unallocatedOnly) q = q.gt('unallocated', 1);
-  const { data } = await q;
-  return (data ?? []).map((r: Record<string, unknown>) => num(r, ['amount', 'allocated', 'unallocated']) as unknown as ReceiptRow);
+  const { data } = await allRows((from, to) => {
+    let q = sb().from('clm_v_receipt_balance').select('*').eq('centre_id', centreId).order('value_date', { ascending: false }).order('id');
+    if (opts.unallocatedOnly) q = q.gt('unallocated', 1);
+    return q.range(from, to);
+  });
+  return (data as Record<string, unknown>[]).map((r) => num(r, ['amount', 'allocated', 'unallocated']) as unknown as ReceiptRow);
 }
 
 export async function fetchUnusedAdvice(centreId: string): Promise<AdviceRow[]> {
-  const { data } = await sb().from('clm_remittance_lines').select('id, utr, claim_ref, bill_no, patient_name, tds_amount, deduction_amount, deduction_reason, net_amount')
-    .eq('centre_id', centreId).limit(5000);
-  const { data: used } = await sb().from('clm_allocations').select('remittance_line_id').not('remittance_line_id', 'is', null).is('reversed_at', null);
-  const done = new Set((used ?? []).map((u: { remittance_line_id: string }) => u.remittance_line_id));
+  const [{ data }, { data: used }] = await Promise.all([
+    allRows((from, to) => sb().from('clm_remittance_lines').select('id, utr, claim_ref, bill_no, patient_name, tds_amount, deduction_amount, deduction_reason, net_amount')
+      .eq('centre_id', centreId).order('id').range(from, to)),
+    // lines of this centre already used (through their bill's centre)
+    allRows((from, to) => sb().from('clm_allocations').select('remittance_line_id, clm_receivables!inner(centre_id)')
+      .eq('clm_receivables.centre_id', centreId).not('remittance_line_id', 'is', null).is('reversed_at', null).order('id').range(from, to)),
+  ]);
+  const done = new Set((used as { remittance_line_id: string }[]).map((u) => u.remittance_line_id));
   return ((data ?? []) as AdviceRow[]).filter((a) => !done.has(a.id))
     .map((a) => ({ ...a, tds_amount: Number(a.tds_amount), deduction_amount: Number(a.deduction_amount), net_amount: Number(a.net_amount) }));
 }

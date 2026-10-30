@@ -119,7 +119,7 @@ function QueryCard({ q, canWrite, onChanged, flash }: { q: ClaimQuery; canWrite:
         )}
       </div>
       {isOpen && canWrite && !replying && (
-        <button onClick={() => setReplying(true)} className="mt-3 inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+        <button onClick={() => setReplying(true)} className="mt-3 inline-flex items-center gap-1 min-h-10 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white hover:bg-blue-700">
           <MessageSquare className="h-3 w-3" /> Reply
         </button>
       )}
@@ -128,8 +128,8 @@ function QueryCard({ q, canWrite, onChanged, flash }: { q: ClaimQuery; canWrite:
           <textarea autoFocus rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Reply sent to the payer"
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <div className="flex justify-end gap-2">
-            <button onClick={() => setReplying(false)} className="rounded-lg border px-3 py-1.5 text-xs">Cancel</button>
-            <button disabled={saving || !text.trim()} onClick={send} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
+            <button onClick={() => setReplying(false)} className="min-h-10 rounded-lg border px-3.5 text-sm">Cancel</button>
+            <button disabled={saving || !text.trim()} onClick={send} className="inline-flex items-center gap-1 min-h-10 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white disabled:opacity-50">
               {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Save reply
             </button>
           </div>

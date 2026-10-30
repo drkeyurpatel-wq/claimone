@@ -42,13 +42,13 @@ export default function SummaryPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!centreId) return;
+    if (!centreId || !isManager) return;
     setAll(null);
     Promise.all([
       fetchJourneys(centreId),
       fetchLeakage(centreId),
       sb().from('clm_claims').select('cut_decision, cut_decided_at, status, claimed_amount, approved_amount, deduction_amount')
-        .eq('centre_id', centreId).not('cut_decision', 'is', null).limit(5000),
+        .eq('centre_id', centreId).not('cut_decision', 'is', null).limit(20000),
       // claim approvals in the last 7 days, from the status history (one per file)
       // (cases brought over from the old sheet were not approved this week)
       sb().from('clm_state_transitions').select('claim_id, clm_claims!inner(centre_id, approved_amount)')
@@ -67,7 +67,7 @@ export default function SummaryPage() {
       if (!st.error) setSettled(((st.data ?? []) as { net_amount: number }[]).map((x) => ({ net: Number(x.net_amount) })));
     })
       .catch(() => setError('Could not load the summary. Please refresh.'));
-  }, [centreId]);
+  }, [centreId, isManager]);
 
   const now = useMemo(() => new Date(), []);
   const rows = useMemo(() => (all ?? []).map((j) => ledgerRow(j, false, now)), [all, now]);
@@ -79,7 +79,7 @@ export default function SummaryPage() {
   const months = useMemo(() => disputesByMonth(disputes, 6, now), [disputes, now]);
 
   if (!centreId) return <NoCentre />;
-  if (!isManager) return <div className="py-20 text-center text-base text-slate-500">The weekly summary is for admins and managers. <Link href="/master" className="text-teal-700 underline">Back to Master</Link></div>;
+  if (!isManager) return <div className="py-20 text-center text-base text-slate-500">The weekly summary is for admins and managers. <Link href="/master" className="inline-flex min-h-11 items-center text-teal-700 underline">Back to Master</Link></div>;
   if (error) return <p role="alert" className="m-6 rounded-lg bg-rose-50 p-3 text-base text-rose-800">{error}</p>;
   if (!all) return <div className="flex justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-teal-600" /></div>;
 

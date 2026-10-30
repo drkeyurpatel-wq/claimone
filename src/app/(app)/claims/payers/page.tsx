@@ -40,7 +40,7 @@ function RouteCell({ p, isAdmin, onSaved }: { p: Payer; isAdmin: boolean; onSave
         {(['portal', 'email', 'tms', 'direct'] as const).map((c) => <option key={c} value={c}>{ROUTE_WORDS[c].label}</option>)}
       </select>
       <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="NHCX code e.g. 1000003538@hcx" className="w-full rounded border border-slate-200 px-1 py-1" />
-      <label className="flex items-center gap-1"><input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} /> Live on NHCX</label>
+      <label className="flex items-center gap-1"><input type="checkbox" className="h-5 w-5" checked={live} onChange={(e) => setLive(e.target.checked)} /> Live on NHCX</label>
       {err && <p className="text-rose-600">{err}</p>}
       <div className="flex gap-1"><button onClick={save} className="rounded bg-teal-600 px-2 py-1 font-semibold text-white">Save</button><button onClick={() => setEdit(false)} className="rounded bg-slate-100 px-2 py-1">Cancel</button></div>
     </div>
@@ -73,8 +73,8 @@ export default function Payers() {
       <div className="flex flex-wrap items-center gap-3 px-6 pt-4">
         <div className="relative"><Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search payers" className="w-56 rounded-lg border border-slate-200 py-1.5 pl-8 pr-3 text-xs" /></div>
-        <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} /> Only payers with claims</label>
-        <Link href="/settings" className="ml-auto rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700">Edit payer list</Link>
+        <label className="flex min-h-11 items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-5 w-5" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} /> Only payers with claims</label>
+        <Link href="/settings" className="ml-auto inline-flex min-h-11 items-center rounded-lg bg-teal-600 px-3.5 text-sm font-semibold text-white hover:bg-teal-700">Edit payer list</Link>
       </div>
       <div className="px-6 py-4">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">

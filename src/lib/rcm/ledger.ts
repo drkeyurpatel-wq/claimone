@@ -172,10 +172,11 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   const paid: Cell = { key: 'paid', state: excess ? 'ours' : col === 'paid' ? mark('paid', false, false) : got > 0 ? 'done' : mark('paid', false, false),
     text: got > 0 ? rs(got) : col === 'paid' ? 'Awaiting' : '',
     sub: excess ? `${rs(excess)} excess — review`
-      : got > 0 ? [m && (m.parts ?? 0) > 1 ? `${m.parts} payments` : '', m && m.tds ? `TDS ${rs(m.tds)}` : '',
-          moreDue ? (cut.awaited ? `${rs(m!.balance)} awaited` : `${rs(m!.balance)} outstanding`) : '',
-          m && m.banked != null ? (m.banked >= got - 1 ? 'In bank ✓' : m.banked > 0 ? `${rs(m.banked)} in bank` : 'Not in bank yet') : '']
-          .filter(Boolean).join(' · ') || undefined : undefined,
+      // short: what is still due first, then how it came; TDS and the bank match are in the cell's form and the download
+      : got > 0 ? [moreDue ? (cut.awaited ? `${rs(m!.balance)} awaited` : `${rs(m!.balance)} due`) : '',
+          m && (m.parts ?? 0) > 1 ? `${m.parts} payments` : '',
+          m && m.banked != null ? (m.banked >= got - 1 ? 'In bank ✓' : m.banked > 0 ? `${rs(m.banked)} in bank` : 'Not in bank') : '']
+          .filter(Boolean).join(' · ') || (m && m.tds ? `TDS ${rs(m.tds)}` : undefined) : undefined,
     tone: excess ? 'alert' : undefined,
     editable: w && APPROVED.has(c.status) && c.status !== 'settled' && (got === 0 || moreDue || excess > 0) };
 
@@ -247,7 +248,9 @@ export function byReminder(a: LedgerRow, b: LedgerRow): number {
 
 // ─── Excel download ─────────────────────────────────────────────────
 const esc = (v: unknown) => {
-  const s = v == null ? '' : String(v);
+  let s = v == null ? '' : String(v);
+  // text starting with = + - @ would run as a formula in Excel (numbers are passed as numbers)
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 const n = (v: number | null | undefined) => (v == null ? '' : Math.round(Number(v)));

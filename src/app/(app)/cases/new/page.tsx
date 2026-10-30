@@ -16,16 +16,18 @@ const field = 'mt-1 min-h-12 w-full rounded-lg border border-slate-300 px-3 text
 
 export default function NewCase() {
   const router = useRouter();
-  const { activeCentreId: centreId, tenantId } = useAuthStore();
+  const { activeCentreId: centreId, tenantId, staff } = useAuthStore();
+  const canWrite = staff?.role === 'admin' || staff?.role === 'manager' || staff?.role === 'desk';
   const [payers, setPayers] = useState<Payer[]>([]);
   const [f, setF] = useState({ patient_name: '', admission_ref: '', patient_uhid: '', patient_phone: '', payer_id: '',
     admitted_at: '', treating_doctor_name: '', estimated_amount: '', policy_number: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  useEffect(() => { fetchAllPayers().then(setPayers); }, []);
+  useEffect(() => { fetchAllPayers().then(setPayers).catch(() => setError('Could not load the payer list. Please refresh.')); }, []);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
 
   if (!centreId || !tenantId) return <NoCentre />;
+  if (staff && !canWrite) return <div className="py-20 text-center text-base text-slate-500">Your login can view cases but not add them. <Link href="/master" className="text-teal-700 underline">Back to Master</Link></div>;
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +42,7 @@ export default function NewCase() {
         patient_uhid: f.patient_uhid.trim() || null, patient_phone: f.patient_phone.trim() || null,
         treating_doctor_name: f.treating_doctor_name.trim() || null, policy_number: f.policy_number.trim() || null,
         estimated_amount: f.estimated_amount ? Number(f.estimated_amount) : null,
-        admitted_at: at.toISOString(), admission_date: f.admitted_at ? f.admitted_at.slice(0, 10) : new Date().toLocaleDateString('en-CA'), case_source: 'manual',
+        admitted_at: at.toISOString(), admission_date: f.admitted_at ? f.admitted_at.slice(0, 10) : new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }), case_source: 'manual',
       });
       router.push(`/case/${id}`);
     } catch (err) {
@@ -52,7 +54,7 @@ export default function NewCase() {
 
   return (
     <div className="mx-auto max-w-xl px-4 py-8 md:px-6">
-      <Link href="/master" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Master</Link>
+      <Link href="/master" className="inline-flex min-h-11 items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Master</Link>
       <h1 className="mt-2 text-2xl font-bold text-slate-900">Add a patient</h1>
       <p className="mt-1 text-base text-slate-600">Only insurance, scheme or company patients. Cash patients are not needed here.</p>
 

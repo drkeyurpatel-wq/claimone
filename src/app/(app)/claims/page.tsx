@@ -81,21 +81,21 @@ export default function ClaimsDesk() {
       <div className="flex flex-wrap items-center gap-2 px-6 pb-2 pt-4">
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${tab === t.id ? 'bg-teal-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+            className={`inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-medium transition ${tab === t.id ? 'bg-teal-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
             {t.label}{tab === t.id && !claimsLoading ? ` · ${claims.length}` : ''}
           </button>
         ))}
         <div className="mx-1 h-5 w-px bg-slate-200" />
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          <input placeholder="Patient, UHID, claim #" value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-52 rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs focus:border-teal-500 focus:outline-none" />
+          <input aria-label="Search claims" placeholder="Patient, UHID, claim #" value={search} onChange={(e) => setSearch(e.target.value)}
+            className="min-h-11 w-56 rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-sm focus:border-teal-500 focus:outline-none" />
         </div>
-        <select value={payer} onChange={(e) => setPayer(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs">
+        <select aria-label="Payer" value={payer} onChange={(e) => setPayer(e.target.value)} className="min-h-11 rounded-lg border border-slate-200 bg-white px-2 text-sm">
           <option value="">All payers</option>
           {payers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <select value={type} onChange={(e) => setType(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs">
+        <select aria-label="Claim type" value={type} onChange={(e) => setType(e.target.value)} className="min-h-11 rounded-lg border border-slate-200 bg-white px-2 text-sm">
           <option value="">All types</option>
           {Object.entries(CLAIM_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>

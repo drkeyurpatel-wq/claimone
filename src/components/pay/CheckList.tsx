@@ -182,7 +182,7 @@ export function CheckList({ rows, canWrite, onChanged, flash }: {
         <ul className="divide-y divide-slate-100">
           {canWrite && (
             <li className="flex items-center gap-3 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600">
-              <input type="checkbox" aria-label="Tick all shown" className="h-5 w-5 accent-teal-600"
+              <input type="checkbox" aria-label="Tick all shown" className="h-6 w-6 accent-teal-600"
                 checked={list.slice(0, 300).every((r) => picked.has(r.receivable_id))}
                 onChange={(e) => setPicked(e.target.checked ? new Set(list.slice(0, 300).map((r) => r.receivable_id)) : new Set())} />
               Tick all · biggest first
@@ -192,11 +192,11 @@ export function CheckList({ rows, canWrite, onChanged, flash }: {
             const received = r.allocated + r.tds + r.deduction;
             return (
               <li key={r.receivable_id} className={`flex gap-3 px-4 py-3 ${picked.has(r.receivable_id) ? 'bg-teal-50/60' : ''}`}>
-                {canWrite && <input type="checkbox" aria-label={`Tick ${r.bill_no ?? r.claim_ref ?? 'bill'}`} className="mt-1 h-5 w-5 shrink-0 accent-teal-600"
+                {canWrite && <input type="checkbox" aria-label={`Tick ${r.bill_no ?? r.claim_ref ?? 'bill'}`} className="mt-1 h-6 w-6 shrink-0 accent-teal-600"
                   checked={picked.has(r.receivable_id)} onChange={() => toggle(r.receivable_id)} />}
                 <div className="grid min-w-0 flex-1 gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_auto]">
                   <div className="min-w-0">
-                    <Link href={`/receivables/${r.receivable_id}`} className="font-medium text-slate-900 hover:underline">{r.patient_name ?? '—'}</Link>
+                    <Link href={`/receivables/${r.receivable_id}`} className="inline-flex min-h-10 items-center font-medium text-slate-900 hover:underline">{r.patient_name ?? '—'}</Link>
                     <p className="truncate text-xs text-slate-500">{r.debtor_name}{r.uhid ? ` · UHID ${r.uhid}` : ''}</p>
                   </div>
                   <div className="text-xs text-slate-600">

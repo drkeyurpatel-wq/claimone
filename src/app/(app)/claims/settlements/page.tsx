@@ -42,7 +42,7 @@ export default function Settlements() {
       </div>
       <div className="flex gap-2 px-6 pt-4">
         {(['due', 'received'] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${tab === t ? 'bg-teal-600 text-white' : 'border bg-white text-slate-600'}`}>
+          <button key={t} onClick={() => setTab(t)} className={`inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-medium ${tab === t ? 'bg-teal-600 text-white' : 'border bg-white text-slate-600'}`}>
             {t === 'due' ? `Awaiting payment · ${due.length}` : `Received · ${received.length}`}
           </button>
         ))}

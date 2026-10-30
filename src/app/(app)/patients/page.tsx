@@ -2,7 +2,7 @@
 // Every insurance / scheme / company patient as a file moving through the
 // hospital. Tabs are the stages of the journey; the number on each tab is
 // how many files sit there. Late files come first. Tap a patient to work the file.
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Search, ChevronRight, UserPlus } from 'lucide-react';
@@ -52,9 +52,14 @@ function Patients() {
   const [q, setQ] = useState('');
   const stage = (params.get('stage') as StageKey | 'all' | null) ?? (workspace ? WORKSPACE_STAGE[workspace] : 'all');
 
+  const current = useRef(centreId);
+  current.current = centreId;
   const load = useCallback(async () => {
     if (!centreId) return;
-    try { setAll(await fetchJourneys(centreId)); setError(''); } catch { setError('Could not load patients. Check the internet and refresh.'); }
+    try {
+      const j = await fetchJourneys(centreId);
+      if (current.current === centreId) { setAll(j); setError(''); }
+    } catch { if (current.current === centreId) setError('Could not load patients. Check the internet and refresh.'); }
   }, [centreId]);
   useEffect(() => { setAll(null); load(); const t = setInterval(load, 60_000); return () => clearInterval(t); }, [load]);
 

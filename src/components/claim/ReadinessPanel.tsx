@@ -76,20 +76,20 @@ export function ReadinessPanel({ claim, rules, documents, defaultStage, canWrite
       {d.status === 'invalid' && d.review_note && <span className="text-rose-600">— {d.review_note}</span>}
       {canWrite && d.status === 'uploaded' && (
         <>
-          <button disabled={busy === d.id} onClick={() => review(d, 'valid')} className="inline-flex items-center gap-1 rounded bg-emerald-600 px-2 py-0.5 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+          <button disabled={busy === d.id} onClick={() => review(d, 'valid')} className="inline-flex items-center gap-1 min-h-9 rounded-md bg-emerald-600 px-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
             {busy === d.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} Verify
           </button>
-          <button onClick={() => setRejecting({ id: d.id, note: '' })} className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-semibold text-slate-700 hover:bg-slate-200">
+          <button onClick={() => setRejecting({ id: d.id, note: '' })} className="inline-flex items-center gap-1 min-h-9 rounded-md bg-slate-100 px-3 font-semibold text-slate-700 hover:bg-slate-200">
             <X className="h-3 w-3" /> Reject
           </button>
         </>
       )}
-      <button onClick={() => open(d)} className="text-slate-400 hover:text-slate-700" aria-label="Open document"><Eye className="h-3.5 w-3.5" /></button>
+      <button onClick={() => open(d)} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Open document"><Eye className="h-3.5 w-3.5" /></button>
       {rejecting?.id === d.id && (
         <div className="flex w-full items-center gap-2 pt-1">
           <input autoFocus value={rejecting.note} onChange={(e) => setRejecting({ id: d.id, note: e.target.value })}
             placeholder="Why is it rejected? (e.g. unsigned, wrong patient)" className="flex-1 rounded border border-slate-200 px-2 py-1" />
-          <button disabled={!rejecting.note.trim()} onClick={() => review(d, 'invalid', rejecting.note)} className="rounded bg-rose-600 px-2 py-1 font-semibold text-white disabled:opacity-50">Reject</button>
+          <button disabled={!rejecting.note.trim()} onClick={() => review(d, 'invalid', rejecting.note)} className="min-h-9 rounded-md bg-rose-600 px-3 font-semibold text-white disabled:opacity-50">Reject</button>
           <button onClick={() => setRejecting(null)} className="text-slate-500">Cancel</button>
         </div>
       )}
@@ -103,7 +103,7 @@ export function ReadinessPanel({ claim, rules, documents, defaultStage, canWrite
         {stages.length > 1 && (
           <div className="flex rounded-lg bg-slate-100 p-0.5">
             {stages.map((s) => (
-              <button key={s} onClick={() => setStage(s)} className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${stage === s ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
+              <button key={s} onClick={() => setStage(s)} className={`min-h-9 rounded-md px-3 text-xs font-semibold ${stage === s ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
                 {STAGE_LABEL[s]}
               </button>
             ))}
@@ -133,7 +133,7 @@ export function ReadinessPanel({ claim, rules, documents, defaultStage, canWrite
                   return (
                     <button role="checkbox" aria-checked={c.passed} aria-label={`${c.docLabel} sent`} disabled={byFile || busy === `tick-${c.docCode}`}
                       onClick={() => tick(c.docCode, c.docLabel, !ticked)}
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-2 transition ${c.passed ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white hover:border-teal-500'} disabled:opacity-70`}>
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border-2 transition ${c.passed ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white hover:border-teal-500'} disabled:opacity-70`}>
                       {busy === `tick-${c.docCode}` ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : c.passed ? <Check className="h-4 w-4" /> : null}
                     </button>
                   );
@@ -143,7 +143,7 @@ export function ReadinessPanel({ claim, rules, documents, defaultStage, canWrite
                   <p className="text-[11px] text-slate-500">{c.appliedBecause}</p>
                 </div>
                 {canWrite && (
-                  <label className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-teal-700 ring-1 ring-slate-200 hover:bg-teal-50">
+                  <label className="inline-flex cursor-pointer items-center gap-1 min-h-9 rounded-md bg-white px-2.5 text-xs font-semibold text-teal-700 ring-1 ring-slate-200 hover:bg-teal-50">
                     {busy === `up-${c.docCode}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />} Upload copy
                     <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"
                       onChange={(e) => { upload(e.target.files?.[0], c.docCode, c.docLabel); e.target.value = ''; }} />

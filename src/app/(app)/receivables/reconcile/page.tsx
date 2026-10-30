@@ -159,7 +159,7 @@ export default function Reconcile() {
                           <button disabled={!manual.bill || saving} onClick={saveManual} className="rounded bg-teal-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">Match</button>
                           <button onClick={() => setManual(null)} className="text-xs text-slate-500">Cancel</button>
                         </div>
-                      ) : <button onClick={() => setManual({ receipt: id, bill: cands[0] ?? '', amount: String(r.unallocated) })} className="text-xs font-semibold text-teal-700">Match by hand</button>)}
+                      ) : <button onClick={() => setManual({ receipt: id, bill: cands[0] ?? '', amount: String(r.unallocated) })} className="inline-flex min-h-10 items-center rounded-lg px-2 text-sm font-semibold text-teal-700 hover:bg-teal-50">Match by hand</button>)}
                     </div>
                   );
                 })}

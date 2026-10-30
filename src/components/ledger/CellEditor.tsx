@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { Loader2, CheckCircle2, ExternalLink, FileText, MessageSquareWarning } from 'lucide-react';
 import type { Claim } from '@/lib/claims/types';
 import { transition, updateClaimFields } from '@/lib/claims/api';
-import { fetchReceivable, reverse } from '@/lib/recon/api';
-import { recordCasePayment, recordEnhancement, istDate, fetchOpenQuery } from '@/lib/rcm/api';
+import { fetchReceivable } from '@/lib/recon/api';
+import { recordCasePayment, recordEnhancement, istDate, fetchOpenQuery, reversePayment } from '@/lib/rcm/api';
 import { LETTERS, LETTER_WAIT_DAYS } from '@/lib/rcm/cut';
 import { actionsFor, type CaseAction } from '@/lib/rcm/actions';
 import { routeFor } from '@/lib/rcm/payer';
@@ -64,6 +64,8 @@ function StatusForm({ r, col, isManager, onClose, onSaved }: {
   const [day, setDay] = useState(today());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // the status move went through; a retry only saves the date
+  const [moved, setMoved] = useState(false);
   const [query, setQuery] = useState<{ query_text: string; raised_at: string } | null>(null);
   const answering = r.j.step.key === 'answer_claim_query' || r.j.step.key === 'answer_preauth_query';
   useEffect(() => { if (answering) fetchOpenQuery(c.id).then(setQuery).catch(() => setQuery(null)); }, [answering, c.id]);
@@ -78,7 +80,7 @@ function StatusForm({ r, col, isManager, onClose, onSaved }: {
 
   const save = async () => {
     if (!pick) return;
-    if (pick.amount && !(amount !== '' && Number(amount) >= 0)) { setError('Enter the amount.'); return; }
+    if (pick.amount && !(amount !== '' && Number(amount) > 0)) { setError('Enter an amount above ₹0.'); return; }
     if (pick.note?.required && !note.trim()) { setError(`Fill in: ${pick.note.label}`); return; }
     if (pick.id === 'part' && !why) { setError('Select the deduction reason.'); return; }
     if (dated && day > today()) { setError('The date cannot be in the future.'); return; }
@@ -91,11 +93,17 @@ function StatusForm({ r, col, isManager, onClose, onSaved }: {
       const fullNote = pick.id === 'part'
         ? `${DISALLOWANCE_CATEGORIES[why as keyof typeof DISALLOWANCE_CATEGORIES].label} — ${note.trim()}`
         : note.trim() || undefined;
-      await transition(c.id, pick.to, fields, fullNote);
+      if (!moved) { await transition(c.id, pick.to, fields, fullNote); setMoved(true); }
       const at = dated ? istDate(day) : null;
       // a reply keeps the first submission date; the date typed is the reply date
-      if (at) await updateClaimFields(c.id, (pick.id === 'answered' ? { query_replied_at: at }
-        : pick.to === 'preauth_pending' ? { preauth_submitted_at: at } : { submitted_at: at }) as Partial<Claim>);
+      if (at) {
+        try {
+          await updateClaimFields(c.id, (pick.id === 'answered' ? { query_replied_at: at }
+            : pick.to === 'preauth_pending' ? { preauth_submitted_at: at } : { submitted_at: at }) as Partial<Claim>);
+        } catch {
+          setError('The status is saved, but the date could not be saved. Press Save again to retry the date.'); setBusy(false); return;
+        }
+      }
       onSaved(`Updated — ${pick.label}`);
     } catch (e) { setError((e as Error).message); setBusy(false); }
   };
@@ -112,7 +120,7 @@ function StatusForm({ r, col, isManager, onClose, onSaved }: {
       {acts.length > 1 && (
         <div className="grid grid-cols-2 gap-2">
           {acts.map((a) => (
-            <button key={a.id} type="button" onClick={() => setPick(a)} aria-pressed={pick?.id === a.id}
+            <button key={a.id} type="button" onClick={() => setPick(a)} disabled={moved} aria-pressed={pick?.id === a.id}
               className={`min-h-12 rounded-xl px-3 text-base font-semibold ${pick?.id === a.id ? TONE[a.tone] : 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'}`}>
               {a.label}
             </button>
@@ -241,12 +249,10 @@ function PaymentForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
   };
 
   // undo a wrong entry: the payment and its TDS line are reversed (kept on record)
-  const reverseEntry = async (allocId: string, remId: string | null) => {
+  const reverseEntry = async (allocId: string) => {
     setBusy(true); setError('');
     try {
-      await reverse(allocId, 'Entered by mistake — corrected on Master', 'allocation');
-      const tdsLines = (pay?.adjustments ?? []).filter((a) => !a.reversed_at && a.kind === 'tds' && remId && (a as { remittance_line_id?: string }).remittance_line_id === remId);
-      for (const a of tdsLines) await reverse(a.id, 'Entered by mistake — corrected on Master', 'adjustment');
+      await reversePayment(allocId, 'Entered by mistake — corrected on Master');
       onSaved('Payment entry reversed — enter the correct figures');
     } catch (e) { setError((e as Error).message); setBusy(false); }
   };
@@ -271,7 +277,7 @@ function PaymentForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
               <span>{dd(a.clm_receipts?.value_date)}{a.clm_receipts?.reference ? ` · UTR ${a.clm_receipts.reference}` : ''}{tdsOf ? ` · TDS ${rs(tdsOf)}` : ''}</span>
               <span className="flex items-center gap-3"><b>{rs(a.amount)}</b>
                 {canWrite && (undo === a.id
-                  ? <span className="flex gap-1"><button type="button" onClick={() => reverseEntry(a.id, remId)} disabled={busy} className="rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">Confirm reverse</button>
+                  ? <span className="flex gap-1"><button type="button" onClick={() => reverseEntry(a.id)} disabled={busy} className="rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">Confirm reverse</button>
                       <button type="button" onClick={() => setUndo(null)} className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs">Keep</button></span>
                   : <button type="button" onClick={() => setUndo(a.id)} className="text-xs font-medium text-rose-700 underline">Reverse entry</button>)}
               </span>
