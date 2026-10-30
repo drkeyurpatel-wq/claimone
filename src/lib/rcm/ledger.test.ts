@@ -99,7 +99,8 @@ describe('ledger row: money and cuts', () => {
   it('fighting: amber, can still take the payment', () => {
     const r = paid({ cut_decision: 'fought', cut_decided_at: '2026-10-29T11:00:00+05:30' },
       { allocated: 49000, tds: 1000, balance: 2000, expected_amount: 52000, recon_status: 'disputed' });
-    expect(r.cells.cut).toMatchObject({ tone: 'warn', sub: 'Disputed', editable: true });
+    expect(r.cells.cut).toMatchObject({ tone: 'warn', sub: 'Disputed · letter due', editable: true });
+    expect(r.next).toMatchObject({ ours: true, text: 'Disputed ₹2,000 — send the reconsideration letter' });
     expect(r.cells.paid.editable).toBe(true);
     expect(inFilter(r, 'cuts')).toBe(true);
   });
@@ -145,5 +146,50 @@ describe('ledger order and download', () => {
     expect(lines).toHaveLength(2);
     expect(lines[0].startsWith('Admission date,Patient,IP number')).toBe(true);
     expect(lines[1]).toContain('"Shah, Ramesh"');
+  });
+});
+
+describe('ageing, bank and letters', () => {
+  it('days since discharge, coloured; over 30 days filter', () => {
+    const r = row(c({ status: 'claim_submitted', submitted_at: '2026-09-25T10:00:00+05:30', discharged_at: '2026-09-20T10:00:00+05:30' }));
+    expect(r.age).toMatchObject({ from: 'discharge', days: 39, band: 'warn' });
+    expect(inFilter(r, 'aged')).toBe(true);
+    const old = row(c({ status: 'claim_submitted', submitted_at: '2026-08-20T10:00:00+05:30', discharged_at: '2026-08-15T10:00:00+05:30' }));
+    expect(old.age?.band).toBe('late');
+    const fresh = row(c({ status: 'claim_submitted', submitted_at: '2026-10-21T10:00:00+05:30', discharged_at: '2026-10-20T10:00:00+05:30' }));
+    expect(fresh.age).toMatchObject({ days: 9, band: 'ok' });
+    expect(inFilter(fresh, 'aged')).toBe(false);
+  });
+  it('in hospital: counted from admission, never late', () => {
+    const r = row(c({ status: 'preauth_approved', preauth_submitted_at: '2026-10-20T10:00:00+05:30', approved_amount: 50000, admitted_at: '2026-10-20T08:00:00+05:30' }));
+    expect(r.age).toMatchObject({ from: 'admission', days: 9, band: 'ok' });
+    expect(inFilter(r, 'aged')).toBe(false);
+  });
+  it('closed files carry no age', () => {
+    const r = row(c({ status: 'settled', claimed_amount: 50000, approved_amount: 50000, discharged_at: '2026-08-01T10:00:00+05:30' }),
+      money({ allocated: 49000, tds: 1000, balance: 0, recon_status: 'settled' }));
+    expect(r.age).toBeNull();
+  });
+  it('settlement cell says whether the money is in the bank', () => {
+    const base = { status: 'claim_approved' as const, submitted_at: 'x', claimed_amount: 50000, approved_amount: 50000, discharged_at: 'x' };
+    const notYet = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 0 }));
+    expect(notYet.cells.paid.sub).toBe('TDS ₹1,000 · Not in bank yet');
+    const inBank = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 49000 }));
+    expect(inBank.cells.paid.sub).toBe('TDS ₹1,000 · In bank ✓');
+  });
+  it('a letter sent shows on the deduction cell', () => {
+    const r = row(c({ status: 'claim_approved', submitted_at: 'x', claimed_amount: 52000, approved_amount: 50000, discharged_at: 'x',
+      cut_decision: 'fought', cut_decided_at: '2026-10-20T11:00:00+05:30', dispute_level: 1, dispute_sent_at: '2026-10-21T11:00:00+05:30' }),
+      money({ allocated: 49000, tds: 1000, balance: 2000, expected_amount: 52000, recon_status: 'disputed' }));
+    expect(r.cells.cut.sub).toBe('Disputed · Reconsideration sent 21 Oct');
+    expect(r.next).toMatchObject({ ours: false, late: false });
+    expect(r.next.text).toContain('awaiting reply');
+  });
+  it('after a query reply, the payer is chased in 48 hours', () => {
+    const r = row(c({ status: 'claim_submitted', submitted_at: '2026-10-01T10:00:00+05:30', discharged_at: '2026-09-30T10:00:00+05:30',
+      query_replied_at: '2026-10-26T10:00:00+05:30', status_changed_at: '2026-10-26T10:00:00+05:30' }));
+    expect(r.next).toMatchObject({ ours: false, late: true });
+    expect(r.next.text).toBe('Query replied — awaiting claim decision (payer)');
+    expect(r.cells.cl_sent.text).toBe('01 Oct');
   });
 });

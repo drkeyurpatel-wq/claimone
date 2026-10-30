@@ -7,7 +7,7 @@
 import type { Claim } from '@/lib/claims/types';
 import type { Journey } from './api';
 import type { CaseMoney } from './journey';
-import { cutOf, CUT_FLOOR, type Cut } from './cut';
+import { cutOf, CUT_FLOOR, LETTERS, type Cut } from './cut';
 import { dueText, type Step } from './worklist';
 
 export type ColKey = 'patient' | 'pa_sent' | 'pa_ok' | 'disch' | 'cl_sent' | 'cl_ok' | 'paid' | 'cut';
@@ -76,9 +76,25 @@ export function stepColumn(step: Step): ColKey | null {
   }
 }
 
+/** How long an open file has been running: from discharge (the money clock), else from admission. */
+export interface Age { days: number; from: 'discharge' | 'admission'; band: 'ok' | 'warn' | 'late' }
+const DAY_MS = 86_400_000;
+export function ageOf(c: Journey['c'], now = new Date()): Age {
+  const d = c.discharged_at ?? c.discharge_date ?? null;
+  const a = c.admitted_at ?? c.admission_date ?? c.created_at;
+  const at = (x: string) => new Date(x.length === 10 ? `${x}T12:00:00+05:30` : x).getTime();
+  const from = d ? 'discharge' : 'admission';
+  const ms = now.getTime() - at(d ?? a);
+  const days = Number.isFinite(ms) ? Math.max(0, Math.floor(ms / DAY_MS)) : 0;
+  const band = from === 'admission' ? 'ok' : days > 60 ? 'late' : days > 30 ? 'warn' : 'ok';
+  return { days, from, band };
+}
+
 export interface LedgerRow {
   j: Journey;
   cells: Record<ColKey, Cell>;
+  /** Open files only: days since discharge (or admission while in hospital). */
+  age: Age | null;
   /** The reminder: what to do next, or what to chase. */
   next: { text: string; due: string | null; late: boolean; ours: boolean; done: boolean };
   cut: Cut & { short: boolean; won?: boolean };
@@ -149,7 +165,9 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   const paid: Cell = { key: 'paid', state: excess ? 'ours' : col === 'paid' ? mark('paid', false, false) : got > 0 ? 'done' : mark('paid', false, false),
     text: got > 0 ? rs(got) : col === 'paid' ? 'Awaiting' : '',
     sub: excess ? `${rs(excess)} excess — review`
-      : got > 0 ? [m && m.tds ? `TDS ${rs(m.tds)}` : '', moreDue ? `${rs(m!.balance)} outstanding` : ''].filter(Boolean).join(' · ') || undefined : undefined,
+      : got > 0 ? [m && m.tds ? `TDS ${rs(m.tds)}` : '', moreDue ? `${rs(m!.balance)} outstanding` : '',
+          m && m.banked != null ? (m.banked >= got - 1 ? 'In bank ✓' : m.banked > 0 ? `${rs(m.banked)} in bank` : 'Not in bank yet') : '']
+          .filter(Boolean).join(' · ') || undefined : undefined,
     tone: excess ? 'alert' : undefined,
     editable: w && APPROVED.has(c.status) && c.status !== 'settled' && (got === 0 || moreDue || excess > 0) };
 
@@ -159,7 +177,9 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
     : cut.state === 'none'
     ? { key: 'cut', state: CLOSED.has(c.status) || got > 0 ? 'done' : 'blank', text: CLOSED.has(c.status) || got > 0 ? 'Nil' : '', editable: false }
     : { key: 'cut', state: cut.needsDecision ? 'ours' : 'done', text: rs(cut.amount),
-        sub: cut.needsDecision ? 'Accept or dispute' : cut.state === 'fought' ? 'Disputed' : cut.state === 'accepted' ? 'Accepted' : `Below ${rs(CUT_FLOOR)}`,
+        sub: cut.needsDecision ? 'Accept or dispute'
+          : cut.state === 'fought' ? (cut.letter ? `Disputed · ${LETTERS[cut.letter.level]?.short ?? 'Letter'} sent ${dd(cut.letter.sentAt)}` : 'Disputed · letter due')
+          : cut.state === 'accepted' ? 'Accepted' : `Below ${rs(CUT_FLOOR)}`,
         tone: cut.needsDecision ? 'alert' : cut.state === 'fought' ? 'warn' : undefined,
         editable: canWrite && c.status !== 'closed' && c.status !== 'written_off' && (cut.needsDecision || cut.state === 'fought' || (cut.state === 'pending' && c.status === 'settled')) };
 
@@ -178,15 +198,16 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
       late: step.overdue, ours: step.ours, done: false };
   }
 
-  return { j, cut, next, cells: { patient, pa_sent: paSent, pa_ok: paOk, disch, cl_sent: clSent, cl_ok: clOk, paid, cut: cutCell } };
+  return { j, cut, next, age: next.done ? null : ageOf(c, now), cells: { patient, pa_sent: paSent, pa_ok: paOk, disch, cl_sent: clSent, cl_ok: clOk, paid, cut: cutCell } };
 }
 
 // ─── Filters ────────────────────────────────────────────────────────
-export type Filter = 'open' | 'mine' | 'chase' | 'cuts' | 'closed';
+export type Filter = 'open' | 'mine' | 'chase' | 'aged' | 'cuts' | 'closed';
 export const FILTERS: { key: Filter; label: string }[] = [
   { key: 'open', label: 'All open' },
   { key: 'mine', label: 'Action due' },
   { key: 'chase', label: 'Follow-up overdue' },
+  { key: 'aged', label: 'Over 30 days' },
   { key: 'cuts', label: 'Deductions & disputes' },
   { key: 'closed', label: 'Closed' },
 ];
@@ -196,6 +217,7 @@ export function inFilter(r: LedgerRow, f: Filter): boolean {
     case 'open': return !r.next.done;
     case 'mine': return !r.next.done && r.next.ours;
     case 'chase': return !r.next.done && !r.next.ours && r.next.late;
+    case 'aged': return !r.next.done && r.age?.from === 'discharge' && r.age.days > 30;
     case 'cuts': return r.cut.needsDecision || r.cut.state === 'fought';
     case 'closed': return r.next.done;
   }
@@ -220,12 +242,13 @@ const ymd = (d: string | null | undefined) => (d ? new Date(d.length === 10 ? `$
 
 export function toCsv(rows: LedgerRow[]): string {
   const head = ['Admission date', 'Patient', 'IP number', 'UHID', 'Payer', 'Pre-auth submitted', 'Pre-auth number', 'Pre-auth approved',
-    'Discharge date', 'Claim submitted', 'Claim number', 'Claimed', 'Approved', 'Received', 'TDS', 'Outstanding', 'Deduction', 'Deduction status', 'Next action', 'Due'];
-  const lines = rows.map(({ j: { c, money: m }, cut, next, cells }) => [
+    'Discharge date', 'Claim submitted', 'Claim number', 'Claimed', 'Approved', 'Received', 'TDS', 'Outstanding', 'Deduction', 'Deduction status', 'In bank', 'Days since discharge', 'Next action', 'Due'];
+  const lines = rows.map(({ j: { c, money: m }, cut, next, cells, age }) => [
     ymd(c.admitted_at ?? c.admission_date), c.patient_name, c.admission_ref, c.patient_uhid, c.clm_payers?.name ?? c.sponsor_name,
     ymd(c.preauth_submitted_at), c.tpa_preauth_number, n(c.preauth_approved_amount), ymd(c.discharged_at ?? c.discharge_date),
     ymd(c.submitted_at), c.tpa_claim_number, n(c.claimed_amount), APPROVED.has(c.status) || c.status === 'closed' ? n(c.approved_amount) : '',
     m ? n(m.allocated) : '', m ? n(m.tds) : '', m ? n(m.balance) : '', cut.amount >= 1 ? n(cut.amount) : '', cells.cut.sub ?? '',
+    m && m.allocated > 0 && m.banked != null ? n(m.banked) : '', age && age.from === 'discharge' ? age.days : '',
     next.text, next.due ?? '',
   ].map(esc).join(','));
   return '﻿' + [head.join(','), ...lines].join('\r\n');

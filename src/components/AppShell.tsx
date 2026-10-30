@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import {
   ShieldCheck, LayoutDashboard, Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut, Wallet, ClipboardCheck, GitMerge, Upload,
-  Gauge, FileSpreadsheet, Users, KeyRound, ChevronDown, Table2, MoreHorizontal, Settings,
+  Gauge, FileSpreadsheet, Users, KeyRound, ChevronDown, Table2, MoreHorizontal, Settings, CalendarRange,
 } from 'lucide-react';
 import type { Session } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/store/auth';
@@ -20,8 +20,10 @@ const MORE_WORK: NavItem[] = [
   { href: '/cases/upload', label: 'Import admissions (eCW)', icon: FileSpreadsheet },
   { href: '/pay', label: 'Import settlements', icon: Upload, exact: true },
   { href: '/pay/check', label: 'Settlement review', icon: ClipboardCheck, exact: true },
+  { href: '/receivables/import', label: 'Import bank statement', icon: Upload },
 ];
 const MORE_MANAGER: NavItem[] = [
+  { href: '/summary', label: 'Weekly summary', icon: CalendarRange },
   { href: '/overview', label: 'Overview', icon: Gauge },
   { href: '/settings', label: 'Settings — payer master', icon: Settings },
   { href: '/claims/payers', label: 'Payer performance', icon: Building2 },
@@ -31,7 +33,6 @@ const MORE_MANAGER: NavItem[] = [
   { href: '/claims', label: 'All claims (table)', icon: LayoutDashboard, exact: true },
   { href: '/receivables', label: 'Receivables (table)', icon: Wallet },
   { href: '/receivables/reconcile', label: 'Bank matching', icon: GitMerge },
-  { href: '/receivables/import', label: 'Import old data', icon: Upload },
   { href: '/claims/bot', label: 'Portal bot', icon: Bot },
 ];
 
@@ -73,7 +74,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
 
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
+      <aside className="sticky top-0 hidden print:!hidden h-screen w-60 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
         <div className="flex items-center gap-2.5 px-5 py-5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600">
             <ShieldCheck className="h-4 w-4 text-white" />
@@ -110,7 +111,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
         </div>
       </aside>
       <div className="min-w-0 flex-1">
-        <div className="border-b border-slate-200 bg-white md:hidden">
+        <div className="border-b border-slate-200 bg-white md:hidden print:hidden">
           <div className="flex items-center justify-between gap-2 px-4 py-3">
             <span className="font-bold">ClaimOne</span>
             <div className="flex items-center gap-3">

@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, UserPlus } from 'lucide-react';
 import { createClaim } from '@/lib/claims/api';
-import { fetchAllPayers, addPayer } from '@/lib/rcm/api';
+import { fetchAllPayers, addPayer, findOpenCasesByName } from '@/lib/rcm/api';
 import { claimTypeFor, groupAsPayer, payerGroup, PAYER_GROUPS, type PayerGroup } from '@/lib/rcm/payer';
 import type { Payer } from '@/lib/claims/types';
 import { Modal, field, label } from './Modal';
@@ -20,8 +20,14 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
   const [f, setF] = useState({ patient_name: '', admission_ref: '', payer_id: '', new_payer: '', admitted: today(), estimated_amount: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // same patient already has an open case: warn once, then "Add anyway"
+  const [dups, setDups] = useState<{ admission_ref: string | null; admitted_at: string | null }[] | null>(null);
+  const [dupOk, setDupOk] = useState(false);
   useEffect(() => { fetchAllPayers().then(setPayers).catch(() => setPayers([])); }, []);
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setF((x) => ({ ...x, [k]: e.target.value }));
+    if (k === 'patient_name') { setDupOk(false); setDups(null); }
+  };
 
   const inGroup = useMemo(() => (payers ?? []).filter((p) => group && payerGroup(p) === group), [payers, group]);
   const pickGroup = (g: PayerGroup) => {
@@ -43,6 +49,10 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
     if (!isNew && !payer) { setError('Select the payer.'); return; }
     if (f.admitted > today()) { setError('Admission date cannot be in the future.'); return; }
     setBusy(true); setError('');
+    if (!dupOk) {
+      const found = await findOpenCasesByName(centreId, f.patient_name).catch(() => []);
+      if (found.length) { setDups(found); setBusy(false); return; }
+    }
     try {
       const day = f.admitted || today();
       // a payer typed in is added to the payer list (or matched to one already there)
@@ -114,6 +124,14 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
         )}
 
         <label className={label}>Estimated amount (₹)<input type="number" min="0" inputMode="numeric" value={f.estimated_amount} onChange={set('estimated_amount')} className={field} /></label>
+        {dups && !dupOk && (
+          <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-base text-amber-900">
+            <p className="font-semibold">{f.patient_name.trim()} already has an open case on Master</p>
+            <ul className="mt-1 text-sm">{dups.map((d, i) => <li key={i}>IP {d.admission_ref ?? '—'}{d.admitted_at ? ` · admitted ${new Date(d.admitted_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' })}` : ''}</li>)}</ul>
+            <p className="mt-1 text-sm">If this is a new admission (readmission), add it anyway. If not, search Master for the existing row.</p>
+            <button type="button" onClick={() => { setDupOk(true); setDups(null); }} className="mt-2 min-h-11 rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white">Add anyway — new admission</button>
+          </div>
+        )}
         {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-base text-rose-800">{error}</p>}
         <button type="submit" disabled={busy} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-600 text-base font-bold text-white hover:bg-teal-700 disabled:opacity-50">
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <UserPlus className="h-5 w-5" />} Add to Master

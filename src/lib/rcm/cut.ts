@@ -19,9 +19,13 @@ export interface Cut {
   needsDecision: boolean;
   /** When the desk decided (fought cuts are chased from here). */
   decidedAt: string | null;
+  /** Dispute letters (0023): 1 reconsideration, 2 escalation to the insurer, 3 patient grievance. */
+  letter?: { level: number; sentAt: string } | null;
 }
 
-type CutClaim = Pick<Claim, 'status' | 'claimed_amount' | 'approved_amount'> & { cut_decision?: 'accepted' | 'fought' | null; cut_decided_at?: string | null };
+type CutClaim = Pick<Claim, 'status' | 'claimed_amount' | 'approved_amount'> & {
+  cut_decision?: 'accepted' | 'fought' | null; cut_decided_at?: string | null; dispute_level?: number | null; dispute_sent_at?: string | null;
+};
 
 const LIVE = new Set(['claim_approved', 'claim_partial', 'settlement_pending', 'settled']);
 
@@ -36,7 +40,10 @@ export function cutOf(c: CutClaim, m: CaseMoney | null): Cut {
   else if (c.approved_amount != null) amount = claimed - Number(c.approved_amount);
   else return none;
   amount = Math.round(amount * 100) / 100;
-  if (c.cut_decision === 'fought') return { amount: Math.max(amount, 0), state: 'fought', needsDecision: false, decidedAt };
+  if (c.cut_decision === 'fought') {
+    const letter = c.dispute_level && c.dispute_sent_at ? { level: c.dispute_level, sentAt: c.dispute_sent_at } : null;
+    return { amount: Math.max(amount, 0), state: 'fought', needsDecision: false, decidedAt, letter };
+  }
   if (amount < 1) return none;
   if (c.cut_decision === 'accepted') return { amount, state: 'accepted', needsDecision: false, decidedAt };
   if (amount < CUT_FLOOR) return { amount, state: 'small', needsDecision: false, decidedAt };
@@ -45,14 +52,35 @@ export function cutOf(c: CutClaim, m: CaseMoney | null): Cut {
 }
 
 const rs = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
-const FOLLOW_UP_MS = 15 * 86_400_000;
+const DAY_MS = 86_400_000;
+/** Days to wait for an answer to each letter before the next step. */
+export const LETTER_WAIT_DAYS: Record<number, number> = { 1: 15, 2: 15, 3: 30 };
+export const LETTERS: Record<number, { title: string; short: string }> = {
+  1: { title: 'Reconsideration request to the payer', short: 'Reconsideration' },
+  2: { title: 'Escalation to the insurer', short: 'Escalation' },
+  3: { title: "Patient's grievance to the insurer", short: 'Patient grievance' },
+};
+const shortDay = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' });
 
 /** The worklist line for a file whose cut is waiting or being fought; null when the cut needs nothing. */
 export function cutStep(cut: Cut, now = new Date()): { label: string; ours: boolean; dueAt: Date | null; overdue: boolean } | null {
   if (cut.needsDecision) return { label: `Deduction ${rs(cut.amount)} — accept or dispute`, ours: true, dueAt: null, overdue: false };
   if (cut.state === 'fought' && cut.amount >= 1) {
-    const dueAt = cut.decidedAt ? new Date(new Date(cut.decidedAt).getTime() + FOLLOW_UP_MS) : null;
-    return { label: `Disputed deduction ${rs(cut.amount)} — follow up with payer`, ours: false, dueAt, overdue: !!dueAt && now > dueAt };
+    const l = cut.letter;
+    if (!l) {
+      // disputed, but no letter yet: sending it is ours
+      const dueAt = cut.decidedAt ? new Date(new Date(cut.decidedAt).getTime() + 2 * DAY_MS) : null;
+      return { label: `Disputed ${rs(cut.amount)} — send the reconsideration letter`, ours: true, dueAt, overdue: !!dueAt && now > dueAt };
+    }
+    const dueAt = new Date(new Date(l.sentAt).getTime() + (LETTER_WAIT_DAYS[l.level] ?? 15) * DAY_MS);
+    const late = now > dueAt;
+    const label = l.level === 1
+      ? (late ? `No reply to reconsideration of ${rs(cut.amount)} — escalate to the insurer` : `Reconsideration of ${rs(cut.amount)} sent ${shortDay(l.sentAt)} — awaiting reply`)
+      : l.level === 2
+      ? (late ? `No reply to escalation of ${rs(cut.amount)} — patient's grievance or write-off` : `Escalated ${rs(cut.amount)} to the insurer ${shortDay(l.sentAt)} — awaiting reply`)
+      : `Patient's grievance on ${rs(cut.amount)} filed ${shortDay(l.sentAt)} — follow up`;
+    // no reply in time: the next letter is ours to send
+    return { label, ours: late && l.level < 3, dueAt, overdue: late };
   }
   return null;
 }

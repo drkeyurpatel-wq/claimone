@@ -8,18 +8,30 @@ export const label = 'block text-base font-medium text-slate-800';
 /** A sheet from the bottom on a phone, a dialog on a desk. Esc or the backdrop closes it. */
 export function Modal({ title, sub, onClose, children }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
+  // the latest onClose, without re-running the focus effect on every parent render
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close.current(); };
     document.addEventListener('keydown', onKey);
     const first = box.current?.querySelector<HTMLElement>('input:not([type=hidden]), select, textarea');
     first?.focus();
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
-  }, [onClose]);
+  }, []);
+  // Enter in a box saves, like Excel (not in a note, and not on a button that does its own thing)
+  const onEnter = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    const t = e.target as HTMLElement;
+    if (t.tagName !== 'INPUT' && t.tagName !== 'SELECT') return;
+    if (t.closest('form')) return; // a form submits itself
+    const save = box.current?.querySelector<HTMLButtonElement>('button[data-save]:not([disabled])');
+    if (save) { e.preventDefault(); save.click(); }
+  };
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-900/40 sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={box} role="dialog" aria-modal="true" aria-label={title}
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-900/40 sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) close.current(); }}>
+      <div ref={box} role="dialog" aria-modal="true" aria-label={title} onKeyDown={onEnter}
         className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

@@ -51,7 +51,7 @@ select t.check((select status = 'settled' and deduction_amount = 0 and settled_a
 -- L2: paid ₹500 short of the approval → accept with a reason → closes
 select clm_transition((select id from clm_claims where admission_ref = 'IPS-LG2'), 'claim_submitted', '{"claimed_amount":30000}'::jsonb, null);
 select clm_transition((select id from clm_claims where admission_ref = 'IPS-LG2'), 'claim_approved', '{"approved_amount":30000}'::jsonb, null);
-select clm_record_case_payment((select id from clm_claims where admission_ref = 'IPS-LG2'), 29500, 0, null, null);
+select clm_record_case_payment((select id from clm_claims where admission_ref = 'IPS-LG2'), 29500, 0, 'UTR-L2', null);
 select t.check((select status = 'claim_approved' from clm_claims where admission_ref = 'IPS-LG2'), 'short payment keeps the file open');
 select clm_decide_cut((select id from clm_claims where admission_ref = 'IPS-LG2'), 'accept', 'Consumables', 'non_payable');
 select t.check((select status = 'settled' and deduction_amount = 500 from clm_claims where admission_ref = 'IPS-LG2'), 'accepted short payment closes');

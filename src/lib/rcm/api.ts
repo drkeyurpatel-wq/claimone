@@ -88,9 +88,16 @@ const toMoney = (r: Record<string, unknown>): CaseMoney => ({
 
 /** Bills tied to cases at this centre, keyed by case. Patient-due bills are left out. */
 export async function fetchCaseMoney(centreId: string): Promise<Map<string, CaseMoney>> {
-  const { data } = await allRows((from, to) => sb().from('clm_v_receivable_balance').select(MONEY_SELECT)
-    .eq('centre_id', centreId).not('claim_id', 'is', null).neq('debtor_type', 'patient').order('id').range(from, to));
-  return new Map(((data ?? []) as Record<string, unknown>[]).map((r) => [r.claim_id as string, toMoney(r)]));
+  const [{ data }, banked] = await Promise.all([
+    allRows((from, to) => sb().from('clm_v_receivable_balance').select(MONEY_SELECT)
+      .eq('centre_id', centreId).not('claim_id', 'is', null).neq('debtor_type', 'patient').order('id').range(from, to)),
+    allRows((from, to) => sb().from('clm_v_case_banked').select('claim_id, banked').eq('centre_id', centreId).order('claim_id').range(from, to)),
+  ]);
+  const inBank = new Map(((banked.data ?? []) as { claim_id: string; banked: number }[]).map((b) => [b.claim_id, Number(b.banked)]));
+  return new Map(((data ?? []) as Record<string, unknown>[]).map((r) => {
+    const m = toMoney(r);
+    return [m.claim_id, { ...m, banked: inBank.get(m.claim_id) ?? 0 }];
+  }));
 }
 
 export async function fetchMoneyFor(claimId: string): Promise<CaseMoney | null> {
@@ -149,6 +156,28 @@ export function istDate(day: string): string | null {
   if (!day) return null;
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   return day === today ? null : new Date(`${day}T12:00:00+05:30`).toISOString();
+}
+
+/** A dispute letter was sent (1 reconsideration, 2 escalation, 3 patient grievance). */
+export async function recordDisputeLetter(claimId: string, level: 1 | 2 | 3) {
+  const { error } = await sb().rpc('clm_record_dispute_letter', { p_claim: claimId, p_level: level });
+  if (error) throw new Error(error.message);
+}
+
+/** The payer's open query on a case (raised text and time), if any. */
+export async function fetchOpenQuery(claimId: string): Promise<{ query_text: string; raised_at: string } | null> {
+  const { data } = await sb().from('clm_queries').select('query_text, raised_at').eq('claim_id', claimId)
+    .in('status', ['open', 'in_progress', 'escalated']).order('query_number', { ascending: false }).limit(1).maybeSingle();
+  return (data as { query_text: string; raised_at: string } | null) ?? null;
+}
+
+/** Open cases at this centre with the same patient name (to warn before adding a second admission). */
+export async function findOpenCasesByName(centreId: string, name: string): Promise<{ admission_ref: string | null; admitted_at: string | null; status: string }[]> {
+  const n = name.trim().replace(/[%_,()*\\]/g, ' ').replace(/\s+/g, ' ');
+  if (n.length < 3) return [];
+  const { data } = await sb().from('clm_claims').select('admission_ref, admitted_at, status').eq('centre_id', centreId)
+    .ilike('patient_name', n).not('status', 'in', '(settled,closed,written_off)').limit(5);
+  return (data ?? []) as { admission_ref: string | null; admitted_at: string | null; status: string }[];
 }
 
 /** A further enhancement on an already-enhanced pre-auth (the first one is a status change). */

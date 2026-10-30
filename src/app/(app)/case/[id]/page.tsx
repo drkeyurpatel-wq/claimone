@@ -13,7 +13,7 @@ import { transition, updateClaimFields, fetchClaimTimeline } from '@/lib/claims/
 import { addAdjustment, fetchReceivable } from '@/lib/recon/api';
 import { sb } from '@/lib/supabase/browser';
 import { fetchCase, fetchMoneyFor, fetchNhcxMessages, markNhcxHandled, paymentStep, decideCut, type NhcxMessage } from '@/lib/rcm/api';
-import { nextStep, dueText } from '@/lib/rcm/worklist';
+import { nextStep, dueText, STATUS_WORDS } from '@/lib/rcm/worklist';
 import { STAGES, stageOf, stageStates, type CaseMoney, type StageKey } from '@/lib/rcm/journey';
 import { actionsFor, type CaseAction } from '@/lib/rcm/actions';
 import { routeFor, ROUTE_WORDS } from '@/lib/rcm/payer';
@@ -57,6 +57,15 @@ const STAGE_OF_STEP: Record<string, StageKey> = {
   send_preauth: 'preauth', wait_preauth: 'preauth', answer_preauth_query: 'preauth', preauth_rejected: 'preauth',
   in_hospital_approved: 'stay', send_claim: 'discharge', wait_claim: 'claim', answer_claim_query: 'claim', claim_rejected: 'claim', wait_payment: 'payment',
 };
+
+/** Status changes in the desk's words ("Claim submitted → Claim approved"). */
+const SOURCE_WORDS: Record<string, string> = { recon: 'Settlement upload', upload: 'Settlement upload', bank: 'Bank statement', bot: 'Portal bot', nhcx: 'NHCX', medpay: 'MedPay', import: 'eCW import' };
+function historyText(h: TimelineEvent): string {
+  if (h.event_type !== 'status_change') return h.event_text;
+  const [a, b] = h.event_text.split(' → ');
+  const w = (x: string) => (STATUS_WORDS as Record<string, string>)[x] ?? (x === 'new' ? 'New case' : x);
+  return b ? `${w(a)} → ${w(b)}` : h.event_text;
+}
 
 export default function CasePage() {
   const { id } = useParams<{ id: string }>();
@@ -392,7 +401,8 @@ export default function CasePage() {
           <summary className="flex cursor-pointer items-center gap-2 text-lg font-semibold text-slate-900"><History className="h-5 w-5 text-slate-500" /> History ({history.length})</summary>
           <ol className="mt-3 space-y-2">{history.map((h, i) => (
             <li key={i} className="flex gap-3 text-base"><span className="w-36 shrink-0 text-sm text-slate-500">{dateTime(h.created_at)}</span>
-              <span className="text-slate-800">{h.event_text}{h.notes ? <span className="text-slate-500"> — {h.notes}</span> : null}</span></li>))}</ol>
+              <span className="text-slate-800">{historyText(h)}{h.notes ? <span className="text-slate-500"> — {h.notes}</span> : null}
+                <span className="block text-sm text-slate-500">{h.actor_name ?? SOURCE_WORDS[h.source] ?? 'System'}</span></span></li>))}</ol>
         </details>
       )}
     </div>

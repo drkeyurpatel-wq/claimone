@@ -25,6 +25,8 @@ export interface CaseLike {
   created_at: string;
   estimated_amount?: number | null;
   approved_amount?: number | null;
+  /** When the payer's last query was answered (0023). */
+  query_replied_at?: string | null;
 }
 
 export interface Step {
@@ -47,6 +49,8 @@ export const TARGETS = {
   sendPreauth: 6 * HOUR,          // from admission
   preauthReply: { insurer: 1 * HOUR, govt: 6 * HOUR },
   answerQuery: 4 * HOUR,
+  /** After our reply to a query: chase the payer if there is no decision in this time. */
+  afterReply: 2 * DAY,
   sendClaim: { insurer: 3 * HOUR, govt: 7 * DAY, corporate: 15 * DAY },
   claimDecision: { insurer: 15 * DAY, govt: 30 * DAY },
   payment: { insurer: 30 * DAY, govt: 45 * DAY },
@@ -65,6 +69,9 @@ export function nextStep(c: CaseLike, now = new Date()): Step {
   const discharged = t(c.discharged_at) ?? t(c.discharge_date);
   const changed = t(c.status_changed_at) ?? t(c.updated_at);
   const where = pmjay ? 'TMS' : 'payer';
+  // the current wait began with our reply to a query: the reply is later than the submission it answered
+  const replied = t(c.query_replied_at);
+  const after = (s?: string | null) => !!replied && !!t(s) && replied.getTime() > t(s)!.getTime();
 
   switch (c.status) {
     case 'draft':
@@ -77,6 +84,8 @@ export function nextStep(c: CaseLike, now = new Date()): Step {
       }
       return step('admission', 'send_preauth', pmjay ? 'Submit pre-auth on TMS' : 'Submit pre-authorisation', true, admitted, TARGETS.sendPreauth, now);
     case 'preauth_pending':
+      if (after(c.preauth_submitted_at)) return step('admission', 'wait_preauth', `Query replied — awaiting pre-auth decision (${where})`, false,
+        replied, govt ? TARGETS.preauthReply.govt : TARGETS.preauthReply.insurer, now);
       return step('admission', 'wait_preauth', `Awaiting pre-auth decision (${where})`, false,
         t(c.preauth_submitted_at) ?? changed, govt ? TARGETS.preauthReply.govt : TARGETS.preauthReply.insurer, now);
     case 'preauth_query':
@@ -94,6 +103,7 @@ export function nextStep(c: CaseLike, now = new Date()): Step {
         discharged, govt ? TARGETS.sendClaim.govt : TARGETS.sendClaim.insurer, now);
     case 'claim_submitted':
     case 'claim_under_review':
+      if (after(c.submitted_at)) return step('claims', 'wait_claim', `Query replied — awaiting claim decision (${where})`, false, replied, TARGETS.afterReply, now);
       return step('claims', 'wait_claim', `Awaiting claim decision (${where})`, false,
         t(c.submitted_at) ?? changed, govt ? TARGETS.claimDecision.govt : TARGETS.claimDecision.insurer, now);
     case 'claim_query':

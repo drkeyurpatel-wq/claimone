@@ -91,6 +91,11 @@ export interface Claim {
   cut_decided_at?: string | null;
   /** The pre-auth approval, kept apart from the claim approval (0020). */
   preauth_approved_amount?: number | null;
+  /** When the last payer query was answered (0023); the follow-up runs from here. */
+  query_replied_at?: string | null;
+  /** Dispute letters sent (0023): 1 reconsideration, 2 escalation to the insurer, 3 patient grievance. */
+  dispute_level?: number | null;
+  dispute_sent_at?: string | null;
   // NHCX case details (0014)
   patient_gender?: 'male' | 'female' | 'other' | 'unknown' | null;
   patient_age_years?: number | null;
@@ -169,6 +174,8 @@ export interface TimelineEvent {
   source: string;
   notes: string | null;
   created_at: string;
+  /** Who did it (0023); null for uploads, the bot and the system. */
+  actor_name?: string | null;
 }
 
 export interface AgingRow {

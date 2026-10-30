@@ -22,6 +22,8 @@ export const STAGES: { key: StageKey; label: string; hint: string }[] = [
 export interface CaseMoney {
   receivable_id: string; claim_id: string; expected_amount: number; billed_amount: number | null; allocated: number; tds: number;
   deduction: number; balance: number; recon_status: 'open' | 'part_received' | 'settled' | 'over_received' | 'disputed'; status: string;
+  /** Of the money received, how much is matched to a bank credit (0023). */
+  banked?: number;
 }
 
 const PAYMENT_STEPS = new Set(['wait_payment']);

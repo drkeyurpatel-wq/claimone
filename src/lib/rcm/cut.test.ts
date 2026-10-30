@@ -52,16 +52,25 @@ describe('cut decisions', () => {
     expect(stageOf(c, paidShort)).toBe('closed');
   });
 
-  it('a fought cut stays in payment and is chased after 15 days', () => {
+  it('a fought cut stays in payment: letter due, then the payer is chased, then escalation', () => {
     const c = claim({ cut_decision: 'fought', cut_decided_at: '2026-10-01T10:00:00+05:30' });
     const m = money({ allocated: 39200, tds: 800, balance: 2000, recon_status: 'disputed' });
     const cut = cutOf(c, m);
-    expect(cut).toMatchObject({ amount: 2000, state: 'fought', needsDecision: false });
+    expect(cut).toMatchObject({ amount: 2000, state: 'fought', needsDecision: false, letter: null });
     expect(stageOf(c, m)).toBe('payment');
-    const s = cutStep(cut, new Date('2026-10-28T10:00:00+05:30'))!;
-    expect(s.ours).toBe(false);
-    expect(s.overdue).toBe(true);
-    expect(s.label).toBe('Disputed deduction ₹2,000 — follow up with payer');
+    // no letter yet: ours, 2 days
+    const s = cutStep(cut, new Date('2026-10-05T10:00:00+05:30'))!;
+    expect(s).toMatchObject({ ours: true, overdue: true, label: 'Disputed ₹2,000 — send the reconsideration letter' });
+    // letter sent: waiting on the payer for 15 days
+    const sent = cutOf(claim({ cut_decision: 'fought', cut_decided_at: '2026-10-01T10:00:00+05:30', dispute_level: 1, dispute_sent_at: '2026-10-02T10:00:00+05:30' }), m);
+    expect(cutStep(sent, new Date('2026-10-10T10:00:00+05:30'))).toMatchObject({ ours: false, overdue: false, label: 'Reconsideration of ₹2,000 sent 02 Oct — awaiting reply' });
+    // no reply in 15 days: escalation is ours
+    expect(cutStep(sent, new Date('2026-10-20T10:00:00+05:30'))).toMatchObject({ ours: true, overdue: true, label: 'No reply to reconsideration of ₹2,000 — escalate to the insurer' });
+    // escalated, then the patient's grievance: no further letter
+    const esc = cutOf(claim({ cut_decision: 'fought', dispute_level: 2, dispute_sent_at: '2026-10-20T10:00:00+05:30' }), m);
+    expect(cutStep(esc, new Date('2026-10-25T10:00:00+05:30'))!.label).toBe('Escalated ₹2,000 to the insurer 20 Oct — awaiting reply');
+    const pg = cutOf(claim({ cut_decision: 'fought', dispute_level: 3, dispute_sent_at: '2026-11-10T10:00:00+05:30' }), m);
+    expect(cutStep(pg, new Date('2026-12-20T10:00:00+05:30'))).toMatchObject({ ours: false, overdue: true });
   });
 
   it('a won fight closes', () => {

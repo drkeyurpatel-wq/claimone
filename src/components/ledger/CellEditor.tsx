@@ -3,11 +3,12 @@
 // field edit — the database still checks the move. One cell, one small form.
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Loader2, CheckCircle2, ExternalLink, FileText, MessageSquareWarning } from 'lucide-react';
 import type { Claim } from '@/lib/claims/types';
 import { transition, updateClaimFields } from '@/lib/claims/api';
 import { fetchReceivable, reverse } from '@/lib/recon/api';
-import { recordCasePayment, recordEnhancement, istDate } from '@/lib/rcm/api';
+import { recordCasePayment, recordEnhancement, istDate, fetchOpenQuery } from '@/lib/rcm/api';
+import { LETTERS, LETTER_WAIT_DAYS } from '@/lib/rcm/cut';
 import { actionsFor, type CaseAction } from '@/lib/rcm/actions';
 import { routeFor } from '@/lib/rcm/payer';
 import { COLUMNS, rs, dd, stepColumn, type ColKey, type LedgerRow } from '@/lib/rcm/ledger';
@@ -40,7 +41,7 @@ function SaveRow({ busy, onSave, onCancel, tone = 'bg-teal-600 hover:bg-teal-700
 }) {
   return (
     <div className="flex gap-2 pt-1">
-      <button type="button" onClick={onSave} disabled={busy}
+      <button type="button" onClick={onSave} disabled={busy} data-save
         className={`inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl text-base font-bold disabled:opacity-50 ${tone}`}>
         {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />} {text}
       </button>
@@ -63,6 +64,9 @@ function StatusForm({ r, col, isManager, onClose, onSaved }: {
   const [day, setDay] = useState(today());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState<{ query_text: string; raised_at: string } | null>(null);
+  const answering = r.j.step.key === 'answer_claim_query' || r.j.step.key === 'answer_preauth_query';
+  useEffect(() => { if (answering) fetchOpenQuery(c.id).then(setQuery).catch(() => setQuery(null)); }, [answering, c.id]);
 
   useEffect(() => {
     setAmount(pick?.amount?.value != null ? String(pick.amount.value) : '');
@@ -89,13 +93,21 @@ function StatusForm({ r, col, isManager, onClose, onSaved }: {
         : note.trim() || undefined;
       await transition(c.id, pick.to, fields, fullNote);
       const at = dated ? istDate(day) : null;
-      if (at) await updateClaimFields(c.id, (pick.to === 'preauth_pending' ? { preauth_submitted_at: at } : { submitted_at: at }) as Partial<Claim>);
+      // a reply keeps the first submission date; the date typed is the reply date
+      if (at) await updateClaimFields(c.id, (pick.id === 'answered' ? { query_replied_at: at }
+        : pick.to === 'preauth_pending' ? { preauth_submitted_at: at } : { submitted_at: at }) as Partial<Claim>);
       onSaved(`Updated — ${pick.label}`);
     } catch (e) { setError((e as Error).message); setBusy(false); }
   };
 
   return (
     <div className="space-y-4">
+      {answering && query && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-base text-amber-900">
+          <p className="flex items-center gap-1.5 text-sm font-semibold"><MessageSquareWarning className="h-4 w-4" /> Payer's query · raised {dd(query.raised_at)}</p>
+          <p className="mt-1 whitespace-pre-wrap">{query.query_text}</p>
+        </div>
+      )}
       {acts.length > 1 && <p className="text-base font-medium text-slate-800">Select the outcome</p>}
       {acts.length > 1 && (
         <div className="grid grid-cols-2 gap-2">
@@ -108,7 +120,7 @@ function StatusForm({ r, col, isManager, onClose, onSaved }: {
         </div>
       )}
       {pick && <>
-        {dated && <label className={label}>Submission date
+        {dated && <label className={label}>{pick.id === 'answered' ? 'Reply date' : 'Submission date'}
           <input type="date" value={day} max={today()} onChange={(e) => setDay(e.target.value)} className={field} /></label>}
         {pick.amount && <label className={label}>{pick.amount.label}
           <input type="number" min="0" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={field} /></label>}
@@ -220,6 +232,7 @@ function PaymentForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
       setError(`Net + TDS (${rs(n + t)}) is more than the outstanding ${rs(outstanding)}. The net received is normally the approved amount less TDS — ${rs(outstanding - t)}.`);
       return;
     }
+    if (utr.trim().length < 4) { setError('Enter the UTR / reference no. — it stops the same payment being counted twice when the statement is uploaded.'); return; }
     setBusy(true); setError('');
     try {
       await recordCasePayment(c.id, { net: n, tds: t, utr, date: day });
@@ -275,7 +288,7 @@ function PaymentForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
         </div>
         <p className={`text-sm ${over ? 'font-semibold text-rose-700' : 'text-slate-500'}`}>Net + TDS = {rs(n + t)} against {rs(outstanding)} outstanding.</p>
         <div className="grid grid-cols-2 gap-3">
-          <label className={label}>UTR / reference no.
+          <label className={label}>UTR / reference no. *
             <input value={utr} onChange={(e) => setUtr(e.target.value)} className={field} autoComplete="off" /></label>
           <label className={label}>Credit date
             <input type="date" value={day} max={today()} onChange={(e) => setDay(e.target.value)} className={field} /></label>
@@ -301,6 +314,27 @@ function CutForm({ r, canWrite, onPay, onSaved }: { r: LedgerRow; canWrite: bool
     <div>
       <CutPanel c={c} cut={r.cut} canWrite={canWrite} reason={reason}
         shortfall={m && m.allocated > 0 && !hasDeduction ? m.balance : 0} onDone={onSaved} />
+      {r.cut.state === 'fought' && r.cut.amount >= 1 && (
+        <div className="mt-4 rounded-xl border border-slate-200 p-3">
+          <p className="text-base font-semibold text-slate-900">Dispute letters</p>
+          <p className="mt-0.5 text-sm text-slate-600">
+            {r.cut.letter ? `${LETTERS[r.cut.letter.level]?.short} sent ${dd(r.cut.letter.sentAt)} — next step after ${LETTER_WAIT_DAYS[r.cut.letter.level]} days without a reply.`
+              : 'Send the reconsideration letter first. Escalate if there is no reply in 15 days.'}
+          </p>
+          <div className="mt-2 grid gap-2">
+            {[1, 2, 3].map((lv) => {
+              const sent = (r.cut.letter?.level ?? 0) >= lv;
+              const nextLv = (r.cut.letter?.level ?? 0) + 1 === lv;
+              return (
+                <Link key={lv} href={`/letter/${c.id}?level=${lv}`}
+                  className={`flex min-h-12 items-center gap-2 rounded-xl px-3 text-base font-medium ${nextLv ? 'bg-teal-600 text-white hover:bg-teal-700' : 'border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
+                  <FileText className="h-4 w-4" /> {lv}. {LETTERS[lv].title}{sent ? ' · sent' : ''}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {r.cut.state === 'fought' && canWrite && c.status !== 'settled' && (
         <button type="button" onClick={onPay} className="mt-3 min-h-12 w-full rounded-xl border border-teal-600 bg-white text-base font-semibold text-teal-700 hover:bg-teal-50">
           Record recovery payment
