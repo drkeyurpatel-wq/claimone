@@ -26,7 +26,12 @@ export interface Cell {
   tone?: 'alert' | 'warn';
   /** Tapping the cell opens its form. */
   editable: boolean;
+  /** A small label on the cell (e.g. where the row came from). */
+  tag?: string;
 }
+
+/** Where a row came from: brought over from the old Excel sheet, the eCW import, or entered in ClaimOne. */
+export const SOURCE_LABEL: Record<string, string> = { sheet: 'Old sheet', ecw: 'eCW import', hmis: 'HMIS', manual: 'Entered in ClaimOne' };
 
 export const COLUMNS: { key: ColKey; label: string; short: string }[] = [
   { key: 'patient', label: 'Patient', short: 'Patient' },
@@ -119,7 +124,7 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
 
   // pre-auth sent
   const paSent: Cell = skippedPreauth
-    ? { key: 'pa_sent', state: 'na', text: corporate ? 'Not applicable' : 'Not taken', editable: false }
+    ? { key: 'pa_sent', state: 'na', text: corporate ? 'Not applicable' : c.case_source === 'sheet' ? 'Not recorded' : 'Not taken', editable: false }
     : { key: 'pa_sent', state: mark('pa_sent', preauthSent, false), text: preauthSent ? dd(c.preauth_submitted_at) : '',
         sub: c.tpa_preauth_number ?? undefined, editable: w && col === 'pa_sent' };
 
@@ -183,8 +188,10 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
         tone: cut.needsDecision ? 'alert' : cut.state === 'fought' ? 'warn' : undefined,
         editable: canWrite && c.status !== 'closed' && c.status !== 'written_off' && (cut.needsDecision || cut.state === 'fought' || (cut.state === 'pending' && c.status === 'settled')) };
 
-  const patient: Cell = { key: 'patient', state: 'done', text: c.patient_name, sub: [c.admission_ref, dd(c.admitted_at ?? c.admission_date)].filter(Boolean).join(' · '),
-    editable: true };
+  // the old sheet had no admission date (the discharge date stands in for it): show the IP no. only
+  const patient: Cell = { key: 'patient', state: 'done', text: c.patient_name,
+    sub: [c.admission_ref, c.case_source === 'sheet' ? '' : dd(c.admitted_at ?? c.admission_date)].filter(Boolean).join(' · '),
+    editable: true, tag: c.case_source === 'sheet' ? SOURCE_LABEL.sheet : undefined };
 
   // the reminder
   let next: LedgerRow['next'];
@@ -241,10 +248,10 @@ const n = (v: number | null | undefined) => (v == null ? '' : Math.round(Number(
 const ymd = (d: string | null | undefined) => (d ? new Date(d.length === 10 ? `${d}T12:00:00+05:30` : d).toLocaleDateString('en-CA', { timeZone: IST }) : '');
 
 export function toCsv(rows: LedgerRow[]): string {
-  const head = ['Admission date', 'Patient', 'IP number', 'UHID', 'Payer', 'Pre-auth submitted', 'Pre-auth number', 'Pre-auth approved',
+  const head = ['Source', 'Admission date', 'Patient', 'IP number', 'UHID', 'Payer', 'Pre-auth submitted', 'Pre-auth number', 'Pre-auth approved',
     'Discharge date', 'Claim submitted', 'Claim number', 'Claimed', 'Approved', 'Received', 'TDS', 'Outstanding', 'Deduction', 'Deduction status', 'In bank', 'Days since discharge', 'Next action', 'Due'];
   const lines = rows.map(({ j: { c, money: m }, cut, next, cells, age }) => [
-    ymd(c.admitted_at ?? c.admission_date), c.patient_name, c.admission_ref, c.patient_uhid, c.clm_payers?.name ?? c.sponsor_name,
+    SOURCE_LABEL[c.case_source ?? 'manual'] ?? '', ymd(c.admitted_at ?? c.admission_date), c.patient_name, c.admission_ref, c.patient_uhid, c.clm_payers?.name ?? c.sponsor_name,
     ymd(c.preauth_submitted_at), c.tpa_preauth_number, n(c.preauth_approved_amount), ymd(c.discharged_at ?? c.discharge_date),
     ymd(c.submitted_at), c.tpa_claim_number, n(c.claimed_amount), APPROVED.has(c.status) || c.status === 'closed' ? n(c.approved_amount) : '',
     m ? n(m.allocated) : '', m ? n(m.tds) : '', m ? n(m.balance) : '', cut.amount >= 1 ? n(cut.amount) : '', cells.cut.sub ?? '',

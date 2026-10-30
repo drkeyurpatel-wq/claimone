@@ -45,7 +45,7 @@ export function outstandingByPayer(rows: LedgerRow[]): PayerOwed[] {
 export interface Week { admissions: number; claimsSubmitted: number; claimed: number; approvals: number; approved: number; settled: number; settledNet: number }
 
 /** The last 7 days, from the case dates. Approvals come from the status history when given (a file approved and settled in the same week still counts). */
-export function thisWeek(rows: LedgerRow[], now = new Date(), approvals?: { amount: number }[]): Week {
+export function thisWeek(rows: LedgerRow[], now = new Date(), approvals?: { amount: number }[], settlements?: { net: number }[]): Week {
   const w: Week = { admissions: 0, claimsSubmitted: 0, claimed: 0, approvals: 0, approved: 0, settled: 0, settledNet: 0 };
   for (const { j: { c } } of rows) {
     if (inLast(c.admitted_at ?? c.admission_date ?? c.created_at, 7, now)) w.admissions += 1;
@@ -53,9 +53,10 @@ export function thisWeek(rows: LedgerRow[], now = new Date(), approvals?: { amou
     if (!approvals && ['claim_approved', 'claim_partial', 'settlement_pending'].includes(c.status) && inLast(c.status_changed_at, 7, now)) {
       w.approvals += 1; w.approved += Number(c.approved_amount ?? 0);
     }
-    if (c.status === 'settled' && inLast(c.status_changed_at, 7, now)) { w.settled += 1; w.settledNet += Number(c.settled_amount ?? 0); }
+    if (!settlements && c.status === 'settled' && inLast(c.status_changed_at, 7, now)) { w.settled += 1; w.settledNet += Number(c.settled_amount ?? 0); }
   }
   if (approvals) { w.approvals = approvals.length; w.approved = approvals.reduce((s, a) => s + a.amount, 0); }
+  if (settlements) { w.settled = settlements.length; w.settledNet = settlements.reduce((s, a) => s + a.net, 0); }
   return w;
 }
 

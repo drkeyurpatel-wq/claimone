@@ -59,7 +59,7 @@ const STAGE_OF_STEP: Record<string, StageKey> = {
 };
 
 /** Status changes in the desk's words ("Claim submitted → Claim approved"). */
-const SOURCE_WORDS: Record<string, string> = { recon: 'Settlement upload', upload: 'Settlement upload', bank: 'Bank statement', bot: 'Portal bot', nhcx: 'NHCX', medpay: 'MedPay', import: 'eCW import' };
+const SOURCE_WORDS: Record<string, string> = { sheet: 'Old Excel sheet', recon: 'Settlement upload', upload: 'Settlement upload', bank: 'Bank statement', bot: 'Portal bot', nhcx: 'NHCX', medpay: 'MedPay', import: 'eCW import' };
 function historyText(h: TimelineEvent): string {
   if (h.event_type !== 'status_change') return h.event_text;
   const [a, b] = h.event_text.split(' → ');

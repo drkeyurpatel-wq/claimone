@@ -144,7 +144,7 @@ describe('ledger order and download', () => {
     const csv = toCsv([row(c({ patient_name: 'Shah, Ramesh' }))]);
     const lines = csv.replace('﻿', '').split('\r\n');
     expect(lines).toHaveLength(2);
-    expect(lines[0].startsWith('Admission date,Patient,IP number')).toBe(true);
+    expect(lines[0].startsWith('Source,Admission date,Patient,IP number')).toBe(true);
     expect(lines[1]).toContain('"Shah, Ramesh"');
   });
 });
@@ -191,5 +191,17 @@ describe('ageing, bank and letters', () => {
     expect(r.next).toMatchObject({ ours: false, late: true });
     expect(r.next.text).toBe('Query replied — awaiting claim decision (payer)');
     expect(r.cells.cl_sent.text).toBe('01 Oct');
+  });
+});
+
+describe('old sheet', () => {
+  it('rows brought over from the old sheet are tagged; others are not', () => {
+    expect(row(c({ case_source: 'sheet' })).cells.patient.tag).toBe('Old sheet');
+    const old = row(c({ case_source: 'sheet', status: 'claim_submitted', submitted_at: '2026-03-01T12:00:00+05:30', discharged_at: '2026-03-01T12:00:00+05:30' }));
+    expect(old.cells.pa_sent.text).toBe('Not recorded');
+    expect(old.cells.patient.sub).toBe('IPS-1');
+    expect(row(c({ case_source: 'manual' })).cells.patient.tag).toBeUndefined();
+    expect(toCsv([row(c({ case_source: 'sheet' })), row(c({ case_source: 'manual', id: 'c2' }))]).split('\r\n').slice(1).map((l) => l.split(',')[0]))
+      .toEqual(['Old sheet', 'Entered in ClaimOne']);
   });
 });

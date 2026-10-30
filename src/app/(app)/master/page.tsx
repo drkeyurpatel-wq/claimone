@@ -30,6 +30,7 @@ function CellView({ cell, onOpen, nav }: { cell: Cell; onOpen: () => void; nav?:
   const body = (
     <>
       <span className="block truncate">{empty ? (cell.state === 'ours' ? 'Action due' : cell.editable ? '' : '—') : cell.text}</span>
+      {cell.tag && <span className="mt-0.5 inline-block rounded bg-violet-100 px-1.5 py-px text-[11px] font-semibold text-violet-800" title="Brought over from the old Excel sheet">{cell.tag}</span>}
       {cell.sub && <span className="block truncate text-xs font-normal opacity-80">{cell.sub}</span>}
       {empty && cell.editable && cell.state !== 'ours' && <span className="inline-flex items-center gap-0.5 text-sm"><Plus className="h-3.5 w-3.5" />Update</span>}
     </>
@@ -52,7 +53,7 @@ function AgeChip({ age }: { age: Age | null }) {
 
 function NextAction({ r }: { r: LedgerRow }) {
   return (
-    <div className={`rounded-md px-2 py-1.5 text-sm ${r.next.done ? 'text-slate-500' : r.next.late ? 'bg-rose-50 text-rose-800' : r.next.ours ? 'text-slate-900' : 'text-slate-600'}`}>
+    <div className={`min-w-[13rem] rounded-md px-2 py-1.5 text-sm ${r.next.done ? 'text-slate-500' : r.next.late ? 'bg-rose-50 text-rose-800' : r.next.ours ? 'text-slate-900' : 'text-slate-600'}`}>
       <span className={`block ${r.next.ours && !r.next.done ? 'font-semibold' : ''}`}>{r.next.text}</span>
       {r.next.due && <span className={`block text-xs ${r.next.late ? 'font-semibold' : ''}`}>{r.next.late ? r.next.due : `Due ${r.next.due}`}</span>}
       <AgeChip age={r.age} />
@@ -101,7 +102,8 @@ function Ledger() {
     const s = q.trim().toLowerCase();
     return rows
       .filter((r) => (s ? true : inFilter(r, filter)))
-      .filter((r) => !s || [r.j.c.patient_name, r.j.c.admission_ref, r.j.c.patient_uhid, r.j.c.clm_payers?.name, r.j.c.tpa_claim_number, r.j.c.tpa_preauth_number]
+      .filter((r) => !s || [r.j.c.patient_name, r.j.c.admission_ref, r.j.c.patient_uhid, r.j.c.clm_payers?.name, r.j.c.tpa_claim_number, r.j.c.tpa_preauth_number,
+        r.j.c.bill_no, r.j.c.case_source === 'sheet' ? 'old sheet' : 'entered in claimone']
         .some((v) => v?.toLowerCase().includes(s)))
       .sort(byReminder);
   }, [rows, filter, q]);
@@ -162,7 +164,7 @@ function Ledger() {
         </div>
         <label className="relative ml-auto w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search patient, IP no., payer, claim no." aria-label="Search Master"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search patient, IP / bill / claim no., payer or old sheet" aria-label="Search Master"
             className="min-h-11 w-full rounded-full border border-slate-300 pl-9 pr-3 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100" />
         </label>
       </div>
@@ -179,7 +181,7 @@ function Ledger() {
 
       {all && shown.length > 0 && (
         <div className="mt-4 hidden overflow-x-auto rounded-xl border border-slate-200 bg-white md:block">
-          <table ref={table} onKeyDown={moveFocus} className="w-full min-w-[1080px] border-collapse text-left">
+          <table ref={table} onKeyDown={moveFocus} className="w-full min-w-[1240px] border-collapse text-left">
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th scope="col" className="sticky left-0 z-10 w-48 border-b border-slate-200 bg-slate-50 px-3 py-2.5">Patient</th>
@@ -193,10 +195,10 @@ function Ledger() {
             <tbody>
               {shown.map((r: LedgerRow, i) => (
                 <tr key={r.j.c.id} className={`border-b border-slate-100 align-top ${fresh === r.j.c.id ? 'bg-teal-50/60' : ''}`} data-id={r.j.c.id}>
-                  <td className="sticky left-0 z-10 w-48 bg-white p-1 shadow-[1px_0_0_#e2e8f0]" data-key="patient">
+                  <td className="sticky left-0 z-10 w-48 min-w-[12rem] max-w-[14rem] bg-white p-1 shadow-[1px_0_0_#e2e8f0]" data-key="patient">
                     <CellView cell={r.cells.patient} nav={{ row: i, col: 0 }} onOpen={() => setEdit({ id: r.j.c.id, col: 'patient' })} />
                   </td>
-                  <td className="p-1"><div className="px-2 py-1.5 text-sm text-slate-700">{r.j.c.clm_payers?.name ?? r.j.c.sponsor_name ?? '—'}</div></td>
+                  <td className="p-1"><div className="min-w-[8rem] max-w-[10rem] px-2 py-1.5 text-sm text-slate-700">{r.j.c.clm_payers?.name ?? r.j.c.sponsor_name ?? '—'}</div></td>
                   {COLUMNS.slice(1).map((col, k) => (
                     <td key={col.key} className="p-1" data-key={col.key}>
                       <CellView cell={r.cells[col.key]} nav={{ row: i, col: k + 1 }} onOpen={() => setEdit({ id: r.j.c.id, col: col.key })} />

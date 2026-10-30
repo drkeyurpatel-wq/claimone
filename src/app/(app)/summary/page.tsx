@@ -38,6 +38,7 @@ export default function SummaryPage() {
   const [leak, setLeak] = useState<LeakageRow[]>([]);
   const [disputes, setDisputes] = useState<DisputeCase[]>([]);
   const [approvals, setApprovals] = useState<{ amount: number }[] | undefined>(undefined);
+  const [settled, setSettled] = useState<{ net: number }[] | undefined>(undefined);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -49,23 +50,28 @@ export default function SummaryPage() {
       sb().from('clm_claims').select('cut_decision, cut_decided_at, status, claimed_amount, approved_amount, deduction_amount')
         .eq('centre_id', centreId).not('cut_decision', 'is', null).limit(5000),
       // claim approvals in the last 7 days, from the status history (one per file)
+      // (cases brought over from the old sheet were not approved this week)
       sb().from('clm_state_transitions').select('claim_id, clm_claims!inner(centre_id, approved_amount)')
-        .in('to_status', ['claim_approved', 'claim_partial']).eq('clm_claims.centre_id', centreId)
+        .in('to_status', ['claim_approved', 'claim_partial']).neq('trigger_source', 'sheet').eq('clm_claims.centre_id', centreId)
         .gte('created_at', new Date(Date.now() - 7 * 86_400_000).toISOString()).limit(5000),
-    ]).then(([j, l, d, a]) => {
+      // settled this week: by the date the money was paid
+      sb().from('clm_settlements').select('net_amount, clm_claims!inner(centre_id)').eq('clm_claims.centre_id', centreId)
+        .gte('payment_date', new Date(Date.now() - 7 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })).limit(5000),
+    ]).then(([j, l, d, a, st]) => {
       setAll(j); setLeak(l); setDisputes((d.data ?? []) as DisputeCase[]);
       if (!a.error) {
         const one = new Map<string, number>();
         for (const x of (a.data ?? []) as unknown as { claim_id: string; clm_claims: { approved_amount: number | null } }[]) one.set(x.claim_id, Number(x.clm_claims?.approved_amount ?? 0));
         setApprovals([...one.values()].map((amount) => ({ amount })));
       }
+      if (!st.error) setSettled(((st.data ?? []) as { net_amount: number }[]).map((x) => ({ net: Number(x.net_amount) })));
     })
       .catch(() => setError('Could not load the summary. Please refresh.'));
   }, [centreId]);
 
   const now = useMemo(() => new Date(), []);
   const rows = useMemo(() => (all ?? []).map((j) => ledgerRow(j, false, now)), [all, now]);
-  const week = useMemo(() => thisWeek(rows, now, approvals), [rows, now, approvals]);
+  const week = useMemo(() => thisWeek(rows, now, approvals, settled), [rows, now, approvals, settled]);
   const owed = useMemo(() => outstandingByPayer(rows), [rows]);
   const late = useMemo(() => stuck(rows), [rows]);
   const since = useMemo(() => { const d = new Date(now.getFullYear(), now.getMonth() - 5, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; }, [now]);
