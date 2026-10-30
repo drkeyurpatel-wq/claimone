@@ -19,7 +19,7 @@ const money = (o: Partial<CaseMoney>): CaseMoney => ({ receivable_id: 'r', claim
 function row(cl: Claim, m: CaseMoney | null = null, canWrite = true): LedgerRow {
   const step = nextStep(cl, NOW);
   const stage = stageOf(cl, m, step);
-  const j: Journey = { c: cl, money: m, stage, step: paymentStep(step, stage, m, cutOf(cl, m)) };
+  const j: Journey = { c: cl, money: m, stage, step: paymentStep(step, stage, m, cutOf(cl, m, NOW)) };
   return ledgerRow(j, canWrite, NOW);
 }
 /** The one cell to fill now, if any. */
@@ -95,6 +95,18 @@ describe('ledger row: money and cuts', () => {
     const r = paid({ claimed_amount: 50000 }, { allocated: 49500, balance: 500, recon_status: 'part_received' });
     expect(r.cells.cut).toMatchObject({ state: 'ours', text: '₹500', editable: true });
     expect(r.cells.paid).toMatchObject({ editable: true, sub: '₹500 outstanding' });
+  });
+  it('paid in two parts, more expected: balance awaited, no deduction yet, next part can be entered', () => {
+    const r = paid({}, { allocated: 30000, tds: 0, balance: 20000, recon_status: 'part_received', parts: 2, last_paid: '2026-10-20' });
+    expect(r.cells.paid).toMatchObject({ text: '₹30,000', sub: '2 payments · ₹20,000 awaited', editable: true });
+    expect(r.cells.cut).toMatchObject({ state: 'theirs', text: 'Awaited', sub: 'Part-paid · decide after 19 Nov', editable: true });
+    expect(r.next).toMatchObject({ ours: false, done: false, text: 'Part-paid (2 payments) — ₹20,000 balance awaited from the payer' });
+    expect(inFilter(r, 'cuts')).toBe(false);
+  });
+  it('part-paid and nothing more for 30 days: the shortfall is put up to accept or dispute', () => {
+    const r = paid({}, { allocated: 30000, balance: 20000, recon_status: 'part_received', parts: 1, last_paid: '2026-09-15' });
+    expect(r.cells.cut).toMatchObject({ state: 'ours', tone: 'alert', text: '₹22,000' });
+    expect(inFilter(r, 'cuts')).toBe(true);
   });
   it('fighting: amber, can still take the payment', () => {
     const r = paid({ cut_decision: 'fought', cut_decided_at: '2026-10-29T11:00:00+05:30' },

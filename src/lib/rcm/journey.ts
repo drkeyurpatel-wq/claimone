@@ -24,6 +24,10 @@ export interface CaseMoney {
   deduction: number; balance: number; recon_status: 'open' | 'part_received' | 'settled' | 'over_received' | 'disputed'; status: string;
   /** Of the money received, how much is matched to a bank credit (0023). */
   banked?: number;
+  /** How many payments (transfers) make up what was received (0026). */
+  parts?: number;
+  /** Date of the latest payment (IST day, yyyy-mm-dd). */
+  last_paid?: string | null;
 }
 
 const PAYMENT_STEPS = new Set(['wait_payment']);

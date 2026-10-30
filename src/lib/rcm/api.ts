@@ -79,11 +79,12 @@ export async function markNhcxHandled(id: string, status: 'applied' | 'ignored')
 
 // ─── Money side of each case (its bill on the receivables book) ─────
 
-const MONEY_SELECT = 'id, claim_id, expected_amount, billed_amount, allocated, tds, deduction, balance, recon_status, status';
+const MONEY_SELECT = 'id, claim_id, expected_amount, billed_amount, allocated, tds, deduction, balance, recon_status, status, last_receipt_date';
 const toMoney = (r: Record<string, unknown>): CaseMoney => ({
   receivable_id: r.id as string, claim_id: r.claim_id as string, expected_amount: Number(r.expected_amount ?? 0),
   billed_amount: r.billed_amount == null ? null : Number(r.billed_amount), allocated: Number(r.allocated ?? 0), tds: Number(r.tds ?? 0),
   deduction: Number(r.deduction ?? 0), balance: Number(r.balance ?? 0), recon_status: r.recon_status as CaseMoney['recon_status'], status: r.status as string,
+  last_paid: (r.last_receipt_date as string | null) ?? null,
 });
 
 /** Bills tied to cases at this centre, keyed by case. Patient-due bills are left out. */
@@ -91,12 +92,13 @@ export async function fetchCaseMoney(centreId: string): Promise<Map<string, Case
   const [{ data }, banked] = await Promise.all([
     allRows((from, to) => sb().from('clm_v_receivable_balance').select(MONEY_SELECT)
       .eq('centre_id', centreId).not('claim_id', 'is', null).neq('debtor_type', 'patient').order('id').range(from, to)),
-    allRows((from, to) => sb().from('clm_v_case_banked').select('claim_id, banked').eq('centre_id', centreId).order('claim_id').range(from, to)),
+    allRows((from, to) => sb().from('clm_v_case_banked').select('claim_id, banked, parts').eq('centre_id', centreId).order('claim_id').range(from, to)),
   ]);
-  const inBank = new Map(((banked.data ?? []) as { claim_id: string; banked: number }[]).map((b) => [b.claim_id, Number(b.banked)]));
+  const inBank = new Map(((banked.data ?? []) as { claim_id: string; banked: number; parts: number }[]).map((b) => [b.claim_id, b]));
   return new Map(((data ?? []) as Record<string, unknown>[]).map((r) => {
     const m = toMoney(r);
-    return [m.claim_id, { ...m, banked: inBank.get(m.claim_id) ?? 0 }];
+    const b = inBank.get(m.claim_id);
+    return [m.claim_id, { ...m, banked: Number(b?.banked ?? 0), parts: Number(b?.parts ?? 0) }];
   }));
 }
 

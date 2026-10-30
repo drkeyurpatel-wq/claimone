@@ -56,8 +56,10 @@ const APPROVED = new Set(['claim_approved', 'claim_partial', 'settlement_pending
 const CLOSED = new Set(['settled', 'closed', 'written_off']);
 
 /** The cut the ledger shows: the insurer's cut, or a short payment with no reason yet (always a person's call). */
-export function ledgerCut(c: Claim, m: CaseMoney | null): Cut & { short: boolean; won?: boolean } {
-  const cut = cutOf(c, m);
+export function ledgerCut(c: Claim, m: CaseMoney | null, now = new Date()): Cut & { short: boolean; won?: boolean } {
+  const cut = cutOf(c, m, now);
+  // paid in parts, more expected: not a deduction yet
+  if (cut.awaited) return { ...cut, short: false };
   // fought and paid in full: nothing left to fight
   if (cut.state === 'fought' && cut.amount < 1) return { ...cut, amount: 0, state: 'none', needsDecision: false, short: false, won: true };
   const shortPaid = !!m && m.allocated > 0 && m.balance > 1 && cut.state !== 'fought' && c.status !== 'settled';
@@ -108,7 +110,7 @@ export interface LedgerRow {
 export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): LedgerRow {
   const { c, step, money: m } = j;
   const closed = CLOSED.has(c.status) && !(j.stage === 'payment');
-  const cut = ledgerCut(c, m);
+  const cut = ledgerCut(c, m, now);
   const col = closed ? null : cut.needsDecision ? 'cut' : stepColumn(step);
   const w = canWrite && !closed;
   const mark = (key: ColKey, done: boolean, can: boolean): CellState =>
@@ -170,14 +172,18 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   const paid: Cell = { key: 'paid', state: excess ? 'ours' : col === 'paid' ? mark('paid', false, false) : got > 0 ? 'done' : mark('paid', false, false),
     text: got > 0 ? rs(got) : col === 'paid' ? 'Awaiting' : '',
     sub: excess ? `${rs(excess)} excess — review`
-      : got > 0 ? [m && m.tds ? `TDS ${rs(m.tds)}` : '', moreDue ? `${rs(m!.balance)} outstanding` : '',
+      : got > 0 ? [m && (m.parts ?? 0) > 1 ? `${m.parts} payments` : '', m && m.tds ? `TDS ${rs(m.tds)}` : '',
+          moreDue ? (cut.awaited ? `${rs(m!.balance)} awaited` : `${rs(m!.balance)} outstanding`) : '',
           m && m.banked != null ? (m.banked >= got - 1 ? 'In bank ✓' : m.banked > 0 ? `${rs(m.banked)} in bank` : 'Not in bank yet') : '']
           .filter(Boolean).join(' · ') || undefined : undefined,
     tone: excess ? 'alert' : undefined,
     editable: w && APPROVED.has(c.status) && c.status !== 'settled' && (got === 0 || moreDue || excess > 0) };
 
   // cut
-  const cutCell: Cell = cut.won
+  const cutCell: Cell = cut.awaited
+    ? { key: 'cut', state: 'theirs', text: 'Awaited', sub: cut.awaited.dueAt ? `Part-paid · decide after ${dd(cut.awaited.dueAt.toISOString())}` : 'Part-paid',
+        editable: canWrite }
+    : cut.won
     ? { key: 'cut', state: 'done', text: 'Recovered', sub: 'Paid in full after dispute', editable: false }
     : cut.state === 'none'
     ? { key: 'cut', state: CLOSED.has(c.status) || got > 0 ? 'done' : 'blank', text: CLOSED.has(c.status) || got > 0 ? 'Nil' : '', editable: false }

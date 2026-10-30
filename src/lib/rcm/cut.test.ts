@@ -90,3 +90,41 @@ describe('cut decisions', () => {
     expect(cutOf(claim({ status: 'claim_submitted', approved_amount: null }), null).state).toBe('none');
   });
 });
+
+describe('payments in parts', () => {
+  const now = new Date('2026-10-30T10:00:00+05:30');
+  // ₹42,000 approved, ₹20,000 came on 20 Oct in the first of two transfers
+  const part = money({ allocated: 20000, balance: 22000, recon_status: 'part_received', parts: 1, last_paid: '2026-10-20' });
+
+  it('a part payment is a balance awaited, not a deduction', () => {
+    const c = claim({});
+    const cut = cutOf(c, part, now);
+    expect(cut.needsDecision).toBe(false);
+    expect(cut.awaited).toMatchObject({ amount: 22000, parts: 1, lastPaid: '2026-10-20' });
+    const step = paymentStep(nextStep(c, now), stageOf(c, part), part, cut);
+    expect(step.ours).toBe(false);
+    expect(step.label).toBe('Part-paid (1 payment) — ₹22,000 balance awaited from the payer');
+  });
+
+  it('thirty days after the last part, the balance comes up to accept or dispute', () => {
+    const cut = cutOf(claim({}), part, new Date('2026-11-25T10:00:00+05:30'));
+    expect(cut.awaited ?? null).toBeNull();
+    expect(cut).toMatchObject({ amount: 22000, needsDecision: true });
+  });
+
+  it('a decision recorded after the last part ends the wait (the payer said it is final)', () => {
+    const cut = cutOf(claim({ cut_decision: 'fought', cut_decided_at: '2026-10-25T10:00:00Z' } as Partial<Claim>), part, now);
+    expect(cut.awaited ?? null).toBeNull();
+    expect(cut.state).toBe('fought');
+  });
+
+  it('a desk acceptance before the money came does not stop later parts being awaited', () => {
+    const cut = cutOf(claim({ cut_decision: 'accepted', cut_decided_at: '2026-10-01T10:00:00Z' } as Partial<Claim>), part, now);
+    expect(cut.awaited?.amount).toBe(22000);
+  });
+
+  it('the database fills each invoice by what it still waits for', () => {
+    const sql = readFileSync('supabase/migrations/0026_split_payments.sql', 'utf8');
+    expect(sql).toMatch(/caps := caps \|\| greatest\(coalesce\(\(select v\.balance/);
+  });
+});

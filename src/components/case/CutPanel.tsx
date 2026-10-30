@@ -86,14 +86,21 @@ export function CutPanel({ c, cut, reason, shortfall, canWrite, onDone }: {
   };
 
   const fighting = cut.state === 'fought';
+  const aw = cut.awaited;
   return (
-    <div className={`mt-4 rounded-xl border-2 p-4 ${fighting ? 'border-amber-300 bg-amber-50' : 'border-rose-300 bg-rose-50'}`}>
+    <div className={`mt-4 rounded-xl border-2 p-4 ${aw ? 'border-sky-300 bg-sky-50' : fighting ? 'border-amber-300 bg-amber-50' : 'border-rose-300 bg-rose-50'}`}>
       <p className="flex items-center gap-2 text-lg font-semibold text-slate-900">
         <Scale className="h-5 w-5" />
-        {fighting ? `Disputed deduction — ${inr(cut.amount)}` : `Deduction — ${inr(cut.amount)}`}
+        {aw ? `Balance awaited — ${inr(aw.amount)}` : fighting ? `Disputed deduction — ${inr(cut.amount)}` : `Deduction — ${inr(cut.amount)}`}
       </p>
       {reason && <p className="mt-1 text-base text-slate-700">Payer's reason: <b>{reason}</b></p>}
-      {fighting ? (
+      {aw ? (
+        <p className="mt-1 text-base text-slate-700">
+          Paid in part ({aw.parts} payment{aw.parts === 1 ? '' : 's'}{aw.lastPaid ? `, last on ${shortDate(aw.lastPaid)}` : ''}). The balance is not treated as a deduction
+          {aw.dueAt ? ` until ${shortDate(aw.dueAt.toISOString())}` : ' yet'} — record each further payment under Settlement.
+          If the payer has said this is the final payment, accept or dispute the shortfall now.
+        </p>
+      ) : fighting ? (
         <p className="mt-1 text-base text-slate-700">
           Dispute raised{cut.decidedAt ? ` on ${shortDate(cut.decidedAt)}` : ''}{c.cut_note ? ` — grounds: ${c.cut_note}` : ''}.
           The amount remains outstanding until the payer settles it. Submit the appeal on the payer portal or by email and follow up.
@@ -106,11 +113,11 @@ export function CutPanel({ c, cut, reason, shortfall, canWrite, onDone }: {
 
       {canWrite && !mode && (
         <div className="mt-3 flex flex-wrap gap-2">
-          {!fighting && <button onClick={() => setMode('fight')} className="min-h-12 rounded-xl bg-amber-500 px-5 text-base font-semibold text-white hover:bg-amber-600">Dispute</button>}
+          {!fighting && <button onClick={() => setMode('fight')} className="min-h-12 rounded-xl bg-amber-500 px-5 text-base font-semibold text-white hover:bg-amber-600">{aw ? 'Final — dispute the shortfall' : 'Dispute'}</button>}
           {fighting && <button onClick={copy} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-teal-600 px-5 text-base font-semibold text-white hover:bg-teal-700">
             {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />} {copied ? 'Copied' : 'Copy appeal letter'}</button>}
           <button onClick={() => setMode('accept')} className="min-h-12 rounded-xl border border-slate-300 bg-white px-5 text-base font-semibold text-slate-800 hover:bg-slate-50">
-            {fighting ? 'Close dispute — accept deduction' : 'Accept deduction'}</button>
+            {fighting ? 'Close dispute — accept deduction' : aw ? 'Final — accept the shortfall' : 'Accept deduction'}</button>
         </div>
       )}
 

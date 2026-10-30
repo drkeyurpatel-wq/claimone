@@ -293,7 +293,7 @@ function PaymentForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
           <label className={label}>Credit date
             <input type="date" value={day} max={today()} onChange={(e) => setDay(e.target.value)} className={field} /></label>
         </div>
-        <p className="text-sm text-slate-500">Any shortfall against the claim appears under Deduction, to accept or dispute.</p>
+        <p className="text-sm text-slate-500">Paid in parts? Enter each payment as it arrives — the balance stays awaited for 30 days after the last part, then comes up under Deduction to accept or dispute.</p>
       </>}
       <Err text={error} />
       {outstanding > 0 ? <SaveRow busy={busy} onSave={save} onCancel={onClose} />
