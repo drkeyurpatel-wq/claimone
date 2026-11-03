@@ -60,14 +60,27 @@ describe('parsePmjay', () => {
 
 describe('pmjayWarnings', () => {
   it('flags zero amounts, swapped rates and payments without UTR', () => {
-    const base = { ip_no: 'X', patient_name: 'P', case_no: null, card_no: null, case_status: null, doctor: null, admitted_on: null,
+    const base = { ip_no: 'X', patient_name: 'P', case_no: 'C' as string | null, card_no: null, case_status: null, doctor: null, admitted_on: null,
       discharged_on: null, category: null, procedure: null, utr: null, paid_on: null, paid_amount: null, deduction: null, remarks: null };
     const w = pmjayWarnings([
-      { ...base, ip_no: 'A', nabh_amount: 0, non_nabh_amount: 0 },
-      { ...base, ip_no: 'B', nabh_amount: 14300, non_nabh_amount: 15730 },
-      { ...base, ip_no: 'C', nabh_amount: 100, non_nabh_amount: 90, paid_amount: 100 },
-      { ...base, ip_no: 'D', nabh_amount: 100, non_nabh_amount: 90 },
+      { ...base, ip_no: 'A', case_no: 'CA', nabh_amount: 0, non_nabh_amount: 0 },
+      { ...base, ip_no: 'B', case_no: 'CB', nabh_amount: 14300, non_nabh_amount: 15730 },
+      { ...base, ip_no: 'C', case_no: 'CC', nabh_amount: 100, non_nabh_amount: 90, paid_amount: 100 },
+      { ...base, ip_no: 'D', case_no: 'CD', nabh_amount: 100, non_nabh_amount: 90 },
     ]);
     expect(w.map((x) => x.ip)).toEqual(['A', 'B', 'C']);
+  });
+  it('flags a missing or repeated case ID', () => {
+    const base = { patient_name: 'P', card_no: null, case_status: null, doctor: null, admitted_on: null, discharged_on: null, category: null,
+      procedure: null, nabh_amount: 100, non_nabh_amount: 90, utr: null, paid_on: null, paid_amount: null, deduction: null, remarks: null };
+    const w = pmjayWarnings([
+      { ...base, ip_no: 'A', case_no: null },
+      { ...base, ip_no: 'B', case_no: 'C1' },
+      { ...base, ip_no: 'E', case_no: 'C1' },
+    ]);
+    expect(w).toEqual([
+      { ip: 'A', note: 'No PMJAY case ID — payments cannot be matched until it is filled' },
+      { ip: 'E', note: 'Case ID C1 is also on IP B' },
+    ]);
   });
 });

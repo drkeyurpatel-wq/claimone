@@ -133,7 +133,7 @@ export function parsePmjay(cells: Cell[][], ref: Date = new Date()): { rows: Pmj
     rows.push({
       ip_no: ip,
       patient_name: name,
-      case_no: code(get(r, 'case_no')),
+      case_no: code(get(r, 'case_no'))?.replace(/\s+/g, '').toUpperCase() ?? null,
       card_no: code(get(r, 'card_no')),
       case_status: text(get(r, 'case_status')),
       doctor: text(get(r, 'doctor')),
@@ -156,7 +156,11 @@ export function parsePmjay(cells: Cell[][], ref: Date = new Date()): { rows: Pmj
 /** Things the desk should look at before saving. Never blocks the upload. */
 export function pmjayWarnings(rows: PmjayRow[]): { ip: string; note: string }[] {
   const out: { ip: string; note: string }[] = [];
+  const seen = new Map<string, string>();
   for (const r of rows) {
+    if (!r.case_no) out.push({ ip: r.ip_no, note: 'No PMJAY case ID — payments cannot be matched until it is filled' });
+    else if (seen.has(r.case_no) && seen.get(r.case_no) !== r.ip_no) out.push({ ip: r.ip_no, note: `Case ID ${r.case_no} is also on IP ${seen.get(r.case_no)}` });
+    else seen.set(r.case_no, r.ip_no);
     if (!r.nabh_amount) out.push({ ip: r.ip_no, note: 'No NABH amount — status will not be updated' });
     else if (r.non_nabh_amount && r.non_nabh_amount > r.nabh_amount) out.push({ ip: r.ip_no, note: 'NO NABH is more than NABH — the two may be swapped' });
     if (r.discharged_on && r.admitted_on && r.discharged_on < r.admitted_on) out.push({ ip: r.ip_no, note: 'Discharge date is before admission date' });

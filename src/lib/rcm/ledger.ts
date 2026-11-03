@@ -198,8 +198,10 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
 
   // the old sheet had no admission date (the discharge date stands in for it): show the IP no. only
   const patient: Cell = { key: 'patient', state: 'done', text: c.patient_name,
-    sub: [c.admission_ref, c.case_source === 'sheet' ? '' : dd(c.admitted_at ?? c.admission_date)].filter(Boolean).join(' · '),
-    editable: true, tag: c.case_source === 'sheet' ? SOURCE_LABEL.sheet : undefined };
+    // a PMJAY patient is known by the PMJAY case ID first
+    sub: [c.claim_type === 'pmjay' && c.tpa_claim_number ? `Case ${c.tpa_claim_number}` : '', c.admission_ref,
+      c.case_source === 'sheet' ? '' : dd(c.admitted_at ?? c.admission_date)].filter(Boolean).join(' · '),
+    editable: true, tag: c.case_source === 'sheet' ? SOURCE_LABEL.sheet : c.case_source === 'pmjay' ? SOURCE_LABEL.pmjay : undefined };
 
   // the reminder
   let next: LedgerRow['next'];

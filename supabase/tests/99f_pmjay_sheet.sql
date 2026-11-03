@@ -11,8 +11,8 @@ select t.act_as('00000000-0000-0000-0000-0000000000d1');
 create temp table res(r jsonb);
 insert into res select clm_import_pmjay('a1000000-0000-0000-0000-000000000001', 'nov.xlsx', $$[
   {"ip_no":"IPS-PJ1","patient_name":"Pmjay One","case_no":"2026102910013158","card_no":"PZDC3DP68","case_status":"Claims Submitted","doctor":"DR.SUNIL GURMUKHANI","admitted_on":"2026-10-29","discharged_on":"2026-11-02","category":"Cardiology","procedure":"PTCA(MC011A-PTCA)","nabh_amount":91714,"non_nabh_amount":86634},
-  {"ip_no":"IPS-PJ2","patient_name":"Pmjay Two","case_status":"Claims Submitted","admitted_on":"2026-10-28","discharged_on":"2026-11-02","nabh_amount":0,"non_nabh_amount":0},
-  {"ip_no":"IPS-PJ3","patient_name":"Pmjay Three","admitted_on":"2026-11-02","nabh_amount":4427.5,"non_nabh_amount":4025},
+  {"ip_no":"IPS-PJ2","patient_name":"Pmjay Two","case_no":"PJ2","case_status":"Claims Submitted","admitted_on":"2026-10-28","discharged_on":"2026-11-02","nabh_amount":0,"non_nabh_amount":0},
+  {"ip_no":"IPS-PJ3","patient_name":"Pmjay Three","case_no":"PJ3","admitted_on":"2026-11-02","nabh_amount":4427.5,"non_nabh_amount":4025},
   {"ip_no":"IPS-PJ4","patient_name":"Pmjay Four","case_no":"PJ4","case_status":"Claim Paid","admitted_on":"2026-10-20","discharged_on":"2026-10-25","nabh_amount":50000,"non_nabh_amount":45000,"utr":"UTRPJ4","paid_on":"2026-11-01","paid_amount":48000,"deduction":2000},
   {"ip_no":"","patient_name":"nobody"}
 ]$$::jsonb);
@@ -45,6 +45,29 @@ select t.check((select status = 'claim_submitted' and discharge_date = '2026-11-
 select t.check((select status <> 'claim_submitted' from clm_claims where admission_ref = 'IPS-PJ4'), 'never moved back');
 select t.check((select count(*) = 1 from clm_remittance_lines l join clm_receivables v on v.id = l.receivable_id
                 join clm_claims c on c.id = v.claim_id where c.admission_ref = 'IPS-PJ4'), 'payment not doubled');
+
+-- the PMJAY case ID is the key: a corrected IP no. on the sheet still finds the case by its case ID
+select t.check((clm_import_pmjay('a1000000-0000-0000-0000-000000000001', 'nov.xlsx', $$[
+  {"ip_no":"IPS-PJ1-X","patient_name":"Pmjay One","case_no":" 2026102910013158 ","case_status":"Claim Approved","nabh_amount":91714}
+]$$::jsonb))->>'created' = '0', 'found by case ID');
+-- one case ID belongs to one case
+select t.check((clm_import_pmjay('a1000000-0000-0000-0000-000000000001', 'nov.xlsx', $$[
+  {"ip_no":"IPS-PJ3","patient_name":"Pmjay Three","case_no":"2026102910013158","nabh_amount":4427.5}
+]$$::jsonb))->'problems'->0->>'problem' like 'Case ID 2026102910013158 is on another IP%', 'case ID on another IP refused');
+select t.check((clm_import_pmjay('a1000000-0000-0000-0000-000000000001', 'nov.xlsx', $$[
+  {"ip_no":"IPS-PJ4","patient_name":"Pmjay Four","case_no":"OTHER1","nabh_amount":50000}
+]$$::jsonb))->'problems'->0->>'problem' like 'This IP no. already has case ID PJ4%', 'IP with a different case ID refused');
+select t.check((select tpa_claim_number = 'PJ4' from clm_claims where admission_ref = 'IPS-PJ4'), 'case ID unchanged');
+reset role;
+select t.expect_error($$ update clm_claims set tpa_claim_number = 'PJ4' where admission_ref = 'IPS-PJ1' $$, 'duplicate');
+set role authenticated;
+select t.act_as('00000000-0000-0000-0000-0000000000d1');
+-- a missing case ID is reported (payments match on it)
+select t.check((clm_import_pmjay('a1000000-0000-0000-0000-000000000001', 'nov.xlsx', $$[
+  {"ip_no":"IPS-PJ5","patient_name":"Pmjay Five","nabh_amount":1000}
+]$$::jsonb))->'problems'->0->>'problem' like 'No PMJAY case ID%', 'missing case ID reported');
+-- the bill carries the case ID, so a settlement file finds it
+select t.check((select claim_ref = '2026102910013158' from clm_receivables where claim_id = (select id from clm_claims where admission_ref = 'IPS-PJ1')), 'bill carries the case ID');
 
 -- a viewer cannot load
 select t.act_as('00000000-0000-0000-0000-0000000000f1');

@@ -218,6 +218,11 @@ describe('old sheet', () => {
     expect(toCsv([row(c({ case_source: 'sheet' })), row(c({ case_source: 'manual', id: 'c2' }))]).split('\r\n').slice(1).map((l) => l.split(',')[0]))
       .toEqual(['Old sheet', 'Entered in ClaimOne']);
   });
+  it('a PMJAY case shows its PMJAY case ID first', () => {
+    const p = row(c({ case_source: 'pmjay', claim_type: 'pmjay', tpa_claim_number: '2026102910013158', admission_date: '2026-10-29', admitted_at: null }));
+    expect(p.cells.patient.tag).toBe('PMJAY sheet');
+    expect(p.cells.patient.sub).toMatch(/^Case 2026102910013158 · IPS-1/);
+  });
 });
 
 describe('Master filters: payer type and payment', () => {

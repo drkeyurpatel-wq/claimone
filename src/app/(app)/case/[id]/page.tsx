@@ -299,7 +299,7 @@ export default function CasePage() {
           ['To claim', money(claimed)],
         ]} />}
         {shown === 'claim' && <Facts rows={[
-          ['Sent on', c.submitted_at ? dateTime(c.submitted_at) : '—'], ['Claim no.', c.tpa_claim_number ?? '—'], ['Claimed', money(claimed)],
+          ['Sent on', c.submitted_at ? dateTime(c.submitted_at) : '—'], [c.claim_type === 'pmjay' ? 'PMJAY case ID' : 'Claim no.', c.tpa_claim_number ?? '—'], ['Claimed', money(claimed)],
           ['Approved', c.approved_amount != null ? money(c.approved_amount) : '—'], ['Cut at approval', cut ? money(cut) : '—'],
         ]} />}
         {(shown === 'payment' || shown === 'closed') && m && <Facts rows={[

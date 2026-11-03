@@ -31,7 +31,7 @@ function CellView({ cell, onOpen, nav }: { cell: Cell; onOpen: () => void; nav?:
   const body = (
     <>
       <span className="block break-words">{empty ? (cell.state === 'ours' ? 'Action due' : cell.editable ? '' : '—') : cell.text}</span>
-      {cell.tag && <span className="mt-0.5 inline-block rounded bg-violet-100 px-1.5 py-px text-[11px] font-semibold text-violet-800" title="Brought over from the old Excel sheet">{cell.tag}</span>}
+      {cell.tag && <span className="mt-0.5 inline-block rounded bg-violet-100 px-1.5 py-px text-[11px] font-semibold text-violet-800" title={cell.tag === 'Old sheet' ? 'Brought over from the old Excel sheet' : 'Loaded from the PMJAY sheet'}>{cell.tag}</span>}
       {cell.sub && <span className="line-clamp-2 break-words text-xs font-normal opacity-80" title={cell.sub}>{cell.sub}</span>}
       {empty && cell.editable && cell.state !== 'ours' && <span className="inline-flex items-center gap-0.5 text-sm"><Plus className="h-3.5 w-3.5" />Update</span>}
     </>
