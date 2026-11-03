@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Claim } from '@/lib/claims/types';
-import { stageOf, stageStates, type CaseMoney } from './journey';
+import { noPreauthWord, stageOf, stageStates, type CaseMoney } from './journey';
 
 const c = (o: Partial<Claim>) => ({ status: 'draft', claim_type: 'cashless', created_at: '2026-10-28T08:00:00+05:30', updated_at: '2026-10-28T08:00:00+05:30', ...o }) as Claim;
 const money = (o: Partial<CaseMoney>): CaseMoney => ({ receivable_id: 'r', claim_id: 'c', expected_amount: 100000, billed_amount: 100000, allocated: 0, tds: 0,
@@ -26,5 +26,18 @@ describe('file journey', () => {
   });
   it('closed shows every step done', () => {
     expect(Object.values(stageStates(c({ preauth_submitted_at: 'x' }), 'closed')).every((s) => s === 'done')).toBe(true);
+  });
+});
+
+describe('pre-auth never sent is never shown as done', () => {
+  it('old-sheet cashless file past pre-auth: pre-auth skipped, described as not recorded', () => {
+    const k = c({ status: 'claim_approved', case_source: 'sheet', submitted_at: 'x', approved_amount: 272400, discharged_at: '2026-11-01T12:00:00+05:30' });
+    const st = stageStates(k, stageOf(k, money({ expected_amount: 272400, balance: 272400 })));
+    expect(st.preauth).toBe('skipped');
+    expect(noPreauthWord(k)).toBe('Not recorded');
+  });
+  it('words match Master: not taken for a new cashless file, not needed for corporate', () => {
+    expect(noPreauthWord(c({}))).toBe('Not taken');
+    expect(noPreauthWord(c({ claim_type: 'corporate' }))).toBe('Not needed');
   });
 });

@@ -18,8 +18,8 @@ export function StageDots({ states, late }: { states: Record<StageKey, State>; l
   );
 }
 
-export function StageTracker({ states, selected, onSelect, late }: {
-  states: Record<StageKey, State>; selected: StageKey; onSelect: (k: StageKey) => void; late?: boolean;
+export function StageTracker({ states, selected, onSelect, late, skippedWord = 'not needed' }: {
+  states: Record<StageKey, State>; selected: StageKey; onSelect: (k: StageKey) => void; late?: boolean; skippedWord?: string;
 }) {
   const current = useRef<HTMLLIElement>(null);
   // on a phone the row scrolls: bring the file's current stage into view
@@ -40,7 +40,7 @@ export function StageTracker({ states, selected, onSelect, late }: {
                   {st === 'done' ? <Check className="h-4 w-4" /> : i + 1}
                 </span>
                 <span className={`text-sm font-semibold leading-tight ${st === 'todo' || st === 'skipped' ? 'text-slate-400' : 'text-slate-800'}`}>
-                  {s.label}{st === 'skipped' && <span className="block text-xs font-normal">not needed</span>}
+                  {s.label}{st === 'skipped' && <span className="block text-xs font-normal">{skippedWord.toLowerCase()}</span>}
                 </span>
               </button>
             </li>

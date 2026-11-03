@@ -54,10 +54,17 @@ export const stageIndex = (k: StageKey) => STAGES.findIndex((s) => s.key === k);
 /** For the tracker: which stages are done, which is current, which are skipped (e.g. no pre-auth for a company). */
 export function stageStates(c: Claim, current: StageKey): Record<StageKey, 'done' | 'current' | 'todo' | 'skipped'> {
   const at = stageIndex(current);
-  const noPreauth = !c.preauth_submitted_at && (c.claim_type === 'corporate' || c.claim_type === 'reimbursement');
+  // past pre-auth without one sent: not needed (corporate), not taken, or not recorded (old sheet) — never "done"
+  const noPreauth = !c.preauth_submitted_at;
   return Object.fromEntries(STAGES.map((s, i) => [s.key,
     s.key === 'preauth' && noPreauth && i < at ? 'skipped' : i < at ? 'done' : i === at ? (current === 'closed' ? 'done' : 'current') : 'todo',
   ])) as Record<StageKey, 'done' | 'current' | 'todo' | 'skipped'>;
+}
+
+/** How a pre-auth stage that was never sent is described — the same words Master uses. */
+export function noPreauthWord(c: Pick<Claim, 'claim_type' | 'case_source'>): string {
+  if (c.claim_type === 'corporate' || c.claim_type === 'reimbursement') return 'Not needed';
+  return c.case_source === 'sheet' ? 'Not recorded' : 'Not taken';
 }
 
 /** Which stages a desk login starts on. */

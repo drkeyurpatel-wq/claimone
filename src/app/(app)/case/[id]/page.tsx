@@ -14,7 +14,7 @@ import { addAdjustment, fetchReceivable } from '@/lib/recon/api';
 import { sb } from '@/lib/supabase/browser';
 import { fetchCase, fetchMoneyFor, fetchNhcxMessages, markNhcxHandled, paymentStep, decideCut, type NhcxMessage } from '@/lib/rcm/api';
 import { nextStep, dueText, STATUS_WORDS } from '@/lib/rcm/worklist';
-import { STAGES, stageOf, stageStates, type CaseMoney, type StageKey } from '@/lib/rcm/journey';
+import { STAGES, noPreauthWord, stageOf, stageStates, type CaseMoney, type StageKey } from '@/lib/rcm/journey';
 import { actionsFor, type CaseAction } from '@/lib/rcm/actions';
 import { routeFor, ROUTE_WORDS } from '@/lib/rcm/payer';
 import { DISALLOWANCE_CATEGORIES } from '@/lib/engine/settlement';
@@ -270,7 +270,7 @@ export default function CasePage() {
 
       {/* The journey */}
       <div className="mt-5 rounded-2xl bg-slate-100 p-2">
-        <StageTracker states={states} selected={shown} onSelect={(k) => { setView(k); setOpen(null); setError(''); }} late={step.overdue} />
+        <StageTracker states={states} selected={shown} onSelect={(k) => { setView(k); setOpen(null); setError(''); }} late={step.overdue} skippedWord={noPreauthWord(c)} />
       </div>
 
       {/* The selected stage */}
@@ -278,14 +278,16 @@ export default function CasePage() {
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xl font-bold text-slate-900">{STAGES.indexOf(info) + 1}. {info.label}</h2>
           <span className={`rounded-full px-3 py-1 text-sm font-semibold ${st === 'done' ? 'bg-teal-100 text-teal-800' : st === 'current' ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-500'}`}>
-            {st === 'done' ? 'Done' : st === 'current' ? 'Now' : st === 'skipped' ? 'Not needed' : 'Later'}
+            {st === 'done' ? 'Done' : st === 'current' ? 'Now' : st === 'skipped' ? noPreauthWord(c) : 'Later'}
           </span>
         </div>
         <p className="mt-1 text-base text-slate-600">{info.hint}</p>
 
         {shown === 'preauth' && <Facts rows={[
           ['Estimate', money(c.estimated_amount)], ['Sent on', c.preauth_submitted_at ? dateTime(c.preauth_submitted_at) : '—'],
-          ['Pre-auth no.', c.tpa_preauth_number ?? '—'], ['Approved', c.approved_amount != null ? money(c.approved_amount) : '—'],
+          ['Pre-auth no.', c.tpa_preauth_number ?? '—'],
+          // pre-auth approval only: the final claim approval belongs to the Claim stage
+          ['Approved', c.preauth_approved_amount != null ? money(c.preauth_approved_amount) : c.preauth_submitted_at && c.approved_amount != null && !c.submitted_at ? money(c.approved_amount) : '—'],
         ]} />}
         {shown === 'stay' && <Facts rows={[
           ['Estimate', money(c.estimated_amount)], ['Approved so far', c.approved_amount != null ? money(c.approved_amount) : '—'],
