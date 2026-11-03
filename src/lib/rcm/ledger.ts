@@ -255,11 +255,13 @@ export const PAY_STATES: { key: PayState; label: string }[] = [
 export function inPayState(r: LedgerRow, s: PayState): boolean {
   const m = r.j.money;
   const got = m?.allocated ?? 0;
+  // paid less than approved: booked as a deduction, waiting for Accept / Fight, or being fought
+  const short = got > 0 && ((m?.deduction ?? 0) > 0 || r.cut.short || r.cut.needsDecision || r.cut.state === 'fought');
   switch (s) {
     case 'unpaid': return got <= 0;
-    case 'part': return got > 0 && (m?.balance ?? 0) >= 1 && !(r.cut.short || (m?.deduction ?? 0) > 0);
+    case 'part': return got > 0 && (m?.balance ?? 0) >= 1 && !short;
     case 'paid': return got > 0 && (m?.balance ?? 0) < 1;
-    case 'short': return got > 0 && (r.cut.short || (m?.deduction ?? 0) > 0);
+    case 'short': return short;
   }
 }
 

@@ -228,7 +228,7 @@ describe('Master filters: payer type and payment', () => {
   });
   it('payment state: nothing, part, full, deduction', () => {
     const none = row(c(approved), money({}));
-    const part = row(c(approved), money({ allocated: 20000, balance: 30000, recon_status: 'part_received' }));
+    const part = row(c(approved), money({ allocated: 20000, balance: 30000, recon_status: 'part_received', last_paid: '2026-10-25' }));
     const full = row(c(approved), money({ allocated: 50000, balance: 0, recon_status: 'settled' }));
     const cut = row(c(approved), money({ allocated: 45000, deduction: 5000, balance: 0, recon_status: 'settled' }));
     expect(inPayState(none, 'unpaid')).toBe(true);
@@ -238,5 +238,14 @@ describe('Master filters: payer type and payment', () => {
     expect(inPayState(cut, 'short')).toBe(true);
     expect(inPayState(cut, 'paid')).toBe(true);
     expect(inPayState(full, 'short')).toBe(false);
+  });
+});
+
+describe('Master filters: a short payment past its wait is a deduction, not part-paid', () => {
+  it('paid less with no balance awaited counts under Deduction taken', () => {
+    const r = row(c({ status: 'claim_approved', submitted_at: 'x', claimed_amount: 50000, approved_amount: 50000, discharged_at: 'x' }),
+      money({ allocated: 40000, balance: 10000, recon_status: 'part_received', last_paid: '2026-08-01' }));
+    expect(inPayState(r, 'short')).toBe(true);
+    expect(inPayState(r, 'part')).toBe(false);
   });
 });
