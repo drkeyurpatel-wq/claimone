@@ -129,7 +129,7 @@ export function mergeStage(sent: Cell, dec: Cell, sentAt: string | null | undefi
   const editable = sent.editable || dec.editable;
   const key = dec.editable ? dec.key : sent.key;
   const when = sent.text && sent.text !== 'Submitted' ? `Sent ${sent.text}` : 'Sent';
-  if (!sent.text && !dec.text) return { ...sent, key, editable };
+  if (!sent.text && !dec.text) return { ...sent, key, editable, text: sent.state === 'ours' ? (claim ? 'Send claim' : 'Send pre-auth') : '' };
   if (!dec.text) return { ...sent, key, text: when, editable };
   if (dec.text === 'Awaiting') {
     const d = daysSince(sentAt, now);
@@ -138,7 +138,8 @@ export function mergeStage(sent: Cell, dec: Cell, sentAt: string | null | undefi
   const decided = dec.text.startsWith('₹') ? `Approved ${dec.text}` : dec.text;
   const sub = dec.text === 'Query' || dec.text === 'Rejected'
     ? [when, claim ? sent.sub : ''].filter(Boolean).join(' · ')
-    : [claim && sent.sub ? `Claimed ${sent.sub}` : '', dec.sub].filter(Boolean).join(' · ');
+    // the claimed amount only matters when the approval is lower (dec.sub then names the cut)
+    : [claim && sent.sub && dec.sub ? `Claimed ${sent.sub}` : '', dec.sub].filter(Boolean).join(' · ');
   return { key, state: dec.state, text: decided, sub: sub || undefined, tone: dec.tone, editable };
 }
 

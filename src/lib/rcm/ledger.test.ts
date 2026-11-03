@@ -297,7 +297,7 @@ describe('doctor on Master', () => {
 
 describe('Master view: one cell per stage', () => {
   it('pre-auth: due → waiting → query → approved, each in the same cell, tap opens the step due', () => {
-    expect(row(c({})).view.preauth).toMatchObject({ key: 'pa_sent', state: 'ours', editable: true });
+    expect(row(c({})).view.preauth).toMatchObject({ key: 'pa_sent', state: 'ours', text: 'Send pre-auth', editable: true });
     const waiting = row(c({ status: 'preauth_pending', preauth_submitted_at: '2026-10-27T09:00:00+05:30', tpa_preauth_number: 'PA-1' })).view.preauth;
     expect(waiting).toMatchObject({ key: 'pa_ok', state: 'theirs', text: 'Sent 27 Oct', sub: 'PA-1 · Awaiting · 2 d', editable: true });
     const query = row(c({ status: 'preauth_query', preauth_submitted_at: '2026-10-27T09:00:00+05:30' })).view.preauth;
@@ -314,6 +314,11 @@ describe('Master view: one cell per stage', () => {
     expect(sent).toMatchObject({ key: 'cl_ok', state: 'theirs', text: 'Sent 28 Oct', sub: '₹91,714 · Awaiting · 1 d' });
     const ok = row(c({ status: 'claim_partial', submitted_at: '2026-10-28T12:00:00+05:30', discharged_at: 'x', claimed_amount: 52000, approved_amount: 50000 }), money({})).view.claim;
     expect(ok).toMatchObject({ text: 'Approved ₹50,000', sub: 'Claimed ₹52,000 · ₹2,000 deducted' });
+    const full = row(c({ status: 'claim_approved', submitted_at: 'x', discharged_at: 'x', claimed_amount: 50000, approved_amount: 50000 }), money({})).view.claim;
+    expect(full).toMatchObject({ text: 'Approved ₹50,000' });
+    expect(full.sub).toBeUndefined();
+    const due = row(c({ status: 'draft', discharged_at: '2026-10-28T10:00:00+05:30', claim_type: 'pmjay', case_source: 'pmjay' })).view.claim;
+    expect(due).toMatchObject({ key: 'cl_sent', state: 'ours', text: 'Send claim' });
   });
   it('payment: received, and a short payment waiting for Accept / Dispute takes the cell', () => {
     const paid = row(c({ status: 'settled', submitted_at: 'x', discharged_at: 'x', claimed_amount: 50000, approved_amount: 50000, settled_amount: 50000 }),
