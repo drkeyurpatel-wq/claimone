@@ -27,7 +27,7 @@ const num = (x: unknown) => (x == null || x === '' ? null : Number(x));
 export function actionsFor(step: Step, c: Claim, route: Route): CaseAction[] {
   const w = ROUTE_WORDS[route];
   const preauthRef = { field: 'tpa_preauth_number' as const, label: 'Pre-auth number (optional)', value: c.tpa_preauth_number };
-  const claimRef = { field: 'tpa_claim_number' as const, label: 'Claim number (optional)', value: c.tpa_claim_number };
+  const claimRef = { field: 'tpa_claim_number' as const, label: c.claim_type === 'pmjay' ? 'PMJAY case ID' : 'Claim number (optional)', value: c.tpa_claim_number };
   const billed = num(c.claimed_amount) ?? num(c.bill_amount) ?? null;
 
   switch (step.key) {
