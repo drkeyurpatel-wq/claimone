@@ -4,12 +4,11 @@
 // browser, previewed, then saved.
 import { useState } from 'react';
 import Link from 'next/link';
-import { Upload, FileSpreadsheet, Loader2, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Upload, FileSpreadsheet, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { parseCsv, parseBankStatement, parseCashlessTracker, parseAdvice, parsePatientDues } from '@/lib/recon/parse';
 import { importRows } from '@/lib/recon/api';
 import { PageHeader, NoCentre, inr, shortDate, btn } from '@/components/ui';
-import { PaymentTabs } from '@/components/PaymentTabs';
 
 type Kind = 'bank_statement' | 'cashless_tracker' | 'settlement_advice' | 'patient_dues';
 const KINDS: { k: Kind; title: string; how: string }[] = [
@@ -73,9 +72,7 @@ export default function ImportPage() {
 
   return (
     <div>
-      <PaymentTabs className="px-4 pt-4 md:px-6" />
       <PageHeader title="Upload bank statement" sub="Bring in what the teams already keep, as CSV" icon={Upload}>
-        <Link href="/receivables" className={btn.ghost}><ArrowLeft className="h-3.5 w-3.5" /> Receivables</Link>
       </PageHeader>
       <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 md:px-6">
         <div className="grid gap-3 md:grid-cols-2">
@@ -102,7 +99,7 @@ export default function ImportPage() {
             <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { read(e.target.files?.[0]); e.target.value = ''; }} />
           </label>
           {error && <p className="w-full text-sm text-rose-600">{error}</p>}
-          {done && <p className="flex w-full items-center gap-1.5 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {done} <Link href="/receivables/reconcile" className="ml-2 font-semibold underline">Reconcile now</Link></p>}
+          {done && <p className="flex w-full items-center gap-1.5 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {done} <Link href="/receivables/reconcile" className="ml-2 font-semibold underline">Go to bank matching</Link></p>}
         </div>
 
         {preview && (

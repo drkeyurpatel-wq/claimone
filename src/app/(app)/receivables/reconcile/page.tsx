@@ -3,13 +3,12 @@
 // ticks and confirms. Nothing is saved until "Confirm".
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { GitMerge, Loader2, ArrowLeft, CheckCircle2, AlertTriangle, Banknote } from 'lucide-react';
+import { GitMerge, Loader2, CheckCircle2, AlertTriangle, Banknote } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { proposeMatches, type MatchResult, type Proposal } from '@/lib/recon/match';
 import { fetchReceivables, fetchReceipts, fetchUnusedAdvice, toOpenReceivable, toOpenReceipt, confirmMatches, manualMatch,
   type ReceivableRow, type ReceiptRow } from '@/lib/recon/api';
 import { PageHeader, NoCentre, Skeleton, StatCard, inr, inrShort, shortDate, useToast, btn } from '@/components/ui';
-import { PaymentTabs } from '@/components/PaymentTabs';
 
 const METHOD: Record<string, string> = { advice: 'Settlement advice', utr: 'UTR on bill', amount: 'Same amount', bulk: 'Bulk payment', manual: 'Manual' };
 
@@ -74,9 +73,7 @@ export default function Reconcile() {
   return (
     <div>
       {toastNode}
-      <PaymentTabs className="px-4 pt-4 md:px-6" />
       <PageHeader title="Bank matching" sub="Match bank receipts to bills. Strong matches are ticked; check the rest before confirming." icon={GitMerge}>
-        <Link href="/receivables" className={btn.ghost}><ArrowLeft className="h-3.5 w-3.5" /> Receivables</Link>
         {canWrite && <button onClick={confirm} disabled={saving || picked.size === 0} className={btn.primary}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Confirm {picked.size} ({inrShort(pickedTotal)})
         </button>}

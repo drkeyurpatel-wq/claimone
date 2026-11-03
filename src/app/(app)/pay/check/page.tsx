@@ -7,7 +7,6 @@ import { useAuthStore } from '@/lib/store/auth';
 import { fetchExceptions, type ExceptionRow } from '@/lib/recon/api';
 import { CheckList } from '@/components/pay/CheckList';
 import { NoCentre, useToast } from '@/components/ui';
-import { PaymentTabs } from '@/components/PaymentTabs';
 
 export default function CheckPage() {
   const centreId = useAuthStore((s) => s.activeCentreId);
@@ -22,7 +21,6 @@ export default function CheckPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 md:px-6">
       {toastNode}
-      <PaymentTabs className="mb-6" />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Settlement review</h1>

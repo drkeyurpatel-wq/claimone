@@ -11,7 +11,6 @@ import { parseCsv } from '@/lib/recon/parse';
 import { cellsToRows, parsePaymentSheet, summarise, type Cell, type PaymentLine } from '@/lib/recon/payments';
 import { applyPayments, readLetter, fetchExceptions, fetchInbox, markInboxUsed, type ApplyResult, type InboxItem } from '@/lib/recon/api';
 import { NoCentre, inrShort, shortDate } from '@/components/ui';
-import { PaymentTabs } from '@/components/PaymentTabs';
 
 type Item = { id: number; name: string; state: 'reading' | 'ready' | 'error'; lines: PaymentLine[]; error?: string; inboxId?: string };
 
@@ -130,7 +129,6 @@ export default function UploadPayments() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 md:px-6">
-      <PaymentTabs className="mb-6" />
       <h1 className="text-2xl font-bold text-slate-900">Upload settlements</h1>
       <p className="mt-1 text-base text-slate-600">Add the files that came this week, then press <b>Save</b>.</p>
 
