@@ -5,7 +5,7 @@ import { stageOf } from './journey';
 import { nextStep } from './worklist';
 import { cutOf } from './cut';
 import { paymentStep, type Journey } from './api';
-import { ledgerRow, inFilter, byReminder, toCsv, type ColKey, type LedgerRow } from './ledger';
+import { ledgerRow, inFilter, inPayState, rowPayerGroup, byReminder, toCsv, type ColKey, type LedgerRow } from './ledger';
 
 const NOW = new Date('2026-10-29T12:00:00+05:30');
 const c = (o: Partial<Claim>) => ({
@@ -215,5 +215,28 @@ describe('old sheet', () => {
     expect(row(c({ case_source: 'manual' })).cells.patient.tag).toBeUndefined();
     expect(toCsv([row(c({ case_source: 'sheet' })), row(c({ case_source: 'manual', id: 'c2' }))]).split('\r\n').slice(1).map((l) => l.split(',')[0]))
       .toEqual(['Old sheet', 'Entered in ClaimOne']);
+  });
+});
+
+describe('Master filters: payer type and payment', () => {
+  const approved = { status: 'claim_approved', submitted_at: 'x', claimed_amount: 50000, approved_amount: 50000, discharged_at: 'x' } as const;
+  it('payer type follows the payer master grouping', () => {
+    expect(rowPayerGroup(row(c({})))).toBe('tpa');
+    expect(rowPayerGroup(row(c({ clm_payers: { id: 'g', code: 'pmjay_gj', name: 'PMJAY', type: 'government' } })))).toBe('pmjay');
+    expect(rowPayerGroup(row(c({ clm_payers: { id: 'g', code: 'cghs', name: 'CGHS', type: 'government' } })))).toBe('scheme');
+    expect(rowPayerGroup(row(c({ clm_payers: null })))).toBeNull();
+  });
+  it('payment state: nothing, part, full, deduction', () => {
+    const none = row(c(approved), money({}));
+    const part = row(c(approved), money({ allocated: 20000, balance: 30000, recon_status: 'part_received' }));
+    const full = row(c(approved), money({ allocated: 50000, balance: 0, recon_status: 'settled' }));
+    const cut = row(c(approved), money({ allocated: 45000, deduction: 5000, balance: 0, recon_status: 'settled' }));
+    expect(inPayState(none, 'unpaid')).toBe(true);
+    expect(inPayState(part, 'part')).toBe(true);
+    expect(inPayState(part, 'paid')).toBe(false);
+    expect(inPayState(full, 'paid')).toBe(true);
+    expect(inPayState(cut, 'short')).toBe(true);
+    expect(inPayState(cut, 'paid')).toBe(true);
+    expect(inPayState(full, 'short')).toBe(false);
   });
 });

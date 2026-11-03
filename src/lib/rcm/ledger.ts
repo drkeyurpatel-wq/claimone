@@ -9,6 +9,7 @@ import type { Journey } from './api';
 import type { CaseMoney } from './journey';
 import { cutOf, CUT_FLOOR, LETTERS, type Cut } from './cut';
 import { dueText, type Step } from './worklist';
+import { payerGroup, type PayerGroup } from './payer';
 
 export type ColKey = 'patient' | 'pa_sent' | 'pa_ok' | 'disch' | 'cl_sent' | 'cl_ok' | 'paid' | 'cut';
 
@@ -234,6 +235,31 @@ export function inFilter(r: LedgerRow, f: Filter): boolean {
     case 'aged': return !r.next.done && r.age?.from === 'discharge' && r.age.days > 30;
     case 'cuts': return r.cut.needsDecision || r.cut.state === 'fought';
     case 'closed': return r.next.done;
+  }
+}
+
+/** Payer-type filter: same groups as the New admission screen. */
+export function rowPayerGroup(r: LedgerRow): PayerGroup | null {
+  const p = r.j.c.clm_payers;
+  return p ? payerGroup(p) : null;
+}
+
+/** Payment filter: what has come in against the approved amount. */
+export type PayState = 'unpaid' | 'part' | 'paid' | 'short';
+export const PAY_STATES: { key: PayState; label: string }[] = [
+  { key: 'unpaid', label: 'Nothing received' },
+  { key: 'part', label: 'Part received' },
+  { key: 'paid', label: 'Fully received' },
+  { key: 'short', label: 'Deduction taken' },
+];
+export function inPayState(r: LedgerRow, s: PayState): boolean {
+  const m = r.j.money;
+  const got = m?.allocated ?? 0;
+  switch (s) {
+    case 'unpaid': return got <= 0;
+    case 'part': return got > 0 && (m?.balance ?? 0) >= 1 && !(r.cut.short || (m?.deduction ?? 0) > 0);
+    case 'paid': return got > 0 && (m?.balance ?? 0) < 1;
+    case 'short': return got > 0 && (r.cut.short || (m?.deduction ?? 0) > 0);
   }
 }
 

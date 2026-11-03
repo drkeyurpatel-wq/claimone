@@ -7,7 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Search, UserPlus, Download, Plus } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { fetchJourneys, type Journey } from '@/lib/rcm/api';
-import { COLUMNS, FILTERS, byReminder, inFilter, ledgerRow, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow } from '@/lib/rcm/ledger';
+import { COLUMNS, FILTERS, PAY_STATES, byReminder, inFilter, inPayState, ledgerRow, rowPayerGroup, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow, type PayState } from '@/lib/rcm/ledger';
+import { PAYER_GROUPS, type PayerGroup } from '@/lib/rcm/payer';
 import { CellEditor } from '@/components/ledger/CellEditor';
 import { AddPatient } from '@/components/ledger/AddPatient';
 import { NoCentre, useToast } from '@/components/ui';
@@ -84,6 +85,8 @@ function Ledger() {
   const [all, setAll] = useState<Journey[] | null>(null);
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
+  const [ptype, setPtype] = useState<PayerGroup | ''>('');
+  const [pay, setPay] = useState<PayState | ''>('');
   const [edit, setEdit] = useState<{ id: string; col: ColKey } | null>(null);
   const [adding, setAdding] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null);
@@ -103,16 +106,18 @@ function Ledger() {
   useEffect(() => { setAll(null); load(); const t = setInterval(load, 60_000); return () => clearInterval(t); }, [load]);
 
   const rows = useMemo(() => (all ?? []).map((j) => ledgerRow(j, canWrite)), [all, canWrite]);
-  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, rows.filter((r) => inFilter(r, f.key)).length])), [rows]);
+  // payer type and payment narrow everything, including the counts on the status buttons
+  const narrowed = useMemo(() => rows.filter((r) => (!ptype || rowPayerGroup(r) === ptype) && (!pay || inPayState(r, pay))), [rows, ptype, pay]);
+  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, narrowed.filter((r) => inFilter(r, f.key)).length])), [narrowed]);
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return rows
+    return narrowed
       .filter((r) => (s ? true : inFilter(r, filter)))
       .filter((r) => !s || [r.j.c.patient_name, r.j.c.admission_ref, r.j.c.patient_uhid, r.j.c.clm_payers?.name, r.j.c.tpa_claim_number, r.j.c.tpa_preauth_number,
         r.j.c.bill_no, r.j.c.case_source === 'sheet' ? 'old sheet' : 'entered in claimone']
         .some((v) => v?.toLowerCase().includes(s)))
       .sort(byReminder);
-  }, [rows, filter, q]);
+  }, [narrowed, filter, q]);
   const editing = edit ? rows.find((r) => r.j.c.id === edit.id) ?? null : null;
   const table = useRef<HTMLTableElement>(null);
   // after a cell's form closes, the cursor goes back to that cell
@@ -168,6 +173,16 @@ function Ledger() {
             </button>
           ))}
         </div>
+        <select value={ptype} onChange={(e) => setPtype(e.target.value as PayerGroup | '')} aria-label="Payer type"
+          className={`min-h-11 rounded-full border px-3 text-sm font-medium ${ptype ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-700'}`}>
+          <option value="">All payer types</option>
+          {PAYER_GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+        </select>
+        <select value={pay} onChange={(e) => setPay(e.target.value as PayState | '')} aria-label="Payment"
+          className={`min-h-11 rounded-full border px-3 text-sm font-medium ${pay ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-700'}`}>
+          <option value="">Any payment</option>
+          {PAY_STATES.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+        </select>
         <label className="relative ml-auto w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, IP, bill or claim no." aria-label="Search Master"
