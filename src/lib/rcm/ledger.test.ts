@@ -5,7 +5,7 @@ import { stageOf } from './journey';
 import { nextStep } from './worklist';
 import { cutOf } from './cut';
 import { paymentStep, type Journey } from './api';
-import { ledgerRow, inFilter, inPayState, isBacklog, rowPayerGroup, byReminder, toCsv, type ColKey, type LedgerRow } from './ledger';
+import { ledgerRow, inFilter, inPayState, isBacklog, rowPayerGroup, byReminder, toCsv, doctorKey, doctorLabel, type ColKey, type LedgerRow } from './ledger';
 
 const NOW = new Date('2026-10-29T12:00:00+05:30');
 const c = (o: Partial<Claim>) => ({
@@ -272,5 +272,20 @@ describe('Backlog: open files discharged before 1 Nov 2026', () => {
     const r = row(c({ ...base, status: 'settled', discharge_date: '2026-09-01' }), money({ allocated: 50000, balance: 0, recon_status: 'settled' }));
     expect(inFilter(r, 'backlog')).toBe(false);
     expect(inFilter(r, 'closed')).toBe(true);
+  });
+});
+
+describe('doctor on Master', () => {
+  it('groups the same doctor however the name was typed', () => {
+    expect(doctorKey('DR KALPESH C PATEL')).toBe('KALPESH C PATEL');
+    expect(doctorKey('Dr. Kalpesh C. Patel')).toBe('KALPESH C PATEL');
+    expect(doctorKey('  dr kalpesh  c patel ')).toBe('KALPESH C PATEL');
+    expect(doctorLabel('DR KALPESH C PATEL')).toBe('Dr Kalpesh C Patel');
+    expect(doctorLabel(null)).toBe('');
+  });
+  it('Excel export carries the doctor', () => {
+    const csv = toCsv([row(c({ treating_doctor_name: 'DR RITESH PATEL' }))]);
+    expect(csv.split('\n')[0]).toContain('Doctor');
+    expect(csv).toContain('DR RITESH PATEL');
   });
 });

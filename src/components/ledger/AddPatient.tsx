@@ -12,12 +12,12 @@ import { Modal, field, label } from './Modal';
 const NEW = '__new';
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
-  tenantId: string; centreId: string; onClose: () => void; onSaved: (id: string) => void;
+export function AddPatient({ tenantId, centreId, doctors = [], onClose, onSaved }: {
+  tenantId: string; centreId: string; doctors?: string[]; onClose: () => void; onSaved: (id: string) => void;
 }) {
   const [payers, setPayers] = useState<Payer[] | null>(null);
   const [group, setGroup] = useState<PayerGroup | ''>('');
-  const [f, setF] = useState({ patient_name: '', admission_ref: '', payer_id: '', new_payer: '', admitted: today(), estimated_amount: '' });
+  const [f, setF] = useState({ patient_name: '', admission_ref: '', doctor: '', payer_id: '', new_payer: '', admitted: today(), estimated_amount: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   // same patient already has an open case: warn once, then "Add anyway"
@@ -44,6 +44,7 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
     const payer = payers?.find((p) => p.id === f.payer_id);
     if (!f.patient_name.trim()) { setError('Enter the patient name.'); return; }
     if (!f.admission_ref.trim()) { setError('Enter the IP number.'); return; }
+    if (f.doctor.trim().length < 3) { setError('Enter the treating doctor.'); return; }
     if (!group) { setError('Select the payer category.'); return; }
     if (isNew && f.new_payer.trim().length < 3) { setError('Enter the full name of the new payer.'); return; }
     if (!isNew && !payer) { setError('Select the payer.'); return; }
@@ -59,7 +60,7 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
       const payerId = isNew ? await addPayer(f.new_payer, group) : payer!.id;
       const { id } = await createClaim({
         tenant_id: tenantId, centre_id: centreId, payer_id: payerId, claim_type: claimTypeFor(payer ?? groupAsPayer(group)),
-        patient_name: f.patient_name.trim(), admission_ref: f.admission_ref.trim(),
+        patient_name: f.patient_name.trim(), admission_ref: f.admission_ref.trim(), treating_doctor_name: f.doctor.trim(),
         estimated_amount: f.estimated_amount ? Number(f.estimated_amount) : null,
         admitted_at: day === today() ? new Date().toISOString() : new Date(`${day}T12:00:00+05:30`).toISOString(),
         admission_date: day, case_source: 'manual',
@@ -81,6 +82,8 @@ export function AddPatient({ tenantId, centreId, onClose, onSaved }: {
           <label className={label}>IP number *<input value={f.admission_ref} onChange={set('admission_ref')} className={field} placeholder="IPS…" autoComplete="off" /></label>
           <label className={label}>Admission date<input type="date" value={f.admitted} max={today()} onChange={set('admitted')} className={field} /></label>
         </div>
+        <label className={label}>Treating doctor *<input value={f.doctor} onChange={set('doctor')} className={field} list="doctor-names" placeholder="Start typing — pick from the list" autoComplete="off" /></label>
+        <datalist id="doctor-names">{doctors.map((d) => <option key={d} value={d} />)}</datalist>
 
         <fieldset>
           <legend className="text-base font-medium text-slate-800">Payer category *</legend>

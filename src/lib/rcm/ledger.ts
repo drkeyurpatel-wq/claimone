@@ -249,6 +249,15 @@ export function inFilter(r: LedgerRow, f: Filter): boolean {
   }
 }
 
+/** Doctor name as typed, tidied so "DR KALPESH C PATEL" and "Dr. Kalpesh C Patel" group together. */
+export function doctorKey(name: string | null | undefined): string {
+  return (name ?? '').toUpperCase().replace(/^\s*DR\.?\s*/, '').replace(/[.\s]+/g, ' ').trim();
+}
+export function doctorLabel(name: string | null | undefined): string {
+  const k = doctorKey(name);
+  return k ? `Dr ${k.toLowerCase().replace(/\b\w/g, (x) => x.toUpperCase())}` : '';
+}
+
 /** Payer-type filter: same groups as the New admission screen. */
 export function rowPayerGroup(r: LedgerRow): PayerGroup | null {
   const p = r.j.c.clm_payers;
@@ -296,10 +305,10 @@ const n = (v: number | null | undefined) => (v == null ? '' : Math.round(Number(
 const ymd = (d: string | null | undefined) => (d ? new Date(d.length === 10 ? `${d}T12:00:00+05:30` : d).toLocaleDateString('en-CA', { timeZone: IST }) : '');
 
 export function toCsv(rows: LedgerRow[]): string {
-  const head = ['Source', 'Admission date', 'Patient', 'IP number', 'UHID', 'Payer', 'Pre-auth submitted', 'Pre-auth number', 'Pre-auth approved',
+  const head = ['Source', 'Admission date', 'Patient', 'IP number', 'UHID', 'Doctor', 'Payer', 'Pre-auth submitted', 'Pre-auth number', 'Pre-auth approved',
     'Discharge date', 'Claim submitted', 'Claim number', 'Claimed', 'Approved', 'Received', 'TDS', 'Outstanding', 'Deduction', 'Deduction status', 'In bank', 'Days since discharge', 'Next action', 'Due'];
   const lines = rows.map(({ j: { c, money: m }, cut, next, cells, age }) => [
-    SOURCE_LABEL[c.case_source ?? 'manual'] ?? '', ymd(c.admitted_at ?? c.admission_date), c.patient_name, c.admission_ref, c.patient_uhid, c.clm_payers?.name ?? c.sponsor_name,
+    SOURCE_LABEL[c.case_source ?? 'manual'] ?? '', ymd(c.admitted_at ?? c.admission_date), c.patient_name, c.admission_ref, c.patient_uhid, c.treating_doctor_name, c.clm_payers?.name ?? c.sponsor_name,
     ymd(c.preauth_submitted_at), c.tpa_preauth_number, n(c.preauth_approved_amount), ymd(c.discharged_at ?? c.discharge_date),
     ymd(c.submitted_at), c.tpa_claim_number, n(c.claimed_amount), APPROVED.has(c.status) || c.status === 'closed' ? n(c.approved_amount) : '',
     m ? n(m.allocated) : '', m ? n(m.tds) : '', m ? n(m.balance) : '', cut.amount >= 1 ? n(cut.amount) : '', cells.cut.sub ?? '',

@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Search, UserPlus, Download, Plus } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { fetchJourneys, type Journey } from '@/lib/rcm/api';
-import { COLUMNS, FILTERS, PAY_STATES, byReminder, inFilter, inPayState, ledgerRow, rowPayerGroup, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow, type PayState } from '@/lib/rcm/ledger';
+import { COLUMNS, FILTERS, PAY_STATES, byReminder, doctorKey, doctorLabel, inFilter, inPayState, ledgerRow, rowPayerGroup, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow, type PayState } from '@/lib/rcm/ledger';
 import { PAYER_GROUPS, type PayerGroup } from '@/lib/rcm/payer';
 import { CellEditor } from '@/components/ledger/CellEditor';
 import { AddPatient } from '@/components/ledger/AddPatient';
@@ -87,6 +87,7 @@ function Ledger() {
   const [q, setQ] = useState('');
   const [ptype, setPtype] = useState<PayerGroup | ''>('');
   const [pay, setPay] = useState<PayState | ''>('');
+  const [doc, setDoc] = useState('');
   const [edit, setEdit] = useState<{ id: string; col: ColKey } | null>(null);
   const [adding, setAdding] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null);
@@ -108,13 +109,20 @@ function Ledger() {
   // demo patients made while building ClaimOne stay out of the team's view
   const rows = useMemo(() => (all ?? []).filter((j) => !/^DEMO/i.test(j.c.admission_ref ?? '')).map((j) => ledgerRow(j, canWrite)), [all, canWrite]);
   // payer type and payment narrow everything, including the counts on the status buttons
-  const narrowed = useMemo(() => rows.filter((r) => (!ptype || rowPayerGroup(r) === ptype) && (!pay || inPayState(r, pay))), [rows, ptype, pay]);
+  const narrowed = useMemo(() => rows.filter((r) => (!ptype || rowPayerGroup(r) === ptype) && (!pay || inPayState(r, pay))
+    && (!doc || doctorKey(r.j.c.treating_doctor_name) === doc)), [rows, ptype, pay, doc]);
+  // doctors on the files, most files first, for the filter and the New admission suggestions
+  const doctors = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) { const k = doctorKey(r.j.c.treating_doctor_name); if (k) m.set(k, (m.get(k) ?? 0) + 1); }
+    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
+  }, [rows]);
   const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, narrowed.filter((r) => inFilter(r, f.key)).length])), [narrowed]);
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
     return narrowed
       .filter((r) => (s ? true : inFilter(r, filter)))
-      .filter((r) => !s || [r.j.c.patient_name, r.j.c.admission_ref, r.j.c.patient_uhid, r.j.c.clm_payers?.name, r.j.c.tpa_claim_number, r.j.c.tpa_preauth_number,
+      .filter((r) => !s || [r.j.c.patient_name, r.j.c.admission_ref, r.j.c.patient_uhid, r.j.c.clm_payers?.name, r.j.c.treating_doctor_name, r.j.c.tpa_claim_number, r.j.c.tpa_preauth_number,
         r.j.c.bill_no, r.j.c.case_source === 'sheet' ? 'old sheet' : 'entered in claimone']
         .some((v) => v?.toLowerCase().includes(s)))
       .sort(byReminder);
@@ -186,6 +194,11 @@ function Ledger() {
           <option value="">Any payment</option>
           {PAY_STATES.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
         </select>
+        <select value={doc} onChange={(e) => setDoc(e.target.value)} aria-label="Doctor"
+          className={`min-h-11 max-w-[14rem] rounded-full border px-3 text-sm font-medium ${doc ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-700'}`}>
+          <option value="">All doctors</option>
+          {doctors.map((d) => <option key={d} value={d}>{doctorLabel(d)}</option>)}
+        </select>
         <label className="relative ml-auto w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, IP, bill or claim no." aria-label="Search Master"
@@ -208,7 +221,7 @@ function Ledger() {
           <table ref={table} onKeyDown={moveFocus} className="w-full min-w-[1060px] border-collapse text-left">
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th scope="col" className="sticky left-0 z-10 w-44 border-b border-slate-200 bg-slate-50 px-3 py-2.5">Patient · payer</th>
+                <th scope="col" className="sticky left-0 z-10 w-44 border-b border-slate-200 bg-slate-50 px-3 py-2.5">Patient · doctor · payer</th>
                 {COLUMNS.slice(1).map((col) => (
                   <th key={col.key} scope="col" className="border-b border-slate-200 px-3 py-2.5">{col.label}</th>
                 ))}
@@ -220,6 +233,7 @@ function Ledger() {
                 <tr key={r.j.c.id} className={`border-b border-slate-100 align-top ${fresh === r.j.c.id ? 'bg-teal-50/60' : ''}`} data-id={r.j.c.id}>
                   <td className="sticky left-0 z-10 w-44 min-w-[10rem] max-w-[12rem] bg-white p-1 shadow-[1px_0_0_#e2e8f0]" data-key="patient">
                     <CellView cell={r.cells.patient} nav={{ row: i, col: 0 }} onOpen={() => setEdit({ id: r.j.c.id, col: 'patient' })} />
+                    <div className={`truncate px-2 text-xs font-medium ${r.j.c.treating_doctor_name ? 'text-slate-700' : 'text-rose-600'}`}>{doctorLabel(r.j.c.treating_doctor_name) || 'Doctor not set'}</div>
                     <div className="line-clamp-2 px-2 pb-1 text-xs text-slate-500">{r.j.c.clm_payers?.name ?? r.j.c.sponsor_name ?? 'Payer not set'}</div>
                   </td>
                   {COLUMNS.slice(1).map((col, k) => (
@@ -240,7 +254,7 @@ function Ledger() {
             <li key={r.j.c.id} className={`rounded-xl border border-slate-200 bg-white p-3 ${fresh === r.j.c.id ? 'ring-2 ring-teal-300' : ''}`}>
               <button type="button" onClick={() => setEdit({ id: r.j.c.id, col: 'patient' })} className="block w-full text-left">
                 <span className="block text-base font-semibold text-slate-900">{r.j.c.patient_name}</span>
-                <span className="block text-sm text-slate-500">{[r.j.c.admission_ref, r.j.c.clm_payers?.name ?? r.j.c.sponsor_name].filter(Boolean).join(' · ')}</span>
+                <span className="block text-sm text-slate-500">{[r.j.c.admission_ref, doctorLabel(r.j.c.treating_doctor_name) || 'Doctor not set', r.j.c.clm_payers?.name ?? r.j.c.sponsor_name].filter(Boolean).join(' · ')}</span>
               </button>
               <div className="mt-2"><NextAction r={r} /></div>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
@@ -258,7 +272,7 @@ function Ledger() {
       {all && shown.length > 0 && <p className="mt-2 text-sm text-slate-500">{shown.length} case{shown.length === 1 ? '' : 's'}{filter === 'closed' && !q ? ' closed in the last 60 days' : filter === 'backlog' && !q ? ' discharged before 1 Nov 2026' : ''}</p>}
 
       {editing && edit && <CellEditor r={editing} col={edit.col} canWrite={canWrite} isManager={isManager} onClose={closeEdit} onSaved={saved} />}
-      {adding && <AddPatient tenantId={tenantId} centreId={centreId} onClose={() => setAdding(false)}
+      {adding && <AddPatient tenantId={tenantId} centreId={centreId} doctors={doctors.map(doctorLabel)} onClose={() => setAdding(false)}
         onSaved={async (id) => { setAdding(false); setFresh(id); setQ(''); router.replace('/master', { scroll: false }); flash('Admission added to Master'); await load(); }} />}
     </div>
   );
