@@ -217,7 +217,7 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
 }
 
 // ─── Filters ────────────────────────────────────────────────────────
-export type Filter = 'open' | 'mine' | 'chase' | 'aged' | 'cuts' | 'closed';
+export type Filter = 'open' | 'mine' | 'chase' | 'aged' | 'cuts' | 'closed' | 'backlog';
 export const FILTERS: { key: Filter; label: string }[] = [
   { key: 'open', label: 'All open' },
   { key: 'mine', label: 'Action due' },
@@ -225,9 +225,20 @@ export const FILTERS: { key: Filter; label: string }[] = [
   { key: 'aged', label: 'Over 30 days' },
   { key: 'cuts', label: 'Deductions & disputes' },
   { key: 'closed', label: 'Closed' },
+  { key: 'backlog', label: 'Backlog' },
 ];
 
+/** Files discharged before this day are the Backlog: kept out of the team's everyday views. */
+export const CURRENT_FROM = '2026-11-01';
+export function isBacklog(r: LedgerRow): boolean {
+  const c = r.j.c;
+  const d = c.discharge_date ?? (c.discharged_at ? new Date(c.discharged_at).toLocaleDateString('en-CA', { timeZone: IST }) : null);
+  return !r.next.done && !!d && d.slice(0, 10) < CURRENT_FROM;
+}
+
 export function inFilter(r: LedgerRow, f: Filter): boolean {
+  if (f === 'backlog') return isBacklog(r);
+  if (f !== 'closed' && isBacklog(r)) return false;
   switch (f) {
     case 'open': return !r.next.done;
     case 'mine': return !r.next.done && r.next.ours;

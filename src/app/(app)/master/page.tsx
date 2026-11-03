@@ -105,7 +105,8 @@ function Ledger() {
   }, [centreId]);
   useEffect(() => { setAll(null); load(); const t = setInterval(load, 60_000); return () => clearInterval(t); }, [load]);
 
-  const rows = useMemo(() => (all ?? []).map((j) => ledgerRow(j, canWrite)), [all, canWrite]);
+  // demo patients made while building ClaimOne stay out of the team's view
+  const rows = useMemo(() => (all ?? []).filter((j) => !/^DEMO/i.test(j.c.admission_ref ?? '')).map((j) => ledgerRow(j, canWrite)), [all, canWrite]);
   // payer type and payment narrow everything, including the counts on the status buttons
   const narrowed = useMemo(() => rows.filter((r) => (!ptype || rowPayerGroup(r) === ptype) && (!pay || inPayState(r, pay))), [rows, ptype, pay]);
   const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, narrowed.filter((r) => inFilter(r, f.key)).length])), [narrowed]);
@@ -165,10 +166,12 @@ function Ledger() {
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <div role="tablist" className="flex flex-wrap gap-2">
-          {FILTERS.map((f) => (
+          {FILTERS.filter((f) => f.key !== 'backlog' || counts.backlog > 0 || filter === 'backlog').map((f) => (
             <button key={f.key} type="button" role="tab" aria-selected={filter === f.key && !q}
               onClick={() => { setQ(''); router.replace(f.key === 'open' ? '/master' : `/master?show=${f.key}`, { scroll: false }); }}
-              className={`min-h-11 rounded-full border px-4 text-sm font-medium ${filter === f.key && !q ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
+              className={`min-h-11 rounded-full border px-4 text-sm font-medium ${f.key === 'backlog'
+                ? (filter === f.key && !q ? 'border-amber-600 bg-amber-600 text-white' : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100')
+                : filter === f.key && !q ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
               {f.label} <span className="ml-1 tabular-nums opacity-80">{all ? counts[f.key] : ''}</span>
             </button>
           ))}
@@ -195,7 +198,7 @@ function Ledger() {
 
       {all && shown.length === 0 && (
         <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-10 text-center">
-          <p className="text-base text-slate-600">{q ? 'No case matches this search.' : all.length === 0 ? 'No cases yet.' : filter === 'open' ? 'All caught up — no open cases.' : 'Nothing here right now.'}</p>
+          <p className="text-base text-slate-600">{q ? 'No case matches this search.' : all.length === 0 ? 'No cases yet.' : filter === 'open' ? 'All caught up — no open cases.' : filter === 'backlog' ? 'Backlog cleared.' : 'Nothing here right now.'}</p>
           {canWrite && all.length === 0 && <button type="button" onClick={() => setAdding(true)} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white"><UserPlus className="h-4 w-4" /> Add first admission</button>}
         </div>
       )}
@@ -252,7 +255,7 @@ function Ledger() {
           ))}
         </ul>
       )}
-      {all && shown.length > 0 && <p className="mt-2 text-sm text-slate-500">{shown.length} case{shown.length === 1 ? '' : 's'}{filter === 'closed' && !q ? ' closed in the last 60 days' : ''}</p>}
+      {all && shown.length > 0 && <p className="mt-2 text-sm text-slate-500">{shown.length} case{shown.length === 1 ? '' : 's'}{filter === 'closed' && !q ? ' closed in the last 60 days' : filter === 'backlog' && !q ? ' discharged before 1 Nov 2026' : ''}</p>}
 
       {editing && edit && <CellEditor r={editing} col={edit.col} canWrite={canWrite} isManager={isManager} onClose={closeEdit} onSaved={saved} />}
       {adding && <AddPatient tenantId={tenantId} centreId={centreId} onClose={() => setAdding(false)}

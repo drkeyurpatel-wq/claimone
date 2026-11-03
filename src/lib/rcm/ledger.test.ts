@@ -5,7 +5,7 @@ import { stageOf } from './journey';
 import { nextStep } from './worklist';
 import { cutOf } from './cut';
 import { paymentStep, type Journey } from './api';
-import { ledgerRow, inFilter, inPayState, rowPayerGroup, byReminder, toCsv, type ColKey, type LedgerRow } from './ledger';
+import { ledgerRow, inFilter, inPayState, isBacklog, rowPayerGroup, byReminder, toCsv, type ColKey, type LedgerRow } from './ledger';
 
 const NOW = new Date('2026-10-29T12:00:00+05:30');
 const c = (o: Partial<Claim>) => ({
@@ -165,7 +165,9 @@ describe('ageing, bank and letters', () => {
   it('days since discharge, coloured; over 30 days filter', () => {
     const r = row(c({ status: 'claim_submitted', submitted_at: '2026-09-25T10:00:00+05:30', discharged_at: '2026-09-20T10:00:00+05:30' }));
     expect(r.age).toMatchObject({ from: 'discharge', days: 39, band: 'warn' });
-    expect(inFilter(r, 'aged')).toBe(true);
+    // discharged before 1 Nov 2026: over 30 days, but it sits in Backlog rather than the everyday views
+    expect(inFilter(r, 'aged')).toBe(false);
+    expect(inFilter(r, 'backlog')).toBe(true);
     const old = row(c({ status: 'claim_submitted', submitted_at: '2026-08-20T10:00:00+05:30', discharged_at: '2026-08-15T10:00:00+05:30' }));
     expect(old.age?.band).toBe('late');
     const fresh = row(c({ status: 'claim_submitted', submitted_at: '2026-10-21T10:00:00+05:30', discharged_at: '2026-10-20T10:00:00+05:30' }));
@@ -247,5 +249,28 @@ describe('Master filters: a short payment past its wait is a deduction, not part
       money({ allocated: 40000, balance: 10000, recon_status: 'part_received', last_paid: '2026-08-01' }));
     expect(inPayState(r, 'short')).toBe(true);
     expect(inPayState(r, 'part')).toBe(false);
+  });
+});
+
+describe('Backlog: open files discharged before 1 Nov 2026', () => {
+  const base = { status: 'claim_approved', submitted_at: 'x', claimed_amount: 50000, approved_amount: 50000 } as const;
+  it('old open file sits in Backlog, out of the everyday views', () => {
+    const r = row(c({ ...base, discharge_date: '2026-10-20' }), money({}));
+    expect(isBacklog(r)).toBe(true);
+    expect(inFilter(r, 'backlog')).toBe(true);
+    expect(inFilter(r, 'open')).toBe(false);
+    expect(inFilter(r, 'aged')).toBe(false);
+  });
+  it('a file discharged from 1 Nov, or still in hospital, is current', () => {
+    const r = row(c({ ...base, discharge_date: '2026-11-01' }), money({}));
+    expect(isBacklog(r)).toBe(false);
+    expect(inFilter(r, 'open')).toBe(true);
+    const inHosp = row(c({ status: 'preauth_approved', preauth_submitted_at: 'x', approved_amount: 40000, admitted_at: '2026-10-25T08:00:00+05:30' }));
+    expect(isBacklog(inHosp)).toBe(false);
+  });
+  it('closed old files still show under Closed, not Backlog', () => {
+    const r = row(c({ ...base, status: 'settled', discharge_date: '2026-09-01' }), money({ allocated: 50000, balance: 0, recon_status: 'settled' }));
+    expect(inFilter(r, 'backlog')).toBe(false);
+    expect(inFilter(r, 'closed')).toBe(true);
   });
 });
