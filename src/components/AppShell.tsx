@@ -11,10 +11,15 @@ import type { Session } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/store/auth';
 import { sb } from '@/lib/supabase/browser';
 
-// Everyone works from the ledger. Everything else sits under "More":
-// the upload screens and patient files for all, the manager screens for managers.
+// Everyone works from the ledger. Managers also get the dashboard, MIS and weekly
+// summary up front. Everything else sits under "More".
 type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean };
 const MAIN_NAV: NavItem[] = [{ href: '/master', label: 'Master', icon: Table2 }];
+const MAIN_MANAGER: NavItem[] = [
+  { href: '/overview', label: 'Dashboard', icon: Gauge },
+  { href: '/claims/mis', label: 'MIS', icon: BarChart3 },
+  { href: '/summary', label: 'Weekly summary', icon: CalendarRange },
+];
 const MORE_WORK: NavItem[] = [
   { href: '/patients', label: 'Case files', icon: Users },
   { href: '/cases/upload', label: 'Import admissions (eCW)', icon: FileSpreadsheet },
@@ -23,12 +28,9 @@ const MORE_WORK: NavItem[] = [
   { href: '/receivables/import', label: 'Import bank statement', icon: Upload },
 ];
 const MORE_MANAGER: NavItem[] = [
-  { href: '/summary', label: 'Weekly summary', icon: CalendarRange },
-  { href: '/overview', label: 'Overview', icon: Gauge },
   { href: '/settings', label: 'Settings — payer master', icon: Settings },
   { href: '/claims/payers', label: 'Payer performance', icon: Building2 },
   { href: '/claims/rules', label: 'Document rules', icon: ListChecks },
-  { href: '/claims/mis', label: 'MIS', icon: BarChart3 },
   { href: '/claims/leakage', label: 'Leakage', icon: TrendingDown },
   { href: '/claims', label: 'All claims (table)', icon: LayoutDashboard, exact: true },
   { href: '/receivables', label: 'Receivables (table)', icon: Wallet },
@@ -51,9 +53,10 @@ export function AppShell({ session, children }: { session: Session; children: Re
   useEffect(() => { hydrate(session); }, [session, hydrate]);
 
   const isManager = session.role === 'admin' || session.role === 'manager';
+  const main = isManager ? [...MAIN_NAV, ...MAIN_MANAGER] : MAIN_NAV;
   const more = isManager ? [...MORE_WORK, ...MORE_MANAGER] : MORE_WORK;
   // a patient's file counts as Patient files; anything not in the menu lights nothing
-  const current = activeHref(pathname.startsWith('/case/') ? '/patients' : pathname, [...MAIN_NAV, ...more]);
+  const current = activeHref(pathname.startsWith('/case/') ? '/patients' : pathname, [...main, ...more]);
   const inMore = more.some((n) => n.href === current);
   // desk menu: open by default while on a More screen, but the button always toggles
   const [moreOpen, setMoreOpen] = useState<boolean | null>(null);
@@ -90,7 +93,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
           </div>
         )}
         <nav className="mt-4 flex-1 space-y-0.5 overflow-y-auto px-3">
-          {MAIN_NAV.map((n) => item(n))}
+          {main.map((n) => item(n))}
           <div className="pt-3">
             <button type="button" onClick={() => setMoreOpen(!showMore)} aria-expanded={showMore}
               className="flex min-h-11 w-full items-center justify-between rounded-lg px-3 text-sm font-medium text-slate-500 hover:bg-slate-50">
@@ -126,7 +129,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
             </div>
           </div>
           <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
-            {MAIN_NAV.map((n) => (
+            {main.map((n) => (
               <Link key={n.href} href={n.href} className={`whitespace-nowrap rounded-lg px-4 py-2.5 text-base font-medium ${n.href === current ? 'bg-teal-50 text-teal-700' : 'text-slate-600'}`}>{n.label}</Link>
             ))}
             <button type="button" onClick={() => setPhoneMore((v) => !v)} aria-expanded={phoneMore}
