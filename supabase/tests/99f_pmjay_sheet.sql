@@ -68,6 +68,17 @@ select t.check((clm_import_pmjay('a1000000-0000-0000-0000-000000000001', 'nov.xl
 ]$$::jsonb))->'problems'->0->>'problem' like 'No PMJAY case ID%', 'missing case ID reported');
 -- the bill carries the case ID, so a settlement file finds it
 select t.check((select claim_ref = '2026102910013158' from clm_receivables where claim_id = (select id from clm_claims where admission_ref = 'IPS-PJ1')), 'bill carries the case ID');
+-- a case ID corrected on Master after approval reaches the bill
+update clm_claims set tpa_claim_number = '2026102910099999' where admission_ref = 'IPS-PJ1';
+select t.check((select claim_ref = '2026102910099999' from clm_receivables where claim_id = (select id from clm_claims where admission_ref = 'IPS-PJ1')), 'corrected case ID on the bill');
+-- a PMJAY case added by hand with its case ID is found by the sheet
+insert into clm_claims (tenant_id, centre_id, payer_id, claim_type, patient_name, admission_ref, tpa_claim_number, case_source, claim_number)
+values ('a0000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001',
+        (select id from clm_payers where code = 'pmjay_gujarat' and tenant_id is null), 'pmjay', 'Pmjay Six', 'IPS-PJ6', 'CASE6', 'manual', 'pending');
+select t.check((clm_import_pmjay('a1000000-0000-0000-0000-000000000001', 'nov.xlsx', $$[
+  {"ip_no":"IPS-PJ6","patient_name":"Pmjay Six","case_no":"case6","case_status":"Claims Submitted","nabh_amount":5000}
+]$$::jsonb))->>'created' = '0', 'hand-added case found by case ID');
+select t.check((select status = 'claim_submitted' and claimed_amount = 5000 from clm_claims where admission_ref = 'IPS-PJ6'), 'hand-added case moved');
 
 -- a viewer cannot load
 select t.act_as('00000000-0000-0000-0000-0000000000f1');

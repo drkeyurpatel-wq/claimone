@@ -168,3 +168,9 @@ export function pmjayWarnings(rows: PmjayRow[]): { ip: string; note: string }[] 
   }
   return out;
 }
+
+/** PMJAY case ID as typed by the desk → stored form (no spaces, capitals). */
+export const normCaseId = (s: string) => s.replace(/\s+/g, '').toUpperCase() || null;
+
+/** The database refuses a case ID that is already on another case. */
+export const isCaseIdTaken = (message: string) => /pmjay_case_uq/i.test(message);
