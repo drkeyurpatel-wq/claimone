@@ -4,17 +4,21 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import {
-  ShieldCheck, LayoutDashboard, Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut, Wallet, ClipboardCheck, GitMerge, Upload,
+  ShieldCheck, LayoutDashboard, Building2, BarChart3, TrendingDown, Bot, ListChecks, LogOut, Wallet,
   Gauge, FileSpreadsheet, Users, KeyRound, ChevronDown, Table2, MoreHorizontal, Settings, CalendarRange,
 } from 'lucide-react';
 import type { Session } from '@/lib/auth/session';
+import { PAYMENT_TABS } from '@/components/PaymentTabs';
 import { useAuthStore } from '@/lib/store/auth';
 import { sb } from '@/lib/supabase/browser';
 
 // Everyone works from the ledger. Managers also get the dashboard, MIS and weekly
 // summary up front. Everything else sits under "More".
 type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean };
-const MAIN_NAV: NavItem[] = [{ href: '/master', label: 'Master', icon: Table2 }];
+const MAIN_NAV: NavItem[] = [
+  { href: '/master', label: 'Master', icon: Table2 },
+  { href: '/pay', label: 'Payments', icon: Wallet },
+];
 const MAIN_MANAGER: NavItem[] = [
   { href: '/overview', label: 'Dashboard', icon: Gauge },
   { href: '/claims/mis', label: 'MIS', icon: BarChart3 },
@@ -23,9 +27,6 @@ const MAIN_MANAGER: NavItem[] = [
 const MORE_WORK: NavItem[] = [
   { href: '/patients', label: 'Case files', icon: Users },
   { href: '/cases/upload', label: 'Import admissions (eCW)', icon: FileSpreadsheet },
-  { href: '/pay', label: 'Import settlements', icon: Upload, exact: true },
-  { href: '/pay/check', label: 'Settlement review', icon: ClipboardCheck, exact: true },
-  { href: '/receivables/import', label: 'Import bank statement', icon: Upload },
 ];
 const MORE_MANAGER: NavItem[] = [
   { href: '/settings', label: 'Settings — payer master', icon: Settings },
@@ -34,7 +35,6 @@ const MORE_MANAGER: NavItem[] = [
   { href: '/claims/leakage', label: 'Leakage', icon: TrendingDown },
   { href: '/claims', label: 'All claims (table)', icon: LayoutDashboard, exact: true },
   { href: '/receivables', label: 'Receivables (table)', icon: Wallet },
-  { href: '/receivables/reconcile', label: 'Bank matching', icon: GitMerge },
   { href: '/claims/bot', label: 'Portal bot', icon: Bot },
 ];
 
@@ -55,8 +55,10 @@ export function AppShell({ session, children }: { session: Session; children: Re
   const isManager = session.role === 'admin' || session.role === 'manager';
   const main = isManager ? [...MAIN_NAV, ...MAIN_MANAGER] : MAIN_NAV;
   const more = isManager ? [...MORE_WORK, ...MORE_MANAGER] : MORE_WORK;
-  // a patient's file counts as Patient files; anything not in the menu lights nothing
-  const current = activeHref(pathname.startsWith('/case/') ? '/patients' : pathname, [...main, ...more]);
+  // the four payment screens are one tab; a patient's file counts as Case files
+  const navPath = PAYMENT_TABS.some((t) => t.href === pathname) ? '/pay'
+    : pathname.startsWith('/case/') ? '/patients' : pathname;
+  const current = activeHref(navPath, [...main, ...more]);
   const inMore = more.some((n) => n.href === current);
   // desk menu: open by default while on a More screen, but the button always toggles
   const [moreOpen, setMoreOpen] = useState<boolean | null>(null);

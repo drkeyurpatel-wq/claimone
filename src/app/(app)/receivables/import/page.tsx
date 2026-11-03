@@ -9,6 +9,7 @@ import { useAuthStore } from '@/lib/store/auth';
 import { parseCsv, parseBankStatement, parseCashlessTracker, parseAdvice, parsePatientDues } from '@/lib/recon/parse';
 import { importRows } from '@/lib/recon/api';
 import { PageHeader, NoCentre, inr, shortDate, btn } from '@/components/ui';
+import { PaymentTabs } from '@/components/PaymentTabs';
 
 type Kind = 'bank_statement' | 'cashless_tracker' | 'settlement_advice' | 'patient_dues';
 const KINDS: { k: Kind; title: string; how: string }[] = [
@@ -72,7 +73,8 @@ export default function ImportPage() {
 
   return (
     <div>
-      <PageHeader title="Import" sub="Bring in what the teams already keep, as CSV" icon={Upload}>
+      <PaymentTabs className="px-4 pt-4 md:px-6" />
+      <PageHeader title="Upload bank statement" sub="Bring in what the teams already keep, as CSV" icon={Upload}>
         <Link href="/receivables" className={btn.ghost}><ArrowLeft className="h-3.5 w-3.5" /> Receivables</Link>
       </PageHeader>
       <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 md:px-6">
