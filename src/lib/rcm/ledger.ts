@@ -45,6 +45,16 @@ export const COLUMNS: { key: ColKey; label: string; short: string }[] = [
   { key: 'cut', label: 'Deduction', short: 'Deduction' },
 ];
 
+/** What Master shows: one cell per stage. Tapping a cell opens the form of the step that is due in it. */
+export type ViewKey = 'patient' | 'preauth' | 'disch' | 'claim' | 'pay';
+export const VIEW_COLUMNS: { key: ViewKey; label: string }[] = [
+  { key: 'patient', label: 'Patient' },
+  { key: 'preauth', label: 'Pre-auth' },
+  { key: 'disch', label: 'Discharge' },
+  { key: 'claim', label: 'Claim' },
+  { key: 'pay', label: 'Payment' },
+];
+
 const IST = 'Asia/Kolkata';
 export const dd = (d: string | null | undefined) =>
   d ? new Date(d.length === 10 ? `${d}T12:00:00+05:30` : d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: IST }) : '';
@@ -106,6 +116,46 @@ export interface LedgerRow {
   /** The reminder: what to do next, or what to chase. */
   next: { text: string; due: string | null; late: boolean; ours: boolean; done: boolean };
   cut: Cut & { short: boolean; won?: boolean };
+  /** The merged cells Master shows; each cell's key is the step its form opens. */
+  view: Record<ViewKey, Cell>;
+}
+
+const daysSince = (d: string | null | undefined, now: Date) =>
+  d ? Math.max(0, Math.floor((now.getTime() - new Date(d.length === 10 ? `${d}T12:00:00+05:30` : d).getTime()) / DAY_MS)) : null;
+
+/** Sent + decided → one cell: what stands now, with when it went (and how long it has waited). */
+export function mergeStage(sent: Cell, dec: Cell, sentAt: string | null | undefined, now: Date, claim: boolean): Cell {
+  if (sent.state === 'na') return sent;
+  const editable = sent.editable || dec.editable;
+  const key = dec.editable ? dec.key : sent.key;
+  const when = sent.text && sent.text !== 'Submitted' ? `Sent ${sent.text}` : 'Sent';
+  if (!sent.text && !dec.text) return { ...sent, key, editable };
+  if (!dec.text) return { ...sent, key, text: when, editable };
+  if (dec.text === 'Awaiting') {
+    const d = daysSince(sentAt, now);
+    return { key, state: dec.state, text: when, sub: [sent.sub, d != null ? `Awaiting · ${d} d` : 'Awaiting'].filter(Boolean).join(' · '), tone: dec.tone, editable };
+  }
+  const decided = dec.text.startsWith('₹') ? `Approved ${dec.text}` : dec.text;
+  const sub = dec.text === 'Query' || dec.text === 'Rejected'
+    ? [when, claim ? sent.sub : ''].filter(Boolean).join(' · ')
+    : [claim && sent.sub ? `Claimed ${sent.sub}` : '', dec.sub].filter(Boolean).join(' · ');
+  return { key, state: dec.state, text: decided, sub: sub || undefined, tone: dec.tone, editable };
+}
+
+/** Received + deduction → one cell. A cut waiting for Accept / Dispute takes the cell. */
+export function mergePay(paid: Cell, cut: Cell): Cell {
+  if (paid.state === 'ours' && paid.tone) return paid; // excess recorded: review first
+  const decide = cut.state === 'ours';
+  const cutPart = !cut.text || cut.text === 'Nil' ? '' : cut.text.startsWith('₹') ? `${cut.text} cut` : cut.text;
+  const text = paid.text || (decide ? cutPart : '');
+  // a cut waiting for a decision is the same money as the amount still due: say it once
+  const paidSub = decide ? paid.sub?.split(' · ').filter((x) => !/ (due|awaited)$/.test(x)).join(' · ') : paid.sub;
+  const sub = [text === cutPart ? '' : cutPart, cut.sub, paidSub].filter(Boolean).join(' · ');
+  return {
+    key: decide ? 'cut' : paid.editable ? 'paid' : cut.editable ? 'cut' : 'paid',
+    state: decide ? 'ours' : paid.state === 'blank' && cut.state === 'done' && !cutPart ? 'blank' : paid.state,
+    text, sub: sub || undefined, tone: cut.tone ?? paid.tone, editable: paid.editable || cut.editable,
+  };
 }
 
 export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): LedgerRow {
@@ -215,7 +265,13 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
       late: step.overdue, ours: step.ours, done: false };
   }
 
-  return { j, cut, next, age: next.done ? null : ageOf(c, now), cells: { patient, pa_sent: paSent, pa_ok: paOk, disch, cl_sent: clSent, cl_ok: clOk, paid, cut: cutCell } };
+  const view: Record<ViewKey, Cell> = {
+    patient, disch,
+    preauth: mergeStage(paSent, paOk, c.preauth_submitted_at, now, false),
+    claim: mergeStage(clSent, clOk, c.submitted_at, now, true),
+    pay: mergePay(paid, cutCell),
+  };
+  return { j, cut, next, view, age: next.done ? null : ageOf(c, now), cells: { patient, pa_sent: paSent, pa_ok: paOk, disch, cl_sent: clSent, cl_ok: clOk, paid, cut: cutCell } };
 }
 
 // ─── Filters ────────────────────────────────────────────────────────

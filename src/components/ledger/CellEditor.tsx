@@ -12,7 +12,7 @@ import { recordCasePayment, recordEnhancement, istDate, fetchOpenQuery, reverseP
 import { LETTERS, LETTER_WAIT_DAYS } from '@/lib/rcm/cut';
 import { actionsFor, type CaseAction } from '@/lib/rcm/actions';
 import { routeFor } from '@/lib/rcm/payer';
-import { COLUMNS, rs, dd, stepColumn, type ColKey, type LedgerRow } from '@/lib/rcm/ledger';
+import { rs, dd, stepColumn, type ColKey, type LedgerRow } from '@/lib/rcm/ledger';
 import { DISALLOWANCE_CATEGORIES } from '@/lib/engine/settlement';
 import { CutPanel } from '@/components/case/CutPanel';
 import { Modal, field, label } from './Modal';
@@ -420,7 +420,8 @@ export function CellEditor({ r, col, canWrite, isManager, onClose, onSaved }: {
   const c = r.j.c;
   // once the pre-auth is approved, this cell records enhancements
   const enhance = view === 'pa_ok' && (c.status === 'preauth_approved' || c.status === 'preauth_enhanced');
-  const title = view === 'patient' ? c.patient_name : view === 'cut' ? 'Deduction' : enhance ? 'Enhancement' : COLUMNS.find((x) => x.key === view)!.label;
+  const title = view === 'patient' ? c.patient_name : view === 'cut' ? 'Deduction' : enhance ? 'Enhancement'
+    : view === 'pa_sent' || view === 'pa_ok' ? 'Pre-auth' : view === 'cl_sent' || view === 'cl_ok' ? 'Claim' : view === 'paid' ? 'Payment' : 'Discharge';
   const sub = view === 'patient' ? (c.clm_payers?.name ?? undefined) : `${c.patient_name}${c.admission_ref ? ` · ${c.admission_ref}` : ''} · ${c.clm_payers?.name ?? ''}`;
   return (
     <Modal title={title} sub={sub} onClose={onClose}>

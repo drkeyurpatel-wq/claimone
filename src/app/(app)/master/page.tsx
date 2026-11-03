@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Search, UserPlus, Download, Plus } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { fetchJourneys, type Journey } from '@/lib/rcm/api';
-import { COLUMNS, FILTERS, PAY_STATES, byReminder, doctorKey, doctorLabel, inFilter, inPayState, ledgerRow, rowPayerGroup, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow, type PayState } from '@/lib/rcm/ledger';
+import { VIEW_COLUMNS, FILTERS, PAY_STATES, byReminder, doctorKey, doctorLabel, inFilter, inPayState, ledgerRow, rowPayerGroup, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow, type PayState } from '@/lib/rcm/ledger';
 import { PAYER_GROUPS, type PayerGroup } from '@/lib/rcm/payer';
 import { CellEditor } from '@/components/ledger/CellEditor';
 import { AddPatient } from '@/components/ledger/AddPatient';
@@ -218,11 +218,11 @@ function Ledger() {
 
       {all && shown.length > 0 && (
         <div className="mt-4 hidden overflow-x-auto rounded-xl border border-slate-200 bg-white md:block">
-          <table ref={table} onKeyDown={moveFocus} className="w-full min-w-[1060px] border-collapse text-left">
+          <table ref={table} onKeyDown={moveFocus} className="w-full min-w-[900px] border-collapse text-left">
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th scope="col" className="sticky left-0 z-10 w-44 border-b border-slate-200 bg-slate-50 px-3 py-2.5">Patient · doctor · payer</th>
-                {COLUMNS.slice(1).map((col) => (
+                {VIEW_COLUMNS.slice(1).map((col) => (
                   <th key={col.key} scope="col" className="border-b border-slate-200 px-3 py-2.5">{col.label}</th>
                 ))}
                 <th scope="col" className="sticky right-0 z-10 w-52 border-b border-slate-200 bg-slate-50 px-3 py-2.5 shadow-[-1px_0_0_#e2e8f0]">Next action</th>
@@ -236,9 +236,9 @@ function Ledger() {
                     <div className={`truncate px-2 text-xs font-medium ${r.j.c.treating_doctor_name ? 'text-slate-700' : 'text-rose-600'}`}>{doctorLabel(r.j.c.treating_doctor_name) || 'Doctor not set'}</div>
                     <div className="line-clamp-2 px-2 pb-1 text-xs text-slate-500">{r.j.c.clm_payers?.name ?? r.j.c.sponsor_name ?? 'Payer not set'}</div>
                   </td>
-                  {COLUMNS.slice(1).map((col, k) => (
-                    <td key={col.key} className="min-w-[6rem] p-1" data-key={col.key}>
-                      <CellView cell={r.cells[col.key]} nav={{ row: i, col: k + 1 }} onOpen={() => setEdit({ id: r.j.c.id, col: col.key })} />
+                  {VIEW_COLUMNS.slice(1).map((col, k) => (
+                    <td key={col.key} className={`${col.key === 'disch' ? 'min-w-[6rem]' : 'min-w-[9.5rem]'} p-1`} data-key={col.key}>
+                      <CellView cell={r.view[col.key]} nav={{ row: i, col: k + 1 }} onOpen={() => setEdit({ id: r.j.c.id, col: r.view[col.key].key })} />
                     </td>
                   ))}
                   <td className="sticky right-0 z-10 bg-white p-1 shadow-[-1px_0_0_#e2e8f0]"><NextAction r={r} /></td>
@@ -258,10 +258,10 @@ function Ledger() {
               </button>
               <div className="mt-2"><NextAction r={r} /></div>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
-                {COLUMNS.slice(1).filter((col) => r.cells[col.key].state !== 'na').map((col) => (
+                {VIEW_COLUMNS.slice(1).filter((col) => r.view[col.key].state !== 'na').map((col) => (
                   <div key={col.key}>
-                    <span className="block px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{col.short}</span>
-                    <CellView cell={r.cells[col.key]} onOpen={() => setEdit({ id: r.j.c.id, col: col.key })} />
+                    <span className="block px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{col.label}</span>
+                    <CellView cell={r.view[col.key]} onOpen={() => setEdit({ id: r.j.c.id, col: r.view[col.key].key })} />
                   </div>
                 ))}
               </div>
