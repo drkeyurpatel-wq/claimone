@@ -32,7 +32,7 @@ export interface Cell {
 }
 
 /** Where a row came from: brought over from the old Excel sheet, the eCW import, or entered in ClaimOne. */
-export const SOURCE_LABEL: Record<string, string> = { sheet: 'Old sheet', ecw: 'eCW import', hmis: 'HMIS', manual: 'Entered in ClaimOne' };
+export const SOURCE_LABEL: Record<string, string> = { sheet: 'Old sheet', pmjay: 'PMJAY sheet', ecw: 'eCW import', hmis: 'HMIS', manual: 'Entered in ClaimOne' };
 
 export const COLUMNS: { key: ColKey; label: string; short: string }[] = [
   { key: 'patient', label: 'Patient', short: 'Patient' },
@@ -127,7 +127,7 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
 
   // pre-auth sent
   const paSent: Cell = skippedPreauth
-    ? { key: 'pa_sent', state: 'na', text: corporate ? 'Not applicable' : c.case_source === 'sheet' ? 'Not recorded' : 'Not taken', editable: false }
+    ? { key: 'pa_sent', state: 'na', text: corporate ? 'Not applicable' : c.case_source === 'sheet' || c.case_source === 'pmjay' ? 'Not recorded' : 'Not taken', editable: false }
     : { key: 'pa_sent', state: mark('pa_sent', preauthSent, false), text: preauthSent ? dd(c.preauth_submitted_at) : '',
         sub: c.tpa_preauth_number ?? undefined, editable: w && col === 'pa_sent' };
 

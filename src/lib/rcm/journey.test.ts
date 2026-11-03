@@ -39,5 +39,6 @@ describe('pre-auth never sent is never shown as done', () => {
   it('words match Master: not taken for a new cashless file, not needed for corporate', () => {
     expect(noPreauthWord(c({}))).toBe('Not taken');
     expect(noPreauthWord(c({ claim_type: 'corporate' }))).toBe('Not needed');
+    expect(noPreauthWord(c({ claim_type: 'pmjay', case_source: 'pmjay' }))).toBe('Not recorded');
   });
 });

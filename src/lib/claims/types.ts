@@ -74,7 +74,8 @@ export interface Claim {
   created_at: string;
   updated_at: string;
   // admission facts from the HMIS (0013)
-  case_source?: 'manual' | 'ecw' | 'hmis' | 'sheet';
+  case_source?: 'manual' | 'ecw' | 'hmis' | 'sheet' | 'pmjay';
+  non_nabh_amount?: number | null;
   admitted_at?: string | null;
   intimated_at?: string | null;
   discharged_at?: string | null;

@@ -123,7 +123,7 @@ function Ledger() {
     return narrowed
       .filter((r) => (s ? true : inFilter(r, filter)))
       .filter((r) => !s || [r.j.c.patient_name, r.j.c.admission_ref, r.j.c.patient_uhid, r.j.c.clm_payers?.name, r.j.c.treating_doctor_name, r.j.c.tpa_claim_number, r.j.c.tpa_preauth_number,
-        r.j.c.bill_no, r.j.c.case_source === 'sheet' ? 'old sheet' : 'entered in claimone']
+        r.j.c.bill_no, r.j.c.case_source === 'sheet' ? 'old sheet' : r.j.c.case_source === 'pmjay' ? 'pmjay sheet' : 'entered in claimone']
         .some((v) => v?.toLowerCase().includes(s)))
       .sort(byReminder);
   }, [narrowed, filter, q]);

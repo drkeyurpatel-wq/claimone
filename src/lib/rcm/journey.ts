@@ -64,7 +64,7 @@ export function stageStates(c: Claim, current: StageKey): Record<StageKey, 'done
 /** How a pre-auth stage that was never sent is described — the same words Master uses. */
 export function noPreauthWord(c: Pick<Claim, 'claim_type' | 'case_source'>): string {
   if (c.claim_type === 'corporate' || c.claim_type === 'reimbursement') return 'Not needed';
-  return c.case_source === 'sheet' ? 'Not recorded' : 'Not taken';
+  return c.case_source === 'sheet' || c.case_source === 'pmjay' ? 'Not recorded' : 'Not taken';
 }
 
 /** Which stages a desk login starts on. */

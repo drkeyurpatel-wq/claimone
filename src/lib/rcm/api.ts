@@ -5,6 +5,7 @@ import { sb } from '@/lib/supabase/browser';
 import { allRows } from '@/lib/supabase/pages';
 import type { Claim, Payer } from '@/lib/claims/types';
 import type { CaseRow } from './ecw';
+import type { PmjayRow } from './pmjay';
 import { nextStep, type Step } from './worklist';
 import { CASE_SELECT } from './select';
 import { stageOf, type CaseMoney, type StageKey } from './journey';
@@ -44,6 +45,24 @@ export async function importCases(centreId: string, file: string, rows: CaseRow[
     const r = data as ImportResult;
     total.created += r.created; total.updated += r.updated; total.cash += r.cash; total.skipped += r.skipped; total.bills += r.bills;
     for (const s of r.unknown_sponsors ?? []) if (!total.unknown_sponsors.includes(s)) total.unknown_sponsors.push(s);
+    onProgress?.(Math.min(i + CHUNK, rows.length));
+  }
+  return total;
+}
+
+export interface PmjayResult { created: number; updated: number; moved: number; paid: number; skipped: number; problems: { ip: string; problem: string }[] }
+
+/** The PMJAY desk's sheet: new cases added, existing ones moved forward, paid rows booked. */
+export async function importPmjay(centreId: string, file: string, rows: PmjayRow[],
+  onProgress?: (done: number) => void): Promise<PmjayResult> {
+  const total: PmjayResult = { created: 0, updated: 0, moved: 0, paid: 0, skipped: 0, problems: [] };
+  const CHUNK = 200;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { data, error } = await sb().rpc('clm_import_pmjay', { p_centre: centreId, p_file: file, p_rows: rows.slice(i, i + CHUNK) });
+    if (error) throw new Error(`${error.message} (saved ${i} of ${rows.length} rows before this)`);
+    const r = data as PmjayResult;
+    total.created += r.created; total.updated += r.updated; total.moved += r.moved; total.paid += r.paid; total.skipped += r.skipped;
+    total.problems.push(...(r.problems ?? []));
     onProgress?.(Math.min(i + CHUNK, rows.length));
   }
   return total;

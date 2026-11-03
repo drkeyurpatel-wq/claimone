@@ -39,6 +39,7 @@ export const GROUPS: Group[] = [
     tabs: [
       { href: '/patients', label: 'Case files' },
       { href: '/cases/upload', label: 'Import admissions (eCW)' },
+      { href: '/cases/pmjay', label: 'Import PMJAY sheet' },
       { href: '/claims', label: 'All claims', manager: true },
       { href: '/receivables', label: 'All bills', manager: true },
     ],
