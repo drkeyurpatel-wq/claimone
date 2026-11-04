@@ -68,8 +68,8 @@ export default function Receivables() {
   return (
     <div>
       <PageHeader title="Receivables" sub="What each payer and patient still owes, after receipts, TDS, deductions and write-offs" icon={Wallet}>
-        <Link href="/receivables/import" className={btn.ghost}><Upload className="h-3.5 w-3.5" /> Import</Link>
-        <Link href="/receivables/reconcile" className={btn.primary}><GitMerge className="h-4 w-4" /> Reconcile</Link>
+        <Link href="/pay" className={btn.ghost}><Upload className="h-3.5 w-3.5" /> Import</Link>
+        <Link href="/pay/check" className={btn.primary}><GitMerge className="h-4 w-4" /> Reconcile</Link>
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 px-6 pt-4 md:grid-cols-5">
@@ -77,7 +77,7 @@ export default function Receivables() {
         <StatCard label="Over 60 days" value={inrShort(owed(old))} sub={`${old.length} bills`} icon={Clock} tone="rose" />
         <StatCard label="Short-paid, open" value={inrShort(owed(short))} sub={`${short.length} bills need a reason`} icon={AlertTriangle} tone="orange" />
         <StatCard label="Patients & referrers" value={inrShort(owed(patientOpen))} sub={`${patientOpen.length} people`} icon={Users} tone="purple" onClick={() => setTab('patients')} />
-        <StatCard label="Receipts not matched" value={inrShort(unalloc)} sub={`${receipts.length} bank lines`} icon={Banknote} tone="slate" onClick={() => router.push('/receivables/reconcile')} />
+        <StatCard label="Receipts not matched" value={inrShort(unalloc)} sub={`${receipts.length} bank lines`} icon={Banknote} tone="slate" onClick={() => router.push('/pay/check')} />
       </div>
 
       {!loading && payerOpen.length > 0 && (
@@ -110,7 +110,7 @@ export default function Receivables() {
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           {loading ? <Skeleton rows={8} /> : rows.length === 0 ? (
             <Empty icon={Wallet} title="No receivables yet" sub="Approved claims appear here automatically. Import the cashless tracker or patient dues to bring in what is already owed.">
-              <Link href="/receivables/import" className={btn.primary}><Upload className="h-4 w-4" /> Import</Link>
+              <Link href="/pay" className={btn.primary}><Upload className="h-4 w-4" /> Import</Link>
             </Empty>
           ) : shown.length === 0 ? <Empty icon={Wallet} title="Nothing matches" /> : (
             <div className="overflow-x-auto">

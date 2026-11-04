@@ -126,6 +126,8 @@ export interface ExceptionRow {
   receivable_id: string; debtor_type: DebtorType; debtor_name: string; patient_name: string | null; uhid: string | null;
   bill_no: string | null; claim_ref: string | null; bill_date: string; expected_amount: number; allocated: number; tds: number;
   deduction: number; balance: number; age_days: number; last_receipt_date: string | null; problem: Problem;
+  /** The patient's case on Master, if the bill has one. */
+  claim_id?: string | null;
 }
 
 export async function fetchExceptions(centreId: string): Promise<ExceptionRow[]> {

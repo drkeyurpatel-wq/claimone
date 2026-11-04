@@ -18,10 +18,8 @@ export const GROUPS: Group[] = [
   {
     key: 'payments', label: 'Payments', icon: Wallet,
     tabs: [
-      { href: '/pay', label: '1. Upload settlements' },
-      { href: '/pay/check', label: '2. Review settlements' },
-      { href: '/receivables/import', label: '3. Upload bank statement' },
-      { href: '/receivables/reconcile', label: '4. Bank matching' },
+      { href: '/pay', label: 'Upload' },
+      { href: '/pay/check', label: 'To check' },
     ],
   },
   {
@@ -58,10 +56,12 @@ export const GROUPS: Group[] = [
 function navPath(pathname: string) {
   if (pathname.startsWith('/case/') || pathname.startsWith('/cases/new')) return '/patients';
   if (pathname === '/ledger' || pathname.startsWith('/desk/')) return '/master';
+  if (pathname.startsWith('/receivables/import')) return '/pay';
+  if (pathname.startsWith('/receivables/reconcile')) return '/pay/check';
   return pathname;
 }
 
-// The most specific tab that matches wins, so /receivables/import does not light up All bills.
+// The most specific tab that matches wins, so /pay/check does not light up Upload.
 function activeTab(pathname: string, tabs: Tab[]) {
   return tabs.filter((t) => pathname === t.href || pathname.startsWith(t.href + '/'))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
