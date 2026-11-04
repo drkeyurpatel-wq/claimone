@@ -61,7 +61,7 @@ returns table (user_id uuid, full_name text, mobile text, role text, workspace t
 language plpgsql stable security definer set search_path = public
 as $$
 begin
-  if clm_current_role() not in ('admin', 'manager') then
+  if coalesce(clm_current_role(), '') not in ('admin', 'manager') then
     raise exception 'Only a manager can see the team' using errcode = 'insufficient_privilege';
   end if;
   return query
@@ -82,7 +82,7 @@ language plpgsql security definer set search_path = public
 as $$
 declare me text := clm_current_role(); them clm_user_profiles%rowtype;
 begin
-  if me not in ('admin', 'manager') then raise exception 'Only a manager can change the team' using errcode = 'insufficient_privilege'; end if;
+  if coalesce(me, '') not in ('admin', 'manager') then raise exception 'Only a manager can change the team' using errcode = 'insufficient_privilege'; end if;
   if p_user = auth.uid() then raise exception 'You cannot change your own login' using errcode = 'check_violation'; end if;
   select * into them from clm_user_profiles where user_id = p_user and tenant_id = clm_current_tenant();
   if not found then raise exception 'Unknown staff member' using errcode = 'foreign_key_violation'; end if;
