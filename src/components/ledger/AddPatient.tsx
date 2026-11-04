@@ -9,6 +9,8 @@ import { claimTypeFor, groupAsPayer, payerGroup, PAYER_GROUPS, type PayerGroup }
 import type { Payer } from '@/lib/claims/types';
 import { Modal, field, label } from './Modal';
 import { normCaseId, isCaseIdTaken, normPackageCodes } from '@/lib/rcm/pmjay';
+import { PackageHint, packageFields, usePackageAmount } from '@/components/ledger/PackageHint';
+
 
 const NEW = '__new';
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -19,6 +21,7 @@ export function AddPatient({ tenantId, centreId, doctors = [], onClose, onSaved 
   const [payers, setPayers] = useState<Payer[] | null>(null);
   const [group, setGroup] = useState<PayerGroup | ''>('');
   const [f, setF] = useState({ patient_name: '', admission_ref: '', doctor: '', payer_id: '', new_payer: '', admitted: today(), estimated_amount: '', case_id: '', pkg: '' });
+  const pkgAmt = usePackageAmount(group === 'pmjay' ? f.pkg : '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   // same patient already has an open case: warn once, then "Add anyway"
@@ -62,10 +65,10 @@ export function AddPatient({ tenantId, centreId, doctors = [], onClose, onSaved 
       const { id } = await createClaim({
         tenant_id: tenantId, centre_id: centreId, payer_id: payerId, claim_type: claimTypeFor(payer ?? groupAsPayer(group)),
         patient_name: f.patient_name.trim(), admission_ref: f.admission_ref.trim(), treating_doctor_name: f.doctor.trim(),
-        estimated_amount: f.estimated_amount ? Number(f.estimated_amount) : null,
+        estimated_amount: f.estimated_amount ? Number(f.estimated_amount) : group === 'pmjay' ? pkgAmt?.nabh ?? null : null,
         admitted_at: day === today() ? new Date().toISOString() : new Date(`${day}T12:00:00+05:30`).toISOString(),
         admission_date: day, case_source: 'manual',
-        ...(group === 'pmjay' ? { tpa_claim_number: normCaseId(f.case_id), package_code: normPackageCodes(f.pkg) } : {}),
+        ...(group === 'pmjay' ? { tpa_claim_number: normCaseId(f.case_id), package_code: normPackageCodes(f.pkg), ...packageFields(pkgAmt) } : {}),
       });
       onSaved(id);
     } catch (err) {
@@ -117,6 +120,7 @@ export function AddPatient({ tenantId, centreId, doctors = [], onClose, onSaved 
             <label className={label}>Package code
               <input value={f.pkg} onChange={set('pkg')} className={field} autoComplete="off" placeholder="e.g. MC011A" />
             </label>
+            <div className="col-span-2 -mt-2"><PackageHint amount={pkgAmt} /></div>
             <span className="col-span-2 -mt-2 block text-sm font-normal text-slate-500">Both optional — add later from Master. Two codes: type both, e.g. SC004A, SC068A.</span>
           </div>
         )}
@@ -140,7 +144,8 @@ export function AddPatient({ tenantId, centreId, doctors = [], onClose, onSaved 
           </div>
         )}
 
-        <label className={label}>Estimated amount (₹)<input type="number" min="0" inputMode="numeric" value={f.estimated_amount} onChange={set('estimated_amount')} className={field} /></label>
+        <label className={label}>Estimated amount (₹)<input type="number" min="0" inputMode="numeric" value={f.estimated_amount} onChange={set('estimated_amount')} className={field}
+          placeholder={group === 'pmjay' && pkgAmt?.nabh ? `${pkgAmt.nabh} — NABH package rate, used if left blank` : ''} /></label>
         {dups && !dupOk && (
           <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-base text-amber-900">
             <p className="font-semibold">{f.patient_name.trim()} already has an open case on Master</p>

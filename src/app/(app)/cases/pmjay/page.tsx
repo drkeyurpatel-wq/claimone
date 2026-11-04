@@ -2,12 +2,13 @@
 // The PMJAY desk uploads its month sheet (the same one it keeps every day).
 // New cases are added to Master, existing ones move forward to the sheet's
 // case status, and a row with a UTR and final amount books the payment.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Upload, Loader2, CheckCircle2, FileText, X, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import type { Cell } from '@/lib/recon/payments';
 import { isPmjaySheet, parsePmjay, pmjayWarnings, type PmjayRow } from '@/lib/rcm/pmjay';
+import { loadPackages, type PackageMaster } from '@/lib/rcm/hbp';
 import { importPmjay, type PmjayResult } from '@/lib/rcm/api';
 import { NoCentre } from '@/components/ui';
 
@@ -36,6 +37,8 @@ export default function UploadPmjay() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState('');
   const [result, setResult] = useState<PmjayResult | null>(null);
+  const [master, setMaster] = useState<PackageMaster | null>(null);
+  useEffect(() => { if (file && !master) loadPackages().then(setMaster).catch(() => {}); }, [file, master]);
 
   const add = async (f: File | undefined) => {
     if (!f) return;
@@ -57,7 +60,7 @@ export default function UploadPmjay() {
   if (!centreId) return <NoCentre />;
   if (!canWrite) return <div className="p-10 text-center text-base text-slate-600">Your login can only view.</div>;
 
-  const warn = file ? pmjayWarnings(file.rows) : [];
+  const warn = file ? pmjayWarnings(file.rows, master) : [];
   const nabh = file ? file.rows.reduce((a, r) => a + (r.nabh_amount ?? 0), 0) : 0;
 
   return (

@@ -6,6 +6,7 @@
  * The NO NABH rate is sent too and kept for internal calculations.
  */
 import type { Cell } from '@/lib/recon/payments';
+import { packageAmount, type PackageMaster } from './hbp';
 
 export interface PmjayRow {
   ip_no: string;
@@ -154,14 +155,34 @@ export function parsePmjay(cells: Cell[][], ref: Date = new Date()): { rows: Pmj
 }
 
 /** Things the desk should look at before saving. Never blocks the upload. */
-export function pmjayWarnings(rows: PmjayRow[]): { ip: string; note: string }[] {
+/** Package codes in the procedure text, e.g. "…(SC004A-…)…(SC068A-…)" → "SC004A, SC068A". */
+export function codesInProcedure(procedure: string | null | undefined): string {
+  return [...new Set([...(procedure ?? '').matchAll(/\(([A-Z]{2}\d{3}[A-Z0-9]*)/g)].map((m) => m[1]))].join(', ');
+}
+
+const inr = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+
+/** With the HBP 2022 master: is the sheet's NABH / NO NABH what the package code pays? */
+function rateNote(r: PmjayRow, master: PackageMaster): string | null {
+  const a = packageAmount(codesInProcedure(r.procedure), master);
+  if (a.nabh == null || a.nonNabh == null || !r.nabh_amount) return null;
+  const near = (x: number | null, y: number) => x != null && Math.abs(x - y) <= 1;
+  if (near(r.nabh_amount, a.nabh) && (!r.non_nabh_amount || near(r.non_nabh_amount, a.nonNabh))) return null;
+  if (near(r.nabh_amount, a.nonNabh) && near(r.non_nabh_amount, a.nabh)) return `NABH and NO NABH are swapped — should be NABH ${inr(a.nabh)}, NO NABH ${inr(a.nonNabh)}`;
+  const implant = a.parts.some((p) => p.implant) ? ' (check the number of implants)' : '';
+  return `Package ${a.codes.join(' + ')} pays NABH ${inr(a.nabh)}, NO NABH ${inr(a.nonNabh)} — sheet has ${inr(r.nabh_amount)}${r.non_nabh_amount ? ` / ${inr(r.non_nabh_amount)}` : ''}${implant}`;
+}
+
+export function pmjayWarnings(rows: PmjayRow[], master?: PackageMaster | null): { ip: string; note: string }[] {
   const out: { ip: string; note: string }[] = [];
   const seen = new Map<string, string>();
   for (const r of rows) {
     if (!r.case_no) out.push({ ip: r.ip_no, note: 'No PMJAY case ID — payments cannot be matched until it is filled' });
     else if (seen.has(r.case_no) && seen.get(r.case_no) !== r.ip_no) out.push({ ip: r.ip_no, note: `Case ID ${r.case_no} is also on IP ${seen.get(r.case_no)}` });
     else seen.set(r.case_no, r.ip_no);
+    const rate = master ? rateNote(r, master) : null;
     if (!r.nabh_amount) out.push({ ip: r.ip_no, note: 'No NABH amount — status will not be updated' });
+    else if (rate) out.push({ ip: r.ip_no, note: rate });
     else if (r.non_nabh_amount && r.non_nabh_amount > r.nabh_amount) out.push({ ip: r.ip_no, note: 'NO NABH is more than NABH — the two may be swapped' });
     if (r.discharged_on && r.admitted_on && r.discharged_on < r.admitted_on) out.push({ ip: r.ip_no, note: 'Discharge date is before admission date' });
     if (r.paid_amount && !r.utr) out.push({ ip: r.ip_no, note: 'Final amount without a UTR — payment will not be recorded' });

@@ -7,6 +7,8 @@ import { Loader2, CheckCircle2, ExternalLink, FileText, MessageSquareWarning } f
 import type { Claim } from '@/lib/claims/types';
 import { transition, updateClaimFields } from '@/lib/claims/api';
 import { normCaseId, isCaseIdTaken, normPackageCodes } from '@/lib/rcm/pmjay';
+import { PackageHint, packageFields, usePackageAmount } from '@/components/ledger/PackageHint';
+
 import { fetchReceivable } from '@/lib/recon/api';
 import { recordCasePayment, recordEnhancement, istDate, fetchOpenQuery, reversePayment } from '@/lib/rcm/api';
 import { LETTERS, LETTER_WAIT_DAYS } from '@/lib/rcm/cut';
@@ -360,6 +362,8 @@ function PatientForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
     treating_doctor_name: c.treating_doctor_name ?? '', patient_phone: c.patient_phone ?? '', case_id: c.tpa_claim_number ?? '', pkg: c.package_code ?? '',
   });
   const pmjay = c.claim_type === 'pmjay';
+  const pkgAmt = usePackageAmount(pmjay ? f.pkg : '');
+  const pkgChanged = normPackageCodes(f.pkg) !== (c.package_code ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -372,9 +376,9 @@ function PatientForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
       const was = dayOf(c.admitted_at ?? c.admission_date);
       await updateClaimFields(c.id, {
         patient_name: f.patient_name.trim(), admission_ref: f.admission_ref.trim(), patient_uhid: f.patient_uhid.trim() || null,
-        estimated_amount: f.estimated_amount === '' ? null : Number(f.estimated_amount),
+        estimated_amount: f.estimated_amount === '' ? (pmjay ? pkgAmt?.nabh ?? null : null) : Number(f.estimated_amount),
         treating_doctor_name: f.treating_doctor_name.trim() || null, patient_phone: f.patient_phone.trim() || null,
-        ...(pmjay ? { tpa_claim_number: normCaseId(f.case_id), package_code: normPackageCodes(f.pkg) } : {}),
+        ...(pmjay ? { tpa_claim_number: normCaseId(f.case_id), package_code: normPackageCodes(f.pkg), ...(pkgChanged || !c.package_amount ? packageFields(pkgAmt) : {}) } : {}),
         ...(f.admitted && f.admitted !== was ? { admission_date: f.admitted, admitted_at: new Date(`${f.admitted}T12:00:00+05:30`).toISOString() } : {}),
       } as Partial<Claim>);
       onSaved('Patient details updated');
@@ -393,6 +397,7 @@ function PatientForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
         {pmjay && <div className="grid grid-cols-2 gap-3">
           <label className={label}>PMJAY case ID<input value={f.case_id} onChange={set('case_id')} className={field} inputMode="numeric" autoComplete="off" placeholder="From TMS" /></label>
           <label className={label}>Package code<input value={f.pkg} onChange={set('pkg')} className={field} autoComplete="off" placeholder="e.g. SC004A, SC068A" /></label>
+          <div className="col-span-2 -mt-2"><PackageHint amount={pkgAmt} /></div>
         </div>}
         <div className="grid grid-cols-2 gap-3">
           <label className={label}>IP number *<input value={f.admission_ref} onChange={set('admission_ref')} className={field} /></label>

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isPmjaySheet, normPackageCodes, parsePmjay, pmjayAmount, pmjayDate, pmjayWarnings } from './pmjay';
+import master from './hbp2022.json';
+import type { PackageMaster } from './hbp';
 
 const NOV = new Date('2026-11-03T06:00:00Z');
 const D = (iso: string) => new Date(`${iso}T00:00:00Z`);
@@ -91,5 +93,23 @@ describe('normPackageCodes', () => {
     expect(normPackageCodes('SC004A + sc068a')).toBe('SC004A, SC068A');
     expect(normPackageCodes('SC004A,SC068A, SC004A')).toBe('SC004A, SC068A');
     expect(normPackageCodes('  ')).toBeNull();
+  });
+});
+
+describe('sheet amounts checked against HBP 2022', () => {
+  const M = master as unknown as PackageMaster;
+  const base = { patient_name: 'P', case_no: 'C', card_no: null, case_status: null, doctor: null, admitted_on: null, discharged_on: null, category: null,
+    utr: null, paid_on: null, paid_amount: null, deduction: null, remarks: null };
+  it('right amounts pass; swapped and wrong ones are named', () => {
+    const w = pmjayWarnings([
+      { ...base, ip_no: 'A', procedure: 'PTCA(MC011A-PTCA)', nabh_amount: 91714, non_nabh_amount: 86634 },
+      { ...base, ip_no: 'B', case_no: 'C2', procedure: 'Abiraterone(MO028I-CT for CA Prostate)', nabh_amount: 14300, non_nabh_amount: 15730 },
+      { ...base, ip_no: 'D', case_no: 'C3', procedure: 'x(SC004A-a)y(SC068A-b)', nabh_amount: 101860, non_nabh_amount: 92600 },
+      { ...base, ip_no: 'E', case_no: 'C4', procedure: 'CAG(MC030GJA-Angiography)', nabh_amount: 5000, non_nabh_amount: 4025 },
+    ], M);
+    expect(w).toEqual([
+      { ip: 'B', note: 'NABH and NO NABH are swapped — should be NABH ₹15,730, NO NABH ₹14,300' },
+      { ip: 'E', note: 'Package MC030GJA pays NABH ₹4,427.5, NO NABH ₹4,025 — sheet has ₹5,000 / ₹4,025' },
+    ]);
   });
 });
