@@ -54,6 +54,8 @@ export const TARGETS = {
   sendClaim: { insurer: 3 * HOUR, govt: 7 * DAY, corporate: 15 * DAY },
   claimDecision: { insurer: 15 * DAY, govt: 30 * DAY },
   payment: { insurer: 30 * DAY, govt: 45 * DAY },
+  /** PMJAY: no claim decision to chase — the payment sheet (UTR, deductions) comes within ~30 days of submission. */
+  pmjayPaid: 30 * DAY,
 };
 
 function step(desk: Desk, key: StepKey, label: string, ours: boolean, from: Date | null, ms: number | null, now: Date): Step {
@@ -103,6 +105,8 @@ export function nextStep(c: CaseLike, now = new Date()): Step {
         discharged, govt ? TARGETS.sendClaim.govt : TARGETS.sendClaim.insurer, now);
     case 'claim_submitted':
     case 'claim_under_review':
+      // PMJAY: the claim cell still takes a query / rejection / approval by hand, but the wait is for the payment sheet
+      if (pmjay) return step('claims', 'wait_claim', 'Awaiting PMJAY payment', false, t(c.submitted_at) ?? changed, TARGETS.pmjayPaid, now);
       if (after(c.submitted_at)) return step('claims', 'wait_claim', `Query replied — awaiting claim decision (${where})`, false, replied, TARGETS.afterReply, now);
       return step('claims', 'wait_claim', `Awaiting claim decision (${where})`, false,
         t(c.submitted_at) ?? changed, govt ? TARGETS.claimDecision.govt : TARGETS.claimDecision.insurer, now);
@@ -113,6 +117,7 @@ export function nextStep(c: CaseLike, now = new Date()): Step {
     case 'claim_approved':
     case 'claim_partial':
     case 'settlement_pending':
+      if (pmjay) return step('payment', 'wait_payment', 'Approved — awaiting PMJAY payment', false, t(c.submitted_at) ?? changed, TARGETS.pmjayPaid, now);
       return step('payment', 'wait_payment', 'Claim approved — awaiting settlement', false,
         changed, govt ? TARGETS.payment.govt : TARGETS.payment.insurer, now);
     default:

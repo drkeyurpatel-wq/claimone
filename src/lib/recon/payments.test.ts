@@ -24,6 +24,14 @@ describe('PMJAY settlement sheet', () => {
     });
   });
 
+  it('reads a deduction and its reason when the sheet has them', () => {
+    const r = parsePmjay(cellsToRows([[...HEAD, 'Deduction Amount', 'Deduction Remarks'],
+      [1, 'IPB126/600', '05/05/2026', 'IPS9', 'R9', 'Test D', '', '', 2026050410099999, 'Dr X', 50000, 50000, 0, 48000, 'UTR9', '20/05/2026', 2000, 'Implant not covered'],
+      [2, 'IPB126/601', '05/05/2026', 'IPS8', 'R8', 'Test E', '', '', 2026050410088888, 'Dr X', 9000, 9000, 0, 9000, 'UTR8', '20/05/2026', 0, '']]));
+    expect(r.rows[0]).toMatchObject({ net_amount: 48000, deduction_amount: 2000, deduction_reason: 'Implant not covered' });
+    expect(r.rows[1]).toMatchObject({ deduction_amount: 0, deduction_reason: null });
+  });
+
   it('an unpaid row has no UTR or payment date', () => {
     const { rows: out } = parsePmjay(rows);
     expect(out[1]).toMatchObject({ net_amount: 0, utr: null, payment_date: null, claimed_amount: 60390 });

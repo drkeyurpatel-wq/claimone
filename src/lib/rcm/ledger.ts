@@ -208,8 +208,10 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
 
   // claim decision
   const clOkDone = APPROVED.has(c.status) || (c.status === 'closed' && c.approved_amount != null && inClaim);
+  // PMJAY sends no claim decision: after submission the wait is for the payment sheet (shown in the Payment cell)
+  const pmjayWait = c.claim_type === 'pmjay' && ['claim_submitted', 'claim_under_review'].includes(c.status);
   const clText = c.status === 'claim_query' ? 'Query' : c.status === 'claim_rejected' ? 'Rejected'
-    : clOkDone ? rs(c.approved_amount) : ['claim_submitted', 'claim_under_review'].includes(c.status) ? 'Awaiting' : '';
+    : clOkDone ? rs(c.approved_amount) : ['claim_submitted', 'claim_under_review'].includes(c.status) && !pmjayWait ? 'Awaiting' : '';
   const approvalCut = clOkDone && c.claimed_amount != null && c.approved_amount != null && Number(c.claimed_amount) > Number(c.approved_amount)
     ? Number(c.claimed_amount) - Number(c.approved_amount) : 0;
   const clOk: Cell = { key: 'cl_ok', state: col === 'cl_ok' ? mark('cl_ok', false, false) : mark('cl_ok', clOkDone, false), text: clText,
@@ -221,14 +223,15 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   const moreDue = !!m && m.balance > 1 && APPROVED.has(c.status) && c.status !== 'settled';
   // more recorded than approved: almost always a typing error (net entered as the gross amount)
   const excess = !!m && m.balance < -1 && c.status !== 'settled' ? -m.balance : 0;
-  const paid: Cell = { key: 'paid', state: excess ? 'ours' : col === 'paid' ? mark('paid', false, false) : got > 0 ? 'done' : mark('paid', false, false),
-    text: got > 0 ? rs(got) : col === 'paid' ? 'Awaiting' : '',
-    sub: excess ? `${rs(excess)} excess — review`
+  const pmjayDue = pmjayWait && got <= 0 && step.dueAt ? `${step.overdue ? 'Was due' : 'Due by'} ${dd(step.dueAt.toISOString())}` : undefined;
+  const paid: Cell = { key: 'paid', state: excess ? 'ours' : pmjayDue ? 'theirs' : col === 'paid' ? mark('paid', false, false) : got > 0 ? 'done' : mark('paid', false, false),
+    text: got > 0 ? rs(got) : col === 'paid' || pmjayWait ? 'Awaiting' : '',
+    sub: pmjayDue ?? (excess ? `${rs(excess)} excess — review`
       // short: what is still due first, then how it came; TDS and the bank match are in the cell's form and the download
       : got > 0 ? [moreDue ? (cut.awaited ? `${rs(m!.balance)} awaited` : `${rs(m!.balance)} due`) : '',
           m && (m.parts ?? 0) > 1 ? `${m.parts} payments` : '',
           m && m.banked != null ? (m.banked >= got - 1 ? 'In bank ✓' : m.banked > 0 ? `${rs(m.banked)} in bank` : 'Not in bank') : '']
-          .filter(Boolean).join(' · ') || (m && m.tds ? `TDS ${rs(m.tds)}` : undefined) : undefined,
+          .filter(Boolean).join(' · ') || (m && m.tds ? `TDS ${rs(m.tds)}` : undefined) : undefined),
     tone: excess ? 'alert' : undefined,
     editable: w && APPROVED.has(c.status) && c.status !== 'settled' && (got === 0 || moreDue || excess > 0) };
 

@@ -80,6 +80,9 @@ export function parsePmjay(rows: string[][]): { rows: PaymentLine[]; skipped: nu
     inv: at('Invoice No'), idate: at('Inv Date'), ip: at('IP No'), reg: at('Reg No'), name: at('Patient Name'),
     letter: at('Letter No'), doc: at('Doctor Name'), limit: at('Credit Limit'), pending: at('Pending'),
     tds: at('TDS Amount'), paid: at('Claim Paid Amount'), utr: at('UTR'), pdate: at('Payment Date'),
+    // not on every version of the sheet: read when present
+    ded: [at('Deduction Amount'), at('Deducted Amount'), at('Ded Amount'), at('Deduction')].find((i) => i >= 0) ?? -1,
+    why: [at('Deduction Remarks'), at('Deduction Reason'), at('Reason'), at('Remarks')].find((i) => i >= 0) ?? -1,
   };
   const get = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
   const out: PaymentLine[] = [];
@@ -89,6 +92,8 @@ export function parsePmjay(rows: string[][]): { rows: PaymentLine[]; skipped: nu
     const letter = get(r, c.letter).replace(/\.0+$/, '');
     if (!bill && !letter) { if (r.some((v) => String(v).trim())) skipped++; continue; }
     const net = parseAmount(get(r, c.paid)) ?? 0;
+    const ded = round2(parseAmount(get(r, c.ded)) ?? 0);
+    const why = get(r, c.why) || null;
     out.push({
       source: 'pmjay', payer_name: 'PMJAY / MA (Gujarat)', tpa_name: null,
       claim_ref: letter || null, bill_no: bill || null, patient_name: get(r, c.name) || null,
@@ -97,7 +102,7 @@ export function parsePmjay(rows: string[][]): { rows: PaymentLine[]; skipped: nu
       claimed_amount: parseAmount(get(r, c.pending)) ?? parseAmount(get(r, c.limit)),
       approved_amount: null,
       tds_amount: round2(parseAmount(get(r, c.tds)) ?? 0),
-      deduction_amount: 0, deduction_reason: null,
+      deduction_amount: ded > 0 ? ded : 0, deduction_reason: ded > 0 ? why : null,
       net_amount: round2(net),
       utr: net > 0 ? get(r, c.utr) || null : null,
       payment_date: net > 0 ? parseDate(get(r, c.pdate).slice(0, 10)) : null,

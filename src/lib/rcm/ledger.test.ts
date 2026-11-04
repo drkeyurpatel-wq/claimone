@@ -347,3 +347,24 @@ describe('Archive', () => {
     expect(fought.next.done).toBe(false);
   });
 });
+
+describe('PMJAY: after the claim goes, the wait is for the payment sheet', () => {
+  it('claim cell shows when it went; payment cell waits, due 30 days from submission', () => {
+    const r = row(c({ status: 'claim_submitted', claim_type: 'pmjay', case_source: 'pmjay', submitted_at: '2026-10-20T12:00:00+05:30',
+      discharged_at: '2026-10-20T10:00:00+05:30', claimed_amount: 91714 }));
+    expect(r.next.text).toBe('Awaiting PMJAY payment');
+    expect(r.next.ours).toBe(false);
+    expect(r.view.claim).toMatchObject({ text: 'Sent 20 Oct', sub: '₹91,714', key: 'cl_ok', editable: true });
+    expect(r.view.pay).toMatchObject({ text: 'Awaiting', state: 'theirs', sub: 'Due by 19 Nov' });
+  });
+  it('past 30 days: follow up', () => {
+    const r = row(c({ status: 'claim_submitted', claim_type: 'pmjay', submitted_at: '2026-09-01T12:00:00+05:30', discharged_at: 'x', claimed_amount: 5000 }));
+    expect(r.next.late).toBe(true);
+    expect(r.view.pay.sub).toBe('Was due 01 Oct');
+  });
+  it('other payers still wait for the claim decision', () => {
+    const r = row(c({ status: 'claim_submitted', submitted_at: '2026-10-20T12:00:00+05:30', discharged_at: 'x', claimed_amount: 5000 }));
+    expect(r.next.text).toMatch(/claim decision/);
+    expect(r.view.pay.text).toBe('');
+  });
+});
