@@ -153,6 +153,23 @@ export async function fetchJourneys(centreId: string): Promise<Journey[]> {
   });
 }
 
+/** The Archive: every settled, closed or written-off file (Master keeps those whose cut is pending or disputed). */
+export async function fetchArchive(centreId: string): Promise<Journey[]> {
+  const [closed, money] = await Promise.all([
+    allRows((from, to) => sb().from('clm_claims').select(CASE_SELECT).eq('centre_id', centreId).in('status', ['settled', 'closed', 'written_off'])
+      .order('id').range(from, to)),
+    fetchCaseMoney(centreId),
+  ]);
+  if (closed.error) throw new Error('Could not load the archive');
+  const now = new Date();
+  return (closed.data as unknown as Claim[]).map((c) => {
+    const step = nextStep(c, now);
+    const m = money.get(c.id) ?? null;
+    const stage = stageOf(c, m, step);
+    return { c, step: paymentStep(step, stage, m, cutOf(c, m)), money: m, stage };
+  });
+}
+
 /** In payment: a cut waits for Accept / Fight (our turn), a fought cut is chased; a part-paid bill needs its reason. */
 export function paymentStep(step: Step, stage: StageKey, m: CaseMoney | null, cut: Cut | null = null): Step {
   if (stage !== 'payment') return step;

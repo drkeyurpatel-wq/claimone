@@ -344,6 +344,12 @@ export function inPayState(r: LedgerRow, s: PayState): boolean {
   }
 }
 
+/** Money received and seen in the bank (null: nothing received yet). */
+export function inBank(r: LedgerRow): boolean {
+  const m = r.j.money;
+  return !!m && m.allocated > 0 && m.banked != null && m.banked >= m.allocated - 1;
+}
+
 /** Late first, then our turn, then waiting on the insurer; oldest admission first. Closed: newest first. */
 export function byReminder(a: LedgerRow, b: LedgerRow): number {
   const rank = (r: LedgerRow) => (r.next.done ? 9 : r.next.late ? (r.next.ours ? 0 : 1) : r.next.ours ? 2 : 3);

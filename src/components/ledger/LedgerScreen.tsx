@@ -1,0 +1,296 @@
+'use client';
+// Master and the Archive. Master: one row per active insurance / scheme / company patient, filled left
+// to right from admission to money received; settled files leave for the Archive. Yellow is ours to fill now,
+// blue waits on the insurer, red needs a decision. The last column is the reminder.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Loader2, Search, UserPlus, Download, Plus, Archive } from 'lucide-react';
+import { useAuthStore } from '@/lib/store/auth';
+import { fetchArchive, fetchJourneys, type Journey } from '@/lib/rcm/api';
+import { VIEW_COLUMNS, FILTERS, PAY_STATES, byReminder, doctorKey, doctorLabel, inFilter, inPayState, inBank, ledgerRow, rowPayerGroup, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow, type PayState } from '@/lib/rcm/ledger';
+import { PAYER_GROUPS, type PayerGroup } from '@/lib/rcm/payer';
+import { CellEditor } from '@/components/ledger/CellEditor';
+import { AddPatient } from '@/components/ledger/AddPatient';
+import { NoCentre, useToast } from '@/components/ui';
+
+const STATE_CLS: Record<Cell['state'], string> = {
+  done: 'text-slate-900',
+  ours: 'bg-amber-50 ring-2 ring-inset ring-amber-400 text-amber-900 font-semibold',
+  theirs: 'bg-sky-50 ring-1 ring-inset ring-sky-300 text-sky-900',
+  open: 'text-slate-400',
+  blank: 'text-slate-300',
+  na: 'text-slate-400 italic',
+};
+const TONE_CLS = { alert: 'bg-rose-50 ring-2 ring-inset ring-rose-400 text-rose-800 font-semibold', warn: 'bg-amber-50 ring-1 ring-inset ring-amber-300 text-amber-900' };
+
+type Nav = { row: number; col: number };
+function CellView({ cell, onOpen, nav }: { cell: Cell; onOpen: () => void; nav?: Nav }) {
+  const cls = cell.tone ? TONE_CLS[cell.tone] : STATE_CLS[cell.state];
+  const at = nav ? { 'data-cell': '', 'data-row': nav.row, 'data-col': nav.col } : {};
+  const empty = !cell.text;
+  const body = (
+    <>
+      <span className="block break-words">{empty ? (cell.state === 'ours' ? 'Action due' : cell.editable ? '' : '—') : cell.text}</span>
+      {cell.tag && <span className="mt-0.5 inline-block rounded bg-violet-100 px-1.5 py-px text-[11px] font-semibold text-violet-800" title={cell.tag === 'Old sheet' ? 'Brought over from the old Excel sheet' : 'Loaded from the PMJAY sheet'}>{cell.tag}</span>}
+      {cell.sub && <span className="line-clamp-2 break-words text-xs font-normal opacity-80" title={cell.sub}>{cell.sub}</span>}
+      {empty && cell.editable && cell.state !== 'ours' && <span className="inline-flex items-center gap-0.5 text-sm"><Plus className="h-3.5 w-3.5" />Update</span>}
+    </>
+  );
+  if (!cell.editable) return <div {...at} tabIndex={nav ? -1 : undefined} className={`min-h-[52px] rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-inset focus:ring-teal-500 ${cls}`}>{body}</div>;
+  return (
+    <button type="button" onClick={onOpen} {...at}
+      className={`min-h-[52px] w-full rounded-md px-2 py-1.5 text-left text-sm outline-none transition hover:bg-teal-50 hover:ring-2 hover:ring-inset hover:ring-teal-400 focus:ring-2 focus:ring-inset focus:ring-teal-600 ${cls}`}>
+      {body}
+    </button>
+  );
+}
+
+const AGE_CLS: Record<Age['band'], string> = { ok: 'bg-slate-100 text-slate-600', warn: 'bg-amber-100 text-amber-900', late: 'bg-rose-100 text-rose-800' };
+function AgeChip({ age }: { age: Age | null }) {
+  if (!age) return null;
+  const text = age.from === 'discharge' ? `${age.days} d since discharge` : `Day ${age.days + 1} in hospital`;
+  return <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${AGE_CLS[age.band]}`}>{text}</span>;
+}
+
+function NextAction({ r }: { r: LedgerRow }) {
+  return (
+    <div className={`min-w-[10.5rem] rounded-md px-2 py-1.5 text-sm ${r.next.done ? 'text-slate-500' : r.next.late ? 'bg-rose-50 text-rose-800' : r.next.ours ? 'text-slate-900' : 'text-slate-600'}`}>
+      <span className={`block ${r.next.ours && !r.next.done ? 'font-semibold' : ''}`}>{r.next.text}</span>
+      {r.next.due && <span className={`block text-xs ${r.next.late ? 'font-semibold' : ''}`}>{r.next.late ? r.next.due : `Due ${r.next.due}`}</span>}
+      <AgeChip age={r.age} />
+    </div>
+  );
+}
+
+/** Arrow keys move between cells like a spreadsheet; Enter opens the cell. */
+function moveFocus(e: React.KeyboardEvent) {
+  const dirs: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+  const d = dirs[e.key];
+  const el = (e.target as HTMLElement).closest<HTMLElement>('[data-cell]');
+  if (!d || !el) return;
+  const row = Number(el.dataset.row) + d[0], col = Number(el.dataset.col) + d[1];
+  const next = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`[data-cell][data-row="${row}"][data-col="${col}"]`);
+  if (next) { e.preventDefault(); next.focus(); }
+}
+
+/** Master (active files) and the Archive (settled and closed files) share one screen. */
+export function LedgerScreen({ archive = false }: { archive?: boolean }) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { activeCentreId: centreId, tenantId, staff, centres } = useAuthStore();
+  const role = staff?.role;
+  const canWrite = role === 'admin' || role === 'manager' || role === 'desk';
+  const isManager = role === 'admin' || role === 'manager';
+  const { flash, toastNode } = useToast();
+
+  const [all, setAll] = useState<Journey[] | null>(null);
+  const [error, setError] = useState('');
+  const [q, setQ] = useState(params.get('q') ?? '');
+  const [bank, setBank] = useState<'' | 'in' | 'not'>('');
+  const [ptype, setPtype] = useState<PayerGroup | ''>('');
+  const [pay, setPay] = useState<PayState | ''>('');
+  const [doc, setDoc] = useState('');
+  const [edit, setEdit] = useState<{ id: string; col: ColKey } | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const asked = params.get('show');
+  // Closed files now live in the Archive
+  useEffect(() => { if (!archive && asked === 'closed') router.replace('/archive'); }, [archive, asked, router]);
+  const filter = (archive ? 'closed' : FILTERS.some((f) => f.key === asked && f.key !== 'closed') ? asked : 'open') as Filter;
+
+  // the centre being shown: a slow answer for a centre the user has left is dropped
+  const current = useRef(centreId);
+  current.current = centreId;
+  const load = useCallback(async () => {
+    if (!centreId) return;
+    try {
+      const j = archive ? await fetchArchive(centreId) : await fetchJourneys(centreId);
+      if (current.current !== centreId) return;
+      setAll(j); setError('');
+    } catch { if (current.current === centreId) setError(`Could not load ${archive ? 'the Archive' : 'Master'}. Please check the connection and refresh.`); }
+  }, [centreId, archive]);
+  useEffect(() => { setAll(null); load(); const t = setInterval(load, 60_000); return () => clearInterval(t); }, [load]);
+
+  // demo patients made while building ClaimOne stay out of the team's view
+  // Master holds the files still being worked; the Archive the ones paid and closed (no cut pending or disputed)
+  const rows = useMemo(() => (all ?? []).filter((j) => !/^DEMO/i.test(j.c.admission_ref ?? '')).map((j) => ledgerRow(j, canWrite))
+    .filter((r) => r.next.done === archive), [all, canWrite, archive]);
+  // payer type and payment narrow everything, including the counts on the status buttons
+  const narrowed = useMemo(() => rows.filter((r) => (!ptype || rowPayerGroup(r) === ptype) && (!pay || inPayState(r, pay))
+    && (!doc || doctorKey(r.j.c.treating_doctor_name) === doc) && (!bank || inBank(r) === (bank === 'in'))), [rows, ptype, pay, doc, bank]);
+  // doctors on the files, most files first, for the filter and the New admission suggestions
+  const doctors = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) { const k = doctorKey(r.j.c.treating_doctor_name); if (k) m.set(k, (m.get(k) ?? 0) + 1); }
+    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
+  }, [rows]);
+  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, narrowed.filter((r) => inFilter(r, f.key)).length])), [narrowed]);
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return narrowed
+      .filter((r) => (s ? true : inFilter(r, filter)))
+      .filter((r) => !s || [r.j.c.patient_name, r.j.c.admission_ref, r.j.c.patient_uhid, r.j.c.clm_payers?.name, r.j.c.treating_doctor_name, r.j.c.tpa_claim_number, r.j.c.tpa_preauth_number,
+        r.j.c.bill_no, r.j.c.case_source === 'sheet' ? 'old sheet' : r.j.c.case_source === 'pmjay' ? 'pmjay sheet' : 'entered in claimone']
+        .some((v) => v?.toLowerCase().includes(s)))
+      .sort(byReminder);
+  }, [narrowed, filter, q]);
+  const editing = edit ? rows.find((r) => r.j.c.id === edit.id) ?? null : null;
+  const table = useRef<HTMLTableElement>(null);
+  // after a cell's form closes, the cursor goes back to that cell
+  const closeEdit = useCallback(() => {
+    const was = edit;
+    setEdit(null);
+    if (was) setTimeout(() => table.current?.querySelector<HTMLElement>(`tr[data-id="${was.id}"] [data-key="${was.col}"] [data-cell]`)?.focus(), 50);
+  }, [edit]);
+
+  if (!centreId || !tenantId) return <NoCentre />;
+  const centreName = centres.find((c) => c.id === centreId)?.name;
+
+  const download = () => {
+    const blob = new Blob([toCsv(shown)], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `ClaimOne ${archive ? 'Archive' : 'Master'} ${centreName ?? ''} ${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  const saved = async (msg: string) => { closeEdit(); flash(msg); await load(); };
+
+  return (
+    <div className="px-3 py-6 md:px-5">
+      {toastNode}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">{archive ? 'Archive' : 'Master'}{centreName && centres.length > 1 ? ` — ${centreName}` : ''}</h1>
+          <p className="mt-1 text-base text-slate-600">{archive
+            ? 'Settled and closed files — paid in full, or paid with the cut accepted. A file being disputed stays on Master.'
+            : <>Active cases, admission to settlement. Select a cell to update it<span className="hidden md:inline"> — arrow keys move, Enter opens</span>. Settled files move to the Archive.</>}</p>
+          {!archive && <div className="mt-2 flex flex-wrap gap-2 text-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 font-medium text-amber-900 ring-1 ring-amber-300"><span className="h-2 w-2 rounded-full bg-amber-400" />Action due</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-0.5 font-medium text-sky-900 ring-1 ring-sky-300"><span className="h-2 w-2 rounded-full bg-sky-400" />Awaiting payer</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-0.5 font-medium text-rose-800 ring-1 ring-rose-300"><span className="h-2 w-2 rounded-full bg-rose-500" />Decision needed</span>
+          </div>}
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={download} disabled={!shown.length}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40">
+            <Download className="h-4 w-4" /> Export to Excel</button>
+          {canWrite && !archive && <button type="button" onClick={() => setAdding(true)}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700">
+            <UserPlus className="h-4 w-4" /> New admission</button>}
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {!archive && <div role="tablist" className="flex flex-wrap gap-2">
+          {FILTERS.filter((f) => f.key !== 'closed' && (f.key !== 'backlog' || counts.backlog > 0 || filter === 'backlog')).map((f) => (
+            <button key={f.key} type="button" role="tab" aria-selected={filter === f.key && !q}
+              onClick={() => { setQ(''); router.replace(f.key === 'open' ? '/master' : `/master?show=${f.key}`, { scroll: false }); }}
+              className={`min-h-11 rounded-full border px-4 text-sm font-medium ${f.key === 'backlog'
+                ? (filter === f.key && !q ? 'border-amber-600 bg-amber-600 text-white' : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100')
+                : filter === f.key && !q ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
+              {f.label} <span className="ml-1 tabular-nums opacity-80">{all ? counts[f.key] : ''}</span>
+            </button>
+          ))}
+        </div>}
+        <select value={ptype} onChange={(e) => setPtype(e.target.value as PayerGroup | '')} aria-label="Payer type"
+          className={`min-h-11 rounded-full border px-3 text-sm font-medium ${ptype ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-700'}`}>
+          <option value="">All payer types</option>
+          {PAYER_GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+        </select>
+        <select value={pay} onChange={(e) => setPay(e.target.value as PayState | '')} aria-label="Payment"
+          className={`min-h-11 rounded-full border px-3 text-sm font-medium ${pay ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-700'}`}>
+          <option value="">Any payment</option>
+          {PAY_STATES.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+        </select>
+        <select value={doc} onChange={(e) => setDoc(e.target.value)} aria-label="Doctor"
+          className={`min-h-11 max-w-[14rem] rounded-full border px-3 text-sm font-medium ${doc ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-700'}`}>
+          <option value="">All doctors</option>
+          {doctors.map((d) => <option key={d} value={d}>{doctorLabel(d)}</option>)}
+        </select>
+        {archive && <select value={bank} onChange={(e) => setBank(e.target.value as '' | 'in' | 'not')} aria-label="Bank"
+          className={`min-h-11 rounded-full border px-3 text-sm font-medium ${bank ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-700'}`}>
+          <option value="">Bank: all</option>
+          <option value="in">In bank ✓</option>
+          <option value="not">Not in bank yet</option>
+        </select>}
+        <label className="relative ml-auto w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, IP, bill or claim no." aria-label={archive ? "Search Archive" : "Search Master"}
+            className="min-h-11 w-full rounded-full border border-slate-300 pl-9 pr-3 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100" />
+        </label>
+      </div>
+
+      {error && <p role="alert" className="mt-4 rounded-lg bg-rose-50 p-3 text-base text-rose-800">{error}</p>}
+      {!all && !error && <div className="flex justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-teal-600" /></div>}
+
+      {all && shown.length === 0 && (
+        <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-10 text-center">
+          <p className="text-base text-slate-600">{q ? 'No case matches this search.' : archive ? 'No settled files yet.' : all.length === 0 ? 'No cases yet.' : filter === 'open' ? 'All caught up — no open cases.' : filter === 'backlog' ? 'Backlog cleared.' : 'Nothing here right now.'}</p>
+          {q && !archive && <Link href={`/archive?q=${encodeURIComponent(q.trim())}`} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Archive className="h-4 w-4" /> Search settled files in the Archive</Link>}
+          {canWrite && all.length === 0 && <button type="button" onClick={() => setAdding(true)} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white"><UserPlus className="h-4 w-4" /> Add first admission</button>}
+        </div>
+      )}
+
+      {all && shown.length > 0 && (
+        <div className="mt-4 hidden overflow-x-auto rounded-xl border border-slate-200 bg-white md:block">
+          <table ref={table} onKeyDown={moveFocus} className="w-full min-w-[900px] border-collapse text-left">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th scope="col" className="sticky left-0 z-10 w-44 border-b border-slate-200 bg-slate-50 px-3 py-2.5">Patient · doctor · payer</th>
+                {VIEW_COLUMNS.slice(1).map((col) => (
+                  <th key={col.key} scope="col" className="border-b border-slate-200 px-3 py-2.5">{col.label}</th>
+                ))}
+                <th scope="col" className="sticky right-0 z-10 w-52 border-b border-slate-200 bg-slate-50 px-3 py-2.5 shadow-[-1px_0_0_#e2e8f0]">Next action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((r: LedgerRow, i) => (
+                <tr key={r.j.c.id} className={`border-b border-slate-100 align-top ${fresh === r.j.c.id ? 'bg-teal-50/60' : ''}`} data-id={r.j.c.id}>
+                  <td className="sticky left-0 z-10 w-44 min-w-[10rem] max-w-[12rem] bg-white p-1 shadow-[1px_0_0_#e2e8f0]" data-key="patient">
+                    <CellView cell={r.cells.patient} nav={{ row: i, col: 0 }} onOpen={() => setEdit({ id: r.j.c.id, col: 'patient' })} />
+                    <div className={`truncate px-2 text-xs font-medium ${r.j.c.treating_doctor_name ? 'text-slate-700' : 'text-rose-600'}`}>{doctorLabel(r.j.c.treating_doctor_name) || 'Doctor not set'}</div>
+                    <div className="line-clamp-2 px-2 pb-1 text-xs text-slate-500">{r.j.c.clm_payers?.name ?? r.j.c.sponsor_name ?? 'Payer not set'}</div>
+                  </td>
+                  {VIEW_COLUMNS.slice(1).map((col, k) => (
+                    <td key={col.key} className={`${col.key === 'disch' ? 'min-w-[6rem]' : 'min-w-[9.5rem]'} p-1`} data-key={col.key}>
+                      <CellView cell={r.view[col.key]} nav={{ row: i, col: k + 1 }} onOpen={() => setEdit({ id: r.j.c.id, col: r.view[col.key].key })} />
+                    </td>
+                  ))}
+                  <td className="sticky right-0 z-10 bg-white p-1 shadow-[-1px_0_0_#e2e8f0]"><NextAction r={r} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {all && shown.length > 0 && (
+        <ul className="mt-4 space-y-3 md:hidden">
+          {shown.map((r) => (
+            <li key={r.j.c.id} className={`rounded-xl border border-slate-200 bg-white p-3 ${fresh === r.j.c.id ? 'ring-2 ring-teal-300' : ''}`}>
+              <button type="button" onClick={() => setEdit({ id: r.j.c.id, col: 'patient' })} className="block w-full text-left">
+                <span className="block text-base font-semibold text-slate-900">{r.j.c.patient_name}</span>
+                <span className="block text-sm text-slate-500">{[r.j.c.admission_ref, doctorLabel(r.j.c.treating_doctor_name) || 'Doctor not set', r.j.c.clm_payers?.name ?? r.j.c.sponsor_name].filter(Boolean).join(' · ')}</span>
+              </button>
+              <div className="mt-2"><NextAction r={r} /></div>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                {VIEW_COLUMNS.slice(1).filter((col) => r.view[col.key].state !== 'na').map((col) => (
+                  <div key={col.key}>
+                    <span className="block px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{col.label}</span>
+                    <CellView cell={r.view[col.key]} onOpen={() => setEdit({ id: r.j.c.id, col: r.view[col.key].key })} />
+                  </div>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {all && shown.length > 0 && <p className="mt-2 text-sm text-slate-500">{shown.length} case{shown.length === 1 ? '' : 's'}{archive && !q ? ' settled or closed' : filter === 'backlog' && !q ? ' discharged before 1 Nov 2026' : ''}</p>}
+
+      {editing && edit && <CellEditor r={editing} col={edit.col} canWrite={canWrite} isManager={isManager} onClose={closeEdit} onSaved={saved} />}
+      {adding && <AddPatient tenantId={tenantId} centreId={centreId} doctors={doctors.map(doctorLabel)} onClose={() => setAdding(false)}
+        onSaved={async (id) => { setAdding(false); setFresh(id); setQ(''); router.replace('/master', { scroll: false }); flash('Admission added to Master'); await load(); }} />}
+    </div>
+  );
+}

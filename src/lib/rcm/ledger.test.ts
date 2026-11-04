@@ -5,7 +5,7 @@ import { stageOf } from './journey';
 import { nextStep } from './worklist';
 import { cutOf } from './cut';
 import { paymentStep, type Journey } from './api';
-import { ledgerRow, inFilter, inPayState, isBacklog, rowPayerGroup, byReminder, toCsv, doctorKey, doctorLabel, type ColKey, type LedgerRow } from './ledger';
+import { ledgerRow, inBank, inFilter, inPayState, isBacklog, rowPayerGroup, byReminder, toCsv, doctorKey, doctorLabel, type ColKey, type LedgerRow } from './ledger';
 
 const NOW = new Date('2026-10-29T12:00:00+05:30');
 const c = (o: Partial<Claim>) => ({
@@ -329,5 +329,21 @@ describe('Master view: one cell per stage', () => {
     expect(short).toMatchObject({ key: 'cut', state: 'ours', text: '₹45,000', tone: 'alert' });
     expect(short.sub).toContain('₹5,000 cut');
     expect(short.sub).toContain('Accept or dispute');
+  });
+});
+
+describe('Archive', () => {
+  it('a settled file with no cut pending is done (Archive); a disputed one stays on Master', () => {
+    const settled = row(c({ status: 'settled', submitted_at: 'x', discharged_at: 'x', claimed_amount: 50000, approved_amount: 50000, settled_amount: 50000 }),
+      money({ allocated: 50000, balance: 0, banked: 50000 }));
+    expect(settled.next.done).toBe(true);
+    expect(inBank(settled)).toBe(true);
+    const notBanked = row(c({ status: 'settled', submitted_at: 'x', discharged_at: 'x', claimed_amount: 50000, approved_amount: 50000, settled_amount: 50000 }),
+      money({ allocated: 50000, balance: 0, banked: 0 }));
+    expect(notBanked.next.done).toBe(true);
+    expect(inBank(notBanked)).toBe(false);
+    const fought = row(c({ status: 'settled', cut_decision: 'fought', submitted_at: 'x', discharged_at: 'x', claimed_amount: 50000, approved_amount: 45000, settled_amount: 45000 }),
+      money({ allocated: 45000, balance: 0, expected_amount: 45000 }));
+    expect(fought.next.done).toBe(false);
   });
 });

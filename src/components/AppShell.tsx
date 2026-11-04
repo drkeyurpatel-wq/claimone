@@ -14,7 +14,7 @@ type Tab = { href: string; label: string; manager?: boolean };
 type Group = { key: string; label: string; icon: LucideIcon; manager?: boolean; tabs: Tab[] };
 
 export const GROUPS: Group[] = [
-  { key: 'master', label: 'Master', icon: Table2, tabs: [{ href: '/master', label: 'Master' }] },
+  { key: 'master', label: 'Master', icon: Table2, tabs: [{ href: '/master', label: 'Active cases' }, { href: '/archive', label: 'Archive' }] },
   {
     key: 'payments', label: 'Payments', icon: Wallet,
     tabs: [
