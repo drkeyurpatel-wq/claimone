@@ -50,7 +50,7 @@ function Patients() {
   const [all, setAll] = useState<Journey[] | null>(null);
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
-  const stage = (params.get('stage') as StageKey | 'all' | null) ?? (workspace ? WORKSPACE_STAGE[workspace] : 'all');
+  const stage = (params.get('stage') as StageKey | 'all' | null) ?? ((workspace && WORKSPACE_STAGE[workspace]) || 'all');
 
   const current = useRef(centreId);
   current.current = centreId;

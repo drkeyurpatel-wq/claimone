@@ -13,6 +13,7 @@ const DESKS = [
   { key: 'admission', label: 'Admission & pre-auth' },
   { key: 'claims', label: 'Claims & bills' },
   { key: 'payments', label: 'Payments' },
+  { key: 'admin', label: 'Administrative', hint: 'Reports and Setup open after your manager approves you' },
 ] as const;
 
 const input =
@@ -133,6 +134,7 @@ function LoginForm() {
               <button key={d.key} type="button" onClick={() => setDesk(d.key)}
                 className={`rounded-lg border px-3 py-2.5 text-left text-sm font-semibold ${desk === d.key ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-700'}`}>
                 {d.label}
+                {'hint' in d && <span className="block text-xs font-normal text-slate-500">{d.hint}</span>}
               </button>
             ))}
           </div>

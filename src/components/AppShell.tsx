@@ -46,6 +46,7 @@ export const GROUPS: Group[] = [
     key: 'setup', label: 'Setup', icon: Settings, manager: true,
     tabs: [
       { href: '/settings', label: 'Payer master' },
+      { href: '/settings/team', label: 'Team' },
       { href: '/claims/rules', label: 'Document rules' },
       { href: '/claims/bot', label: 'Portal bot' },
     ],

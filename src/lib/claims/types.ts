@@ -108,7 +108,7 @@ export interface Claim {
 
 /** How a payer is reached when it is not live on NHCX. */
 export type PayerChannel = 'portal' | 'email' | 'tms' | 'direct';
-export type Workspace = 'admission' | 'claims' | 'payments';
+export type Workspace = 'admission' | 'claims' | 'payments' | 'admin';
 
 export interface ClaimDocument {
   id: string;
