@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPmjaySheet, parsePmjay, pmjayAmount, pmjayDate, pmjayWarnings } from './pmjay';
+import { isPmjaySheet, normPackageCodes, parsePmjay, pmjayAmount, pmjayDate, pmjayWarnings } from './pmjay';
 
 const NOV = new Date('2026-11-03T06:00:00Z');
 const D = (iso: string) => new Date(`${iso}T00:00:00Z`);
@@ -82,5 +82,14 @@ describe('pmjayWarnings', () => {
       { ip: 'A', note: 'No PMJAY case ID — payments cannot be matched until it is filled' },
       { ip: 'E', note: 'Case ID C1 is also on IP B' },
     ]);
+  });
+});
+
+describe('normPackageCodes', () => {
+  it('one code, two codes, or none', () => {
+    expect(normPackageCodes(' mc011a ')).toBe('MC011A');
+    expect(normPackageCodes('SC004A + sc068a')).toBe('SC004A, SC068A');
+    expect(normPackageCodes('SC004A,SC068A, SC004A')).toBe('SC004A, SC068A');
+    expect(normPackageCodes('  ')).toBeNull();
   });
 });

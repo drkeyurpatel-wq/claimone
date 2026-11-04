@@ -80,6 +80,14 @@ select t.check((clm_import_pmjay('a1000000-0000-0000-0000-000000000001', 'nov.xl
 ]$$::jsonb))->>'created' = '0', 'hand-added case found by case ID');
 select t.check((select status = 'claim_submitted' and claimed_amount = 5000 from clm_claims where admission_ref = 'IPS-PJ6'), 'hand-added case moved');
 
+-- a dual package keeps both codes
+select clm_import_pmjay('a1000000-0000-0000-0000-000000000001', 'nov.xlsx', $$[
+  {"ip_no":"IPS-PJ7","patient_name":"Pmjay Seven","case_no":"CASE7","nabh_amount":101860,
+   "procedure":"Composite resection (Oral Cavity)(SC004A-Composite resection (Oral Cavity))Myocutaneous flap(SC068A-Regional flap)"}
+]$$::jsonb);
+select t.check((select package_code = 'SC004A, SC068A' from clm_claims where admission_ref = 'IPS-PJ7'), 'dual package: both codes');
+select t.check((select package_code = 'MC011A' from clm_claims where admission_ref = 'IPS-PJ1'), 'single package: one code');
+
 -- a viewer cannot load
 select t.act_as('00000000-0000-0000-0000-0000000000f1');
 select t.expect_error($$ select clm_import_pmjay('a1000000-0000-0000-0000-000000000001', 'x', '[]'::jsonb) $$, 'read-only');

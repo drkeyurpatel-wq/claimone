@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Loader2, CheckCircle2, ExternalLink, FileText, MessageSquareWarning } from 'lucide-react';
 import type { Claim } from '@/lib/claims/types';
 import { transition, updateClaimFields } from '@/lib/claims/api';
-import { normCaseId, isCaseIdTaken } from '@/lib/rcm/pmjay';
+import { normCaseId, isCaseIdTaken, normPackageCodes } from '@/lib/rcm/pmjay';
 import { fetchReceivable } from '@/lib/recon/api';
 import { recordCasePayment, recordEnhancement, istDate, fetchOpenQuery, reversePayment } from '@/lib/rcm/api';
 import { LETTERS, LETTER_WAIT_DAYS } from '@/lib/rcm/cut';
@@ -357,7 +357,7 @@ function PatientForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
   const [f, setF] = useState({
     patient_name: c.patient_name ?? '', admission_ref: c.admission_ref ?? '', patient_uhid: c.patient_uhid ?? '',
     admitted: dayOf(c.admitted_at ?? c.admission_date), estimated_amount: c.estimated_amount != null ? String(c.estimated_amount) : '',
-    treating_doctor_name: c.treating_doctor_name ?? '', patient_phone: c.patient_phone ?? '', case_id: c.tpa_claim_number ?? '',
+    treating_doctor_name: c.treating_doctor_name ?? '', patient_phone: c.patient_phone ?? '', case_id: c.tpa_claim_number ?? '', pkg: c.package_code ?? '',
   });
   const pmjay = c.claim_type === 'pmjay';
   const [busy, setBusy] = useState(false);
@@ -374,7 +374,7 @@ function PatientForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
         patient_name: f.patient_name.trim(), admission_ref: f.admission_ref.trim(), patient_uhid: f.patient_uhid.trim() || null,
         estimated_amount: f.estimated_amount === '' ? null : Number(f.estimated_amount),
         treating_doctor_name: f.treating_doctor_name.trim() || null, patient_phone: f.patient_phone.trim() || null,
-        ...(pmjay ? { tpa_claim_number: normCaseId(f.case_id) } : {}),
+        ...(pmjay ? { tpa_claim_number: normCaseId(f.case_id), package_code: normPackageCodes(f.pkg) } : {}),
         ...(f.admitted && f.admitted !== was ? { admission_date: f.admitted, admitted_at: new Date(`${f.admitted}T12:00:00+05:30`).toISOString() } : {}),
       } as Partial<Claim>);
       onSaved('Patient details updated');
@@ -390,7 +390,10 @@ function PatientForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
       <p className="text-base text-slate-700">Payer: <b>{c.clm_payers?.name ?? c.sponsor_name ?? '—'}</b></p>
       {canWrite ? <>
         <label className={label}>Patient name *<input value={f.patient_name} onChange={set('patient_name')} className={field} autoComplete="off" /></label>
-        {pmjay && <label className={label}>PMJAY case ID<input value={f.case_id} onChange={set('case_id')} className={field} inputMode="numeric" autoComplete="off" placeholder="From TMS" /></label>}
+        {pmjay && <div className="grid grid-cols-2 gap-3">
+          <label className={label}>PMJAY case ID<input value={f.case_id} onChange={set('case_id')} className={field} inputMode="numeric" autoComplete="off" placeholder="From TMS" /></label>
+          <label className={label}>Package code<input value={f.pkg} onChange={set('pkg')} className={field} autoComplete="off" placeholder="e.g. SC004A, SC068A" /></label>
+        </div>}
         <div className="grid grid-cols-2 gap-3">
           <label className={label}>IP number *<input value={f.admission_ref} onChange={set('admission_ref')} className={field} /></label>
           <label className={label}>UHID<input value={f.patient_uhid} onChange={set('patient_uhid')} className={field} /></label>

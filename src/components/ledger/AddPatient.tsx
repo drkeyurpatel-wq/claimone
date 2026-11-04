@@ -8,7 +8,7 @@ import { fetchAllPayers, addPayer, findOpenCasesByName } from '@/lib/rcm/api';
 import { claimTypeFor, groupAsPayer, payerGroup, PAYER_GROUPS, type PayerGroup } from '@/lib/rcm/payer';
 import type { Payer } from '@/lib/claims/types';
 import { Modal, field, label } from './Modal';
-import { normCaseId, isCaseIdTaken } from '@/lib/rcm/pmjay';
+import { normCaseId, isCaseIdTaken, normPackageCodes } from '@/lib/rcm/pmjay';
 
 const NEW = '__new';
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -18,7 +18,7 @@ export function AddPatient({ tenantId, centreId, doctors = [], onClose, onSaved 
 }) {
   const [payers, setPayers] = useState<Payer[] | null>(null);
   const [group, setGroup] = useState<PayerGroup | ''>('');
-  const [f, setF] = useState({ patient_name: '', admission_ref: '', doctor: '', payer_id: '', new_payer: '', admitted: today(), estimated_amount: '', case_id: '' });
+  const [f, setF] = useState({ patient_name: '', admission_ref: '', doctor: '', payer_id: '', new_payer: '', admitted: today(), estimated_amount: '', case_id: '', pkg: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   // same patient already has an open case: warn once, then "Add anyway"
@@ -65,7 +65,7 @@ export function AddPatient({ tenantId, centreId, doctors = [], onClose, onSaved 
         estimated_amount: f.estimated_amount ? Number(f.estimated_amount) : null,
         admitted_at: day === today() ? new Date().toISOString() : new Date(`${day}T12:00:00+05:30`).toISOString(),
         admission_date: day, case_source: 'manual',
-        ...(group === 'pmjay' ? { tpa_claim_number: normCaseId(f.case_id) } : {}),
+        ...(group === 'pmjay' ? { tpa_claim_number: normCaseId(f.case_id), package_code: normPackageCodes(f.pkg) } : {}),
       });
       onSaved(id);
     } catch (err) {
@@ -110,10 +110,15 @@ export function AddPatient({ tenantId, centreId, doctors = [], onClose, onSaved 
         </fieldset>
 
         {group === 'pmjay' && (
-          <label className={label}>PMJAY case ID
-            <input value={f.case_id} onChange={set('case_id')} className={field} inputMode="numeric" autoComplete="off" placeholder="From TMS, e.g. 2026102910013158" />
-            <span className="mt-1 block text-sm font-normal text-slate-500">Payments are matched on this. If TMS has not given it yet, add it later from Master.</span>
-          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className={label}>PMJAY case ID
+              <input value={f.case_id} onChange={set('case_id')} className={field} inputMode="numeric" autoComplete="off" placeholder="From TMS" />
+            </label>
+            <label className={label}>Package code
+              <input value={f.pkg} onChange={set('pkg')} className={field} autoComplete="off" placeholder="e.g. MC011A" />
+            </label>
+            <span className="col-span-2 -mt-2 block text-sm font-normal text-slate-500">Both optional — add later from Master. Two codes: type both, e.g. SC004A, SC068A.</span>
+          </div>
         )}
         {group && (
           <div className="space-y-3">

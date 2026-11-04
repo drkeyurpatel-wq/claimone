@@ -10,7 +10,7 @@ import { createClaim } from '@/lib/claims/api';
 import { fetchAllPayers } from '@/lib/rcm/api';
 import type { Payer } from '@/lib/claims/types';
 import { claimTypeFor } from '@/lib/rcm/payer';
-import { normCaseId, isCaseIdTaken } from '@/lib/rcm/pmjay';
+import { normCaseId, isCaseIdTaken, normPackageCodes } from '@/lib/rcm/pmjay';
 import { NoCentre } from '@/components/ui';
 
 const field = 'mt-1 min-h-12 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100';
@@ -21,7 +21,7 @@ export default function NewCase() {
   const canWrite = staff?.role === 'admin' || staff?.role === 'manager' || staff?.role === 'desk';
   const [payers, setPayers] = useState<Payer[]>([]);
   const [f, setF] = useState({ patient_name: '', admission_ref: '', patient_uhid: '', patient_phone: '', payer_id: '',
-    admitted_at: '', treating_doctor_name: '', estimated_amount: '', policy_number: '', case_id: '' });
+    admitted_at: '', treating_doctor_name: '', estimated_amount: '', policy_number: '', case_id: '', pkg: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => { fetchAllPayers().then(setPayers).catch(() => setError('Could not load the payer list. Please refresh.')); }, []);
@@ -44,7 +44,7 @@ export default function NewCase() {
         treating_doctor_name: f.treating_doctor_name.trim() || null, policy_number: f.policy_number.trim() || null,
         estimated_amount: f.estimated_amount ? Number(f.estimated_amount) : null,
         admitted_at: at.toISOString(), admission_date: f.admitted_at ? f.admitted_at.slice(0, 10) : new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }), case_source: 'manual',
-        ...(claimTypeFor(payer) === 'pmjay' ? { tpa_claim_number: normCaseId(f.case_id) } : {}),
+        ...(claimTypeFor(payer) === 'pmjay' ? { tpa_claim_number: normCaseId(f.case_id), package_code: normPackageCodes(f.pkg) } : {}),
       });
       router.push(`/case/${id}`);
     } catch (err) {
@@ -79,10 +79,14 @@ export default function NewCase() {
           </select>
         </label>
         {payers.find((p) => p.id === f.payer_id && claimTypeFor(p) === 'pmjay') && (
-          <label className="block text-base font-medium text-slate-800">PMJAY case ID
-            <input value={f.case_id} onChange={set('case_id')} className={field} inputMode="numeric" autoComplete="off" placeholder="From TMS, e.g. 2026102910013158" />
-            <span className="mt-1 block text-sm font-normal text-slate-500">Payments are matched on this. Add it later if TMS has not given it yet.</span>
-          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-base font-medium text-slate-800">PMJAY case ID
+              <input value={f.case_id} onChange={set('case_id')} className={field} inputMode="numeric" autoComplete="off" placeholder="From TMS" />
+            </label>
+            <label className="block text-base font-medium text-slate-800">Package code
+              <input value={f.pkg} onChange={set('pkg')} className={field} autoComplete="off" placeholder="e.g. MC011A, or two: SC004A, SC068A" />
+            </label>
+          </div>
         )}
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-base font-medium text-slate-800">Admitted on

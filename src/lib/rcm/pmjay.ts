@@ -174,3 +174,12 @@ export const normCaseId = (s: string) => s.replace(/\s+/g, '').toUpperCase() || 
 
 /** The database refuses a case ID that is already on another case. */
 export const isCaseIdTaken = (message: string) => /pmjay_case_uq/i.test(message);
+
+/**
+ * PMJAY package code(s) as typed: one code, or two for a dual package ("SC004A + SC068A").
+ * Stored as "SC004A, SC068A"; empty means not given (the field is optional).
+ */
+export function normPackageCodes(s: string): string | null {
+  const codes = s.toUpperCase().split(/[\s,;+/&]+/).map((x) => x.replace(/[^A-Z0-9-]/g, '')).filter(Boolean);
+  return codes.length ? [...new Set(codes)].join(', ') : null;
+}
