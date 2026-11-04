@@ -85,7 +85,7 @@ export default function ToCheck() {
       )}
 
       {!loading && money.receipts.length > 0 && (
-        <Section icon={Landmark} title="Money in the bank, not tied to a bill" sub="Confirm the suggested bill, or choose it."
+        <Section icon={Landmark} title="Credited in bank — patient not known" sub="The bank shows this money came in, but no letter or sheet says which patient it is for. Confirm the suggested patient, or choose one."
           count={money.receipts.length} amount={money.receipts.reduce((a, r) => a + r.unallocated, 0)}>
           <UnmatchedMoney open={money} canWrite={canWrite} onChanged={load} flash={flash} />
         </Section>
@@ -99,7 +99,7 @@ export default function ToCheck() {
       )}
 
       {!loading && bank.length > 0 && (
-        <Section icon={Clock} title="Paid on the letter, not seen in the bank" sub={`The bank statement covers these dates but shows no credit with this UTR, ${NOT_IN_BANK_DAYS}+ days on. Check with the bank or the payer.`}
+        <Section icon={Clock} title="Letter says paid — not in bank" sub={`The bank statement covers these dates but shows no credit with this UTR, ${NOT_IN_BANK_DAYS}+ days on. Check with the bank or the payer.`}
           count={bank.length} amount={bank.reduce((a, r) => a + r.amount, 0)}>
           <div className="flex justify-end px-4 pt-3">
             <button onClick={downloadBank} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"><Download className="h-4 w-4" /> Download list</button>

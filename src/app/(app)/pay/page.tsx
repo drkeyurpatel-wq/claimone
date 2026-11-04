@@ -186,7 +186,7 @@ export default function UploadPayments() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 md:px-6">
       <h1 className="text-2xl font-bold text-slate-900">Upload</h1>
-      <p className="mt-1 text-base text-slate-600">Add every money file here — TPA and insurer letters, the PMJAY sheet, the bank statement — then press <b>Save</b>.</p>
+      <p className="mt-1 text-base text-slate-600">Add the TPA and insurer letters or the PMJAY sheet, then press <b>Save</b>. A bank statement can go in too, to confirm the money arrived — that is optional.</p>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
         <label
@@ -277,7 +277,7 @@ export default function UploadPayments() {
               {result.cases?.problems.map((p, i) => <li key={i} className="text-amber-900">IP {p.ip}: {p.problem}</li>)}
               {result.bank && <li><b>{n(result.bank.inserted)}</b> bank credits added{result.bank.duplicates > 0 && ` · ${n(result.bank.duplicates)} were already there`}</li>}
               {result.auto.matched > 0 && <li><b>{n(result.auto.matched)}</b> bank credits matched to bills automatically</li>}
-              {result.auto.left > 0 && <li className="text-amber-900">{n(result.auto.left)} bank credits could not be tied to a bill — see To check</li>}
+              {result.auto.left > 0 && <li className="text-amber-900">{n(result.auto.left)} bank credits with no patient known — see To check</li>}
             </ul>
           </div>
         )}
