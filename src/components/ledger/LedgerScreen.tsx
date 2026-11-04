@@ -242,7 +242,7 @@ export function LedgerScreen({ archive = false }: { archive?: boolean }) {
                 {VIEW_COLUMNS.slice(1).map((col) => (
                   <th key={col.key} scope="col" className="border-b border-slate-200 px-3 py-2.5">{col.label}</th>
                 ))}
-                <th scope="col" className="sticky right-0 z-10 w-52 border-b border-slate-200 bg-slate-50 px-3 py-2.5 shadow-[-1px_0_0_#e2e8f0]">Next action</th>
+                <th scope="col" className="sticky right-0 z-10 w-52 border-b border-slate-200 bg-slate-50 px-3 py-2.5 shadow-[-1px_0_0_#e2e8f0]">{archive ? 'Status' : 'Next action'}</th>
               </tr>
             </thead>
             <tbody>
