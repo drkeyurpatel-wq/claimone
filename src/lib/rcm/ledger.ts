@@ -367,6 +367,9 @@ const esc = (v: unknown) => {
   let s = v == null ? '' : String(v);
   // text starting with = + - @ would run as a formula in Excel (numbers are passed as numbers)
   if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  // a long digit string (16-digit PMJAY case ID, numeric UTR / claim no.) or one with a leading 0 would become
+  // a rounded number in Excel (2.0261E+15, last digits lost): keep it as text
+  if (typeof v === 'string' && (/^\d{11,}$/.test(s) || /^0\d+$/.test(s))) return `="${s}"`;
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 const n = (v: number | null | undefined) => (v == null ? '' : Math.round(Number(v)));
@@ -374,7 +377,7 @@ const ymd = (d: string | null | undefined) => (d ? new Date(d.length === 10 ? `$
 
 export function toCsv(rows: LedgerRow[]): string {
   const head = ['Source', 'Admission date', 'Patient', 'IP number', 'UHID', 'Doctor', 'Payer', 'Pre-auth submitted', 'Pre-auth number', 'Pre-auth approved',
-    'Discharge date', 'Claim submitted', 'Claim number', 'Claimed', 'Approved', 'Received', 'TDS', 'Outstanding', 'Deduction', 'Deduction status', 'In bank', 'Days since discharge', 'Next action', 'Due'];
+    'Discharge date', 'Claim submitted', 'Claim no. / PMJAY case ID', 'Claimed', 'Approved', 'Received', 'TDS', 'Outstanding', 'Deduction', 'Deduction status', 'In bank', 'Days since discharge', 'Next action', 'Due'];
   const lines = rows.map(({ j: { c, money: m }, cut, next, cells, age }) => [
     SOURCE_LABEL[c.case_source ?? 'manual'] ?? '', ymd(c.admitted_at ?? c.admission_date), c.patient_name, c.admission_ref, c.patient_uhid, c.treating_doctor_name, c.clm_payers?.name ?? c.sponsor_name,
     ymd(c.preauth_submitted_at), c.tpa_preauth_number, n(c.preauth_approved_amount), ymd(c.discharged_at ?? c.discharge_date),

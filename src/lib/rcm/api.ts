@@ -171,9 +171,9 @@ export async function fetchArchive(centreId: string): Promise<Journey[]> {
 }
 
 /** In payment: a cut waits for Accept / Fight (our turn), a fought cut is chased; a part-paid bill needs its reason. */
-export function paymentStep(step: Step, stage: StageKey, m: CaseMoney | null, cut: Cut | null = null): Step {
+export function paymentStep(step: Step, stage: StageKey, m: CaseMoney | null, cut: Cut | null = null, now = new Date()): Step {
   if (stage !== 'payment') return step;
-  const c = cut && cutStep(cut);
+  const c = cut && cutStep(cut, now);
   if (c) return { ...step, desk: 'payment', key: 'wait_payment', ...c };
   // same rule as the ledger: any shortfall after a payment, once it is no longer awaited, is a decision
   if (!m || m.allocated <= 0 || m.balance <= 1) return step;

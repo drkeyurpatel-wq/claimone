@@ -101,7 +101,7 @@ describe('payments in parts', () => {
     const cut = cutOf(c, part, now);
     expect(cut.needsDecision).toBe(false);
     expect(cut.awaited).toMatchObject({ amount: 22000, parts: 1, lastPaid: '2026-10-20' });
-    const step = paymentStep(nextStep(c, now), stageOf(c, part), part, cut);
+    const step = paymentStep(nextStep(c, now), stageOf(c, part), part, cut, now);
     expect(step.ours).toBe(false);
     expect(step.label).toBe('Part-paid (1 payment) — ₹22,000 balance awaited from the payer');
   });

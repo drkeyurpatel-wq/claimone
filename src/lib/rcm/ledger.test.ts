@@ -19,7 +19,7 @@ const money = (o: Partial<CaseMoney>): CaseMoney => ({ receivable_id: 'r', claim
 function row(cl: Claim, m: CaseMoney | null = null, canWrite = true): LedgerRow {
   const step = nextStep(cl, NOW);
   const stage = stageOf(cl, m, step);
-  const j: Journey = { c: cl, money: m, stage, step: paymentStep(step, stage, m, cutOf(cl, m, NOW)) };
+  const j: Journey = { c: cl, money: m, stage, step: paymentStep(step, stage, m, cutOf(cl, m, NOW), NOW) };
   return ledgerRow(j, canWrite, NOW);
 }
 /** The one cell to fill now, if any. */
@@ -366,5 +366,15 @@ describe('PMJAY: after the claim goes, the wait is for the payment sheet', () =>
     const r = row(c({ status: 'claim_submitted', submitted_at: '2026-10-20T12:00:00+05:30', discharged_at: 'x', claimed_amount: 5000 }));
     expect(r.next.text).toMatch(/claim decision/);
     expect(r.view.pay.text).toBe('');
+  });
+});
+
+describe('Excel download keeps long numbers as text', () => {
+  it('16-digit PMJAY case ID and leading-zero numbers are not turned into rounded numbers', () => {
+    const csv = toCsv([row(c({ claim_type: 'pmjay', tpa_claim_number: '2026102910013158', patient_uhid: '00123', admission_ref: 'IPS1262407' }))]);
+    expect(csv).toContain('="2026102910013158"');
+    expect(csv).toContain('="00123"');
+    expect(csv).toContain(',IPS1262407,');
+    expect(csv.split('\r\n')[0]).toContain('Claim no. / PMJAY case ID');
   });
 });

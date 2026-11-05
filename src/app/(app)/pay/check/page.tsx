@@ -56,7 +56,8 @@ export default function ToCheck() {
 
   const downloadBank = () => {
     const rows = [['Date', 'Amount', 'UTR', 'Patient', 'Payer'], ...(bank ?? []).map((r) => [r.value_date, String(Math.round(r.amount)), r.reference ?? '', r.patient ?? '', r.payer ?? ''])];
-    const csv = '﻿' + rows.map((r) => r.map((v) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join(',')).join('\r\n');
+    // long numeric UTRs stay text in Excel
+    const csv = '﻿' + rows.map((r) => r.map((v) => (/^\d{11,}$/.test(v) ? `="${v}"` : /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join(',')).join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     a.download = `Not in bank ${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })}.csv`;
