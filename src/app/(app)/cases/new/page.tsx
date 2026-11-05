@@ -10,7 +10,7 @@ import { createClaim } from '@/lib/claims/api';
 import { fetchAllPayers } from '@/lib/rcm/api';
 import type { Payer } from '@/lib/claims/types';
 import { claimTypeFor } from '@/lib/rcm/payer';
-import { normCaseId, isCaseIdTaken, normPackageCodes } from '@/lib/rcm/pmjay';
+import { normCaseId, isCaseIdTaken, normPackageCodes, normIp, ipLooksWrong, IP_WRONG_MSG } from '@/lib/rcm/pmjay';
 import { PackageHint, packageFields, usePackageAmount } from '@/components/ledger/PackageHint';
 
 import { NoCentre } from '@/components/ui';
@@ -38,12 +38,13 @@ export default function NewCase() {
     e.preventDefault();
     const payer = payers.find((p) => p.id === f.payer_id);
     if (!payer) { setError('Choose who pays.'); return; }
+    if (ipLooksWrong(f.admission_ref)) { setError(IP_WRONG_MSG); return; }
     setBusy(true); setError('');
     try {
       const at = f.admitted_at ? new Date(f.admitted_at) : new Date();
       const { id } = await createClaim({
         tenant_id: tenantId, centre_id: centreId, payer_id: payer.id, claim_type: claimTypeFor(payer),
-        patient_name: f.patient_name.trim(), admission_ref: f.admission_ref.trim() || null,
+        patient_name: f.patient_name.trim(), admission_ref: normIp(f.admission_ref) || null,
         patient_uhid: f.patient_uhid.trim() || null, patient_phone: f.patient_phone.trim() || null,
         treating_doctor_name: f.treating_doctor_name.trim() || null, policy_number: f.policy_number.trim() || null,
         estimated_amount: f.estimated_amount ? Number(f.estimated_amount) : isPmjay ? pkgAmt?.nabh ?? null : null,

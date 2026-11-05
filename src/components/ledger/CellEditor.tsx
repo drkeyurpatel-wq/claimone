@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Loader2, CheckCircle2, ExternalLink, FileText, MessageSquareWarning } from 'lucide-react';
 import type { Claim } from '@/lib/claims/types';
 import { transition, updateClaimFields } from '@/lib/claims/api';
-import { normCaseId, isCaseIdTaken, normPackageCodes } from '@/lib/rcm/pmjay';
+import { normCaseId, isCaseIdTaken, normPackageCodes, normIp, ipLooksWrong, IP_WRONG_MSG } from '@/lib/rcm/pmjay';
 import { PackageHint, packageFields, usePackageAmount } from '@/components/ledger/PackageHint';
 
 import { fetchReceivable } from '@/lib/recon/api';
@@ -373,13 +373,14 @@ function PatientForm({ r, canWrite, onClose, onSaved }: { r: LedgerRow; canWrite
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
   const save = async () => {
     if (!f.patient_name.trim()) { setError('Enter the patient name.'); return; }
-    if (!f.admission_ref.trim()) { setError('Enter the IP number.'); return; }
+    if (!normIp(f.admission_ref)) { setError('Enter the IP number.'); return; }
+    if (ipLooksWrong(f.admission_ref)) { setError(IP_WRONG_MSG); return; }
     if (f.admitted && f.admitted > today()) { setError('Admission date cannot be in the future.'); return; }
     setBusy(true); setError('');
     try {
       const was = dayOf(c.admitted_at ?? c.admission_date);
       await updateClaimFields(c.id, {
-        patient_name: f.patient_name.trim(), admission_ref: f.admission_ref.trim(), patient_uhid: f.patient_uhid.trim() || null,
+        patient_name: f.patient_name.trim(), admission_ref: normIp(f.admission_ref), patient_uhid: f.patient_uhid.trim() || null,
         estimated_amount: f.estimated_amount === '' ? (pmjay ? pkgAmt?.nabh ?? null : null) : Number(f.estimated_amount),
         treating_doctor_name: f.treating_doctor_name.trim() || null, patient_phone: f.patient_phone.trim() || null,
         ...(pmjay ? { tpa_claim_number: normCaseId(f.case_id), package_code: normPackageCodes(f.pkg), ...(pkgChanged || !c.package_amount ? packageFields(pkgAmt) : {}) } : {}),

@@ -204,3 +204,10 @@ export function normPackageCodes(s: string): string | null {
   const codes = s.toUpperCase().split(/[\s,;+/&]+/).map((x) => x.replace(/[^A-Z0-9-]/g, '')).filter(Boolean);
   return codes.length ? [...new Set(codes)].join(', ') : null;
 }
+
+/** IP no. as typed or pasted from Excel: quotes, tabs and spaces removed ("\tIPS 1262452" → "IPS1262452"). */
+export const normIp = (s: string) => s.replace(/["'`\t\r\n\s]/g, '').toUpperCase();
+
+/** An IP no. that is only digits is almost always an amount typed in the wrong box (eCW IP nos start IPS / DIP). */
+export const ipLooksWrong = (s: string) => /^\d+$/.test(normIp(s));
+export const IP_WRONG_MSG = 'The IP number starts with IPS or DIP (as in eCW). This looks like an amount — check the IP number.';

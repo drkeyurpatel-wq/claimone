@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPmjaySheet, normPackageCodes, parsePmjay, pmjayAmount, pmjayDate, pmjayWarnings } from './pmjay';
+import { ipLooksWrong, isPmjaySheet, normIp, normPackageCodes, parsePmjay, pmjayAmount, pmjayDate, pmjayWarnings } from './pmjay';
 import master from './hbp2022.json';
 import type { PackageMaster } from './hbp';
 
@@ -111,5 +111,15 @@ describe('sheet amounts checked against HBP 2022', () => {
       { ip: 'B', note: 'NABH and NO NABH are swapped — should be NABH ₹15,730, NO NABH ₹14,300' },
       { ip: 'E', note: 'Package MC030GJA pays NABH ₹4,427.5, NO NABH ₹4,025 — sheet has ₹5,000 / ₹4,025' },
     ]);
+  });
+});
+
+describe('IP number as typed', () => {
+  it('cleans pasted quotes, tabs and spaces; flags a bare number', () => {
+    expect(normIp('"\tIPS1262452"')).toBe('IPS1262452');
+    expect(normIp(' ips 1262452 ')).toBe('IPS1262452');
+    expect(normIp('DIP-1-26-2978')).toBe('DIP-1-26-2978');
+    expect(ipLooksWrong('91714')).toBe(true);
+    expect(ipLooksWrong('IPS1262452')).toBe(false);
   });
 });

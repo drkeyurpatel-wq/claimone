@@ -8,7 +8,7 @@ import { fetchAllPayers, addPayer, findOpenCasesByName } from '@/lib/rcm/api';
 import { claimTypeFor, groupAsPayer, payerGroup, PAYER_GROUPS, type PayerGroup } from '@/lib/rcm/payer';
 import type { Payer } from '@/lib/claims/types';
 import { Modal, field, label } from './Modal';
-import { normCaseId, isCaseIdTaken, normPackageCodes } from '@/lib/rcm/pmjay';
+import { normCaseId, isCaseIdTaken, normPackageCodes, normIp, ipLooksWrong, IP_WRONG_MSG } from '@/lib/rcm/pmjay';
 import { PackageHint, packageFields, usePackageAmount } from '@/components/ledger/PackageHint';
 
 
@@ -47,7 +47,8 @@ export function AddPatient({ tenantId, centreId, doctors = [], onClose, onSaved 
     const isNew = f.payer_id === NEW;
     const payer = payers?.find((p) => p.id === f.payer_id);
     if (!f.patient_name.trim()) { setError('Enter the patient name.'); return; }
-    if (!f.admission_ref.trim()) { setError('Enter the IP number.'); return; }
+    if (!normIp(f.admission_ref)) { setError('Enter the IP number.'); return; }
+    if (ipLooksWrong(f.admission_ref)) { setError(IP_WRONG_MSG); return; }
     if (f.doctor.trim().length < 3) { setError('Enter the treating doctor.'); return; }
     if (!group) { setError('Select the payer category.'); return; }
     if (isNew && f.new_payer.trim().length < 3) { setError('Enter the full name of the new payer.'); return; }
@@ -64,7 +65,7 @@ export function AddPatient({ tenantId, centreId, doctors = [], onClose, onSaved 
       const payerId = isNew ? await addPayer(f.new_payer, group) : payer!.id;
       const { id } = await createClaim({
         tenant_id: tenantId, centre_id: centreId, payer_id: payerId, claim_type: claimTypeFor(payer ?? groupAsPayer(group)),
-        patient_name: f.patient_name.trim(), admission_ref: f.admission_ref.trim(), treating_doctor_name: f.doctor.trim(),
+        patient_name: f.patient_name.trim(), admission_ref: normIp(f.admission_ref), treating_doctor_name: f.doctor.trim(),
         estimated_amount: f.estimated_amount ? Number(f.estimated_amount) : group === 'pmjay' ? pkgAmt?.nabh ?? null : null,
         admitted_at: day === today() ? new Date().toISOString() : new Date(`${day}T12:00:00+05:30`).toISOString(),
         admission_date: day, case_source: 'manual',
