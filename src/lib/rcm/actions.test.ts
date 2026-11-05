@@ -42,3 +42,26 @@ describe('case screen buttons', () => {
     expect(actionsFor(nextStep(c), c, 'portal').find((a) => a.to === 'written_off')?.managerOnly).toBe(true);
   });
 });
+
+describe('amount boxes start with the amount already on the case', () => {
+  const base = { created_at: '2026-10-28T08:00:00+05:30', updated_at: '2026-10-28T08:00:00+05:30', claim_type: 'cashless',
+    claimed_amount: null, bill_amount: null, approved_amount: null, preauth_approved_amount: null, estimated_amount: null, package_amount: null };
+  const amountOf = (o: Record<string, unknown>, id: string) => {
+    const c = { ...base, ...o } as unknown as Claim;
+    return actionsFor(nextStep(c), c, 'portal').find((a) => a.id === id)?.amount?.value;
+  };
+  it('pre-auth approval starts with the estimate (or the PMJAY package amount)', () => {
+    expect(amountOf({ status: 'preauth_pending', estimated_amount: 85000 }, 'approved')).toBe(85000);
+    expect(amountOf({ status: 'preauth_pending', claim_type: 'pmjay', package_amount: 91714 }, 'approved')).toBe(91714);
+  });
+  it('claim submission starts with the bill, else the pre-auth approval, else the estimate', () => {
+    const d = { status: 'preauth_approved', discharged_at: '2026-10-29T09:00:00+05:30' };
+    expect(amountOf({ ...d, preauth_approved_amount: 80000, estimated_amount: 85000 }, 'claim_sent')).toBe(80000);
+    expect(amountOf({ ...d, bill_amount: 92000, preauth_approved_amount: 80000 }, 'claim_sent')).toBe(92000);
+    expect(amountOf({ status: 'draft', discharged_at: '2026-10-29T09:00:00+05:30', estimated_amount: 50000 }, 'claim_sent')).toBe(50000);
+  });
+  it('claim approval (full or part) starts with the amount claimed', () => {
+    expect(amountOf({ status: 'claim_submitted', submitted_at: '2026-10-30T09:00:00+05:30', claimed_amount: 92000 }, 'full')).toBe(92000);
+    expect(amountOf({ status: 'claim_submitted', submitted_at: '2026-10-30T09:00:00+05:30', claimed_amount: 92000 }, 'part')).toBe(92000);
+  });
+});

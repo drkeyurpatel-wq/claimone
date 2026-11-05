@@ -86,6 +86,10 @@ function StatusForm({ r, col, isManager, onClose, onSaved }: {
     if (pick.amount && !(amount !== '' && Number(amount) > 0)) { setError('Enter an amount above ₹0.'); return; }
     if (pick.note?.required && !note.trim()) { setError(`Fill in: ${pick.note.label}`); return; }
     if (pick.id === 'part' && !why) { setError('Select the deduction reason.'); return; }
+    // the box starts with the amount claimed: a partial approval must be below it
+    if (pick.id === 'part' && c.claimed_amount != null && Number(amount) >= Number(c.claimed_amount)) {
+      setError(`A partial approval is less than the amount claimed (${rs(Number(c.claimed_amount))}). Change the amount, or choose Approved in full.`); return;
+    }
     if (dated && day > today()) { setError('The date cannot be in the future.'); return; }
     setBusy(true); setError('');
     try {

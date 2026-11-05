@@ -28,7 +28,11 @@ export function actionsFor(step: Step, c: Claim, route: Route): CaseAction[] {
   const w = ROUTE_WORDS[route];
   const preauthRef = { field: 'tpa_preauth_number' as const, label: 'Pre-auth number (optional)', value: c.tpa_preauth_number };
   const claimRef = { field: 'tpa_claim_number' as const, label: c.claim_type === 'pmjay' ? 'PMJAY case ID' : 'Claim number (optional)', value: c.tpa_claim_number };
-  const billed = num(c.claimed_amount) ?? num(c.bill_amount) ?? null;
+  // every amount box starts with the latest figure already on the case (still editable): the estimate (or PMJAY
+  // package amount) → the pre-auth approval → the bill / claimed amount
+  const estimate = num(c.estimated_amount) ?? num(c.package_amount) ?? null;
+  const preauthOk = num(c.preauth_approved_amount) ?? (c.status === 'preauth_approved' || c.status === 'preauth_enhanced' ? num(c.approved_amount) : null);
+  const billed = num(c.claimed_amount) ?? num(c.bill_amount) ?? preauthOk ?? estimate;
 
   switch (step.key) {
     case 'send_preauth':
@@ -36,7 +40,7 @@ export function actionsFor(step: Step, c: Claim, route: Route): CaseAction[] {
     case 'wait_preauth':
       return [
         { id: 'approved', label: 'Approved', to: 'preauth_approved', tone: 'success',
-          amount: { field: 'approved_amount', label: 'Approved amount (₹)', value: num(c.approved_amount) }, ref: preauthRef },
+          amount: { field: 'approved_amount', label: 'Approved amount (₹)', value: num(c.approved_amount) ?? estimate }, ref: preauthRef },
         { id: 'query', label: 'Query raised', to: 'preauth_query', tone: 'warning', note: { label: 'Query details', required: true } },
         { id: 'rejected', label: 'Rejected', to: 'preauth_rejected', tone: 'danger', note: { label: 'Rejection reason', required: true } },
       ];
@@ -62,7 +66,7 @@ export function actionsFor(step: Step, c: Claim, route: Route): CaseAction[] {
         { id: 'full', label: 'Approved in full', to: 'claim_approved', tone: 'success',
           amount: { field: 'approved_amount', label: 'Approved amount (₹)', value: billed }, ref: claimRef },
         { id: 'part', label: 'Partially approved', to: 'claim_partial', tone: 'warning',
-          amount: { field: 'approved_amount', label: 'Approved amount (₹)', value: null }, ref: claimRef,
+          amount: { field: 'approved_amount', label: 'Approved amount (₹)', value: billed }, ref: claimRef,
           note: { label: 'Deduction details (as per approval letter)', required: true } },
         { id: 'query', label: 'Query raised', to: 'claim_query', tone: 'warning', note: { label: 'Query details', required: true } },
         { id: 'rejected', label: 'Rejected', to: 'claim_rejected', tone: 'danger', note: { label: 'Rejection reason', required: true } },

@@ -6,5 +6,5 @@ export const CASE_SELECT =
   'tpa_claim_number, tpa_preauth_number, preauth_submitted_at, submitted_at, is_query_pending, case_source, created_at, updated_at, status_changed_at, ' +
   'cut_decision, cut_note, cut_decided_at, preauth_approved_amount, query_replied_at, dispute_level, dispute_sent_at, ' +
   'patient_phone, patient_gender, patient_age_years, member_id, treating_doctor_hpr_id, treatment_type, policy_number, abha_id, ' +
-  'icd_code, primary_diagnosis, package_code, package_name, procedure_name, ' +
+  'icd_code, primary_diagnosis, package_code, package_name, package_amount, non_nabh_amount, procedure_name, ' +
   'clm_payers!clm_claims_payer_id_fkey(id, code, name, type, channel, is_nhcx_live, nhcx_code)';
