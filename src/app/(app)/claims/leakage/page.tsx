@@ -1,99 +1,33 @@
 'use client';
-// Leakage (ClaimOne's "where the money is lost"): every disallowed rupee,
-// by reason, payer and doctor — and how much of it a process fix recovers.
+// Reports → Deductions.
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingDown } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
+import { sb } from '@/lib/supabase/browser';
 import { fetchLeakage } from '@/lib/claims/api';
 import type { LeakageRow } from '@/lib/claims/types';
-import { DISALLOWANCE_CATEGORIES, type DisallowanceCategory } from '@/lib/engine/settlement';
-import { PageHeader, Skeleton, NoCentre, Empty, StatCard, inrShort } from '@/components/ui';
+import { disputesByMonth, type DisputeCase } from '@/lib/rcm/summary';
+import { NoCentre } from '@/components/ui';
+import { DeductionsView } from '@/components/report/DeductionsView';
 
-function Bars({ title, rows }: { title: string; rows: { label: string; amount: number; preventable?: boolean }[] }) {
-  const max = Math.max(1, ...rows.map((r) => r.amount));
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <h2 className="mb-4 text-sm font-bold text-slate-900">{title}</h2>
-      {rows.length === 0 ? <p className="text-sm text-slate-400">No data yet</p> : (
-        <div className="space-y-2.5">
-          {rows.map((r) => (
-            <div key={r.label} className="grid grid-cols-12 items-center gap-3 text-sm">
-              <span className="col-span-4 truncate text-slate-700" title={r.label}>{r.label}</span>
-              <div className="col-span-6 h-5 rounded bg-slate-100">
-                <div className={`h-5 rounded ${r.preventable === false ? 'bg-slate-400' : 'bg-rose-500'}`} style={{ width: `${(100 * r.amount) / max}%` }} />
-              </div>
-              <span className="tabular col-span-2 text-right font-semibold">{inrShort(r.amount)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-export default function Leakage() {
+export default function Deductions() {
   const centreId = useAuthStore((s) => s.activeCentreId);
-  const [rows, setRows] = useState<LeakageRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<LeakageRow[] | null>(null);
+  const [cases, setCases] = useState<DisputeCase[]>([]);
   const [months, setMonths] = useState(6);
 
   useEffect(() => {
     if (!centreId) return;
-    setLoading(true);
-    fetchLeakage(centreId).then((r) => { setRows(r); setLoading(false); });
+    setRows(null);
+    Promise.all([
+      fetchLeakage(centreId),
+      sb().from('clm_claims').select('cut_decision, cut_decided_at, status, claimed_amount, approved_amount, deduction_amount')
+        .eq('centre_id', centreId).not('cut_decision', 'is', null).limit(20000),
+    ]).then(([l, d]) => { setRows(l); setCases((d.data ?? []) as DisputeCase[]); });
   }, [centreId]);
-
-  const recent = useMemo(() => {
-    const from = new Date(); from.setMonth(from.getMonth() - months + 1); from.setDate(1);
-    return rows.filter((r) => new Date(r.month) >= from);
-  }, [rows, months]);
-  // cuts being fought are not lost (yet): shown apart, left out of every total below
-  const fighting = useMemo(() => recent.filter((r) => r.kind === 'fighting'), [recent]);
-  const fightingTotal = fighting.reduce((s, r) => s + Number(r.amount), 0);
-  const lost = useMemo(() => recent.filter((r) => r.kind !== 'fighting'), [recent]);
-
-  const group = (key: (r: LeakageRow) => string, byReason = false, top = 10) => {
-    const m = new Map<string, { amount: number; preventable?: boolean }>();
-    for (const r of lost) {
-      const k = key(r); const v = m.get(k) ?? { amount: 0, preventable: byReason ? r.is_preventable : undefined };
-      v.amount += Number(r.amount); m.set(k, v);
-    }
-    return [...m.entries()].map(([label, v]) => ({ label, ...v })).sort((a, b) => b.amount - a.amount).slice(0, top);
-  };
-
-  const total = lost.reduce((s, r) => s + Number(r.amount), 0);
-  const preventable = lost.filter((r) => r.is_preventable).reduce((s, r) => s + Number(r.amount), 0);
-  const rejections = lost.filter((r) => r.kind === 'rejection').reduce((s, r) => s + r.items, 0);
+  const disputes = useMemo(() => disputesByMonth(cases, 6), [cases]);
 
   if (!centreId) return <NoCentre />;
-  return (
-    <div>
-      <PageHeader title="Leakage" sub="Money claimed but not paid, by reason — approval cuts, short payments and settlement deductions" icon={TrendingDown}>
-        <select aria-label="Period" value={months} onChange={(e) => setMonths(Number(e.target.value))} className="min-h-11 rounded-lg border border-slate-200 px-2 text-sm">
-          <option value={3}>Last 3 months</option><option value={6}>Last 6 months</option><option value={12}>Last 12 months</option>
-        </select>
-      </PageHeader>
-      {loading ? <div className="p-6"><Skeleton rows={10} /></div> : rows.length === 0 ? (
-        <div className="m-6 rounded-2xl border bg-white"><Empty icon={TrendingDown} title="No deductions recorded yet" sub="This fills when a claim is approved for less than billed, or a payment comes in short and its reason is given." /></div>
-      ) : (
-        <div className="space-y-4 px-6 py-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-            <StatCard label="Disallowed" value={inrShort(total)} icon={TrendingDown} tone="rose" />
-            <StatCard label="Preventable" value={inrShort(preventable)} sub={total ? `${Math.round((100 * preventable) / total)}% — fixable at admission and billing` : undefined} icon={TrendingDown} tone="amber" />
-            <StatCard label="Rejected claims" value={rejections} icon={TrendingDown} />
-            <StatCard label="Being fought" value={inrShort(fightingTotal)} sub={fighting.length ? `${fighting.reduce((s, r) => s + r.items, 0)} files — not counted as lost` : 'No cuts being fought'} icon={TrendingDown} tone="amber" />
-          </div>
-          <Bars title="By reason" rows={group((r) => DISALLOWANCE_CATEGORIES[r.category as DisallowanceCategory]?.label ?? r.category, true)} />
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Bars title="By payer" rows={group((r) => r.payer_name)} />
-            <Bars title="By treating doctor" rows={group((r) => r.doctor_name)} />
-          </div>
-          <p className="flex items-center gap-4 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-rose-500" /> Preventable — process fix recovers it</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-slate-400" /> Policy terms — not recoverable</span>
-          </p>
-        </div>
-      )}
-    </div>
-  );
+  if (!rows) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-teal-600" /></div>;
+  return <DeductionsView rows={rows} months={months} setMonths={setMonths} disputes={disputes} />;
 }

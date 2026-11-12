@@ -10,14 +10,16 @@ import { sb } from '@/lib/supabase/browser';
 import { fetchJourneys, type Journey } from '@/lib/rcm/api';
 import { fetchLeakage } from '@/lib/claims/api';
 import { ledgerRow } from '@/lib/rcm/ledger';
-import { BUCKETS, deductionGrid, disputesByMonth, outstandingByPayer, stuck, thisWeek, type DisputeCase } from '@/lib/rcm/summary';
+import { deductionGrid, disputesByMonth, stuck, thisWeek, type DisputeCase } from '@/lib/rcm/summary';
+import { BUCKETS, type Ageing } from '@/lib/rcm/overview';
+import { loadOwed } from '@/lib/rcm/reports';
+import { BucketBar, BucketLegend } from '@/components/report/kit';
 import type { LeakageRow } from '@/lib/claims/types';
 import { NoCentre } from '@/components/ui';
 
 const rs = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 const lakh = (n: number) => (Math.abs(n) >= 1e7 ? `₹${(n / 1e7).toFixed(2)} Cr` : Math.abs(n) >= 1e5 ? `₹${(n / 1e5).toFixed(1)} L` : rs(n));
 const monthName = (k: string) => new Date(`${k}-15T12:00:00+05:30`).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
-const BUCKET_COLOR = ['#0d9488', '#d97706', '#ea580c', '#dc2626'];
 
 function Exhibit({ n, title, children, note }: { n: number; title: string; children: React.ReactNode; note?: string }) {
   return (
@@ -36,6 +38,7 @@ export default function SummaryPage() {
   const isManager = staff?.role === 'admin' || staff?.role === 'manager';
   const [all, setAll] = useState<Journey[] | null>(null);
   const [leak, setLeak] = useState<LeakageRow[]>([]);
+  const [age, setAge] = useState<Ageing | null>(null);
   const [disputes, setDisputes] = useState<DisputeCase[]>([]);
   const [approvals, setApprovals] = useState<{ amount: number }[] | undefined>(undefined);
   const [settled, setSettled] = useState<{ net: number }[] | undefined>(undefined);
@@ -47,6 +50,7 @@ export default function SummaryPage() {
     Promise.all([
       fetchJourneys(centreId),
       fetchLeakage(centreId),
+      loadOwed(centreId),
       sb().from('clm_claims').select('cut_decision, cut_decided_at, status, claimed_amount, approved_amount, deduction_amount')
         .eq('centre_id', centreId).not('cut_decision', 'is', null).limit(20000),
       // claim approvals in the last 7 days, from the status history (one per file)
@@ -57,8 +61,8 @@ export default function SummaryPage() {
       // settled this week: by the date the money was paid
       sb().from('clm_settlements').select('net_amount, clm_claims!inner(centre_id)').eq('clm_claims.centre_id', centreId)
         .gte('payment_date', new Date(Date.now() - 7 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })).limit(5000),
-    ]).then(([j, l, d, a, st]) => {
-      setAll(j); setLeak(l); setDisputes((d.data ?? []) as DisputeCase[]);
+    ]).then(([j, l, ag, d, a, st]) => {
+      setAll(j); setLeak(l); setAge(ag); setDisputes((d.data ?? []) as DisputeCase[]);
       if (!a.error) {
         const one = new Map<string, number>();
         for (const x of (a.data ?? []) as unknown as { claim_id: string; clm_claims: { approved_amount: number | null } }[]) one.set(x.claim_id, Number(x.clm_claims?.approved_amount ?? 0));
@@ -72,7 +76,6 @@ export default function SummaryPage() {
   const now = useMemo(() => new Date(), []);
   const rows = useMemo(() => (all ?? []).map((j) => ledgerRow(j, false, now)), [all, now]);
   const week = useMemo(() => thisWeek(rows, now, approvals, settled), [rows, now, approvals, settled]);
-  const owed = useMemo(() => outstandingByPayer(rows), [rows]);
   const late = useMemo(() => stuck(rows), [rows]);
   const since = useMemo(() => { const d = new Date(now.getFullYear(), now.getMonth() - 5, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; }, [now]);
   const grid = useMemo(() => deductionGrid(leak, since), [leak, since]);
@@ -81,12 +84,12 @@ export default function SummaryPage() {
   if (!centreId) return <NoCentre />;
   if (!isManager) return <div className="py-20 text-center text-base text-slate-500">The weekly summary is for admins and managers. <Link href="/master" className="inline-flex min-h-11 items-center text-teal-700 underline">Back to Master</Link></div>;
   if (error) return <p role="alert" className="m-6 rounded-lg bg-rose-50 p-3 text-base text-rose-800">{error}</p>;
-  if (!all) return <div className="flex justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-teal-600" /></div>;
+  if (!all || !age) return <div className="flex justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-teal-600" /></div>;
 
   const centre = centres.find((c) => c.id === centreId)?.name ?? '';
-  const totalOwed = owed.reduce((s, p) => s + p.total, 0);
-  const over60 = owed.reduce((s, p) => s + p.buckets[BUCKETS[2]] + p.buckets[BUCKETS[3]], 0);
-  const maxOwed = Math.max(1, ...owed.map((p) => p.total));
+  const owed = age.byPayer;
+  const totalOwed = age.total;
+  const over60 = owed.reduce((s, p) => s + p.buckets[BUCKETS[2]] + p.buckets[BUCKETS[3]] + p.buckets[BUCKETS[4]], 0);
   const recovered = months.reduce((s, m) => s + m.recovered, 0);
   const lateOurs = late.filter((s) => s.ours).reduce((s, x) => s + x.cases, 0);
   const latePayer = late.filter((s) => !s.ours).reduce((s, x) => s + x.cases, 0);
@@ -105,7 +108,7 @@ export default function SummaryPage() {
       <div className="mt-5 rounded-xl border-l-4 border-teal-600 bg-slate-50 p-4 text-base text-slate-800 print:bg-white">
         <p className="font-semibold">Key messages</p>
         <ul className="mt-1 list-disc space-y-0.5 pl-5">
-          <li>Payers owe <b>{lakh(totalOwed)}</b> on open files; <b>{lakh(over60)}</b> of it is over 60 days from discharge.</li>
+          <li><b>{lakh(totalOwed)}</b> is owed on {age.count.toLocaleString('en-IN')} open bills; <b>{lakh(over60)}</b> of it is over 60 days old.</li>
           <li>This week: <b>{week.claimsSubmitted}</b> claims submitted ({lakh(week.claimed)}), <b>{week.approvals}</b> approved ({lakh(week.approved)}), <b>{week.settled}</b> settled ({lakh(week.settledNet)} net).</li>
           <li><b>{lateOurs}</b> files are overdue on our side and <b>{latePayer}</b> are overdue with the payer.</li>
           <li>Deductions in the last 6 months: <b>{lakh(grid.total)}</b>{grid.categories[0] ? <>, mostly <b>{grid.categories[0]}</b> ({lakh(grid.totals[grid.categories[0]])})</> : null}. Recovered by disputing: <b>{lakh(recovered)}</b>.</li>
@@ -121,29 +124,20 @@ export default function SummaryPage() {
         </div>
       </Exhibit>
 
-      <Exhibit n={2} title="Outstanding by payer and age" note="Age is days since discharge. Amount: unpaid balance, else the approval, else the claim.">
+      <Exhibit n={2} title="Money owed by payer and age" note="Open bills with a balance. Age is days since the bill date — the same numbers as Reports → Money owed.">
         {owed.length === 0 ? <p className="text-base text-slate-500">Nothing outstanding.</p> : <>
-          <div className="space-y-2">
-            {owed.slice(0, 10).map((p) => (
-              <div key={p.payer}>
-                <div className="flex justify-between text-[15px]"><span className="font-medium text-slate-800">{p.payer}</span><span className="tabular-nums font-semibold">{lakh(p.total)}</span></div>
-                <div className="mt-1 flex h-5 overflow-hidden rounded bg-slate-100" style={{ width: `${Math.max(4, (p.total / maxOwed) * 100)}%` }}>
-                  {BUCKETS.map((b, i) => p.buckets[b] > 0 && <div key={b} title={`${b}: ${rs(p.buckets[b])}`} style={{ width: `${(p.buckets[b] / p.total) * 100}%`, background: BUCKET_COLOR[i] }} />)}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-600">{BUCKETS.map((b, i) => <span key={b} className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded-sm" style={{ background: BUCKET_COLOR[i] }} />{b}</span>)}</div>
-          <div className="mt-4 overflow-x-auto">
+          <BucketLegend />
+          <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[640px] border-collapse">
-              <thead><tr><th className={th}>Payer</th><th className={`${th} text-right`}>Files</th>{BUCKETS.map((b) => <th key={b} className={`${th} text-right`}>{b}</th>)}<th className={`${th} text-right`}>Total</th></tr></thead>
+              <thead><tr><th className={th}>Payer</th><th className={`${th} text-right`}>Bills</th>{BUCKETS.map((b) => <th key={b} className={`${th} text-right`}>{b}</th>)}<th className={`${th} text-right`}>Total</th></tr></thead>
               <tbody>
                 {owed.map((p) => (
-                  <tr key={p.payer}><td className={td}>{p.payer}</td><td className={`${td} text-right`}>{p.cases}</td>
-                    {BUCKETS.map((b, i) => <td key={b} className={`${td} text-right ${i >= 2 && p.buckets[b] > 0 ? 'font-semibold text-rose-700' : ''}`}>{p.buckets[b] ? rs(p.buckets[b]) : '—'}</td>)}
+                  <tr key={p.name}><td className={td}><span className="block">{p.name}</span><span className="mt-1 block max-w-[14rem]"><BucketBar buckets={p.buckets} total={p.total} label={p.name} format={lakh} /></span></td>
+                    <td className={`${td} text-right`}>{p.count}</td>
+                    {BUCKETS.map((b, i) => <td key={b} className={`${td} text-right ${i >= 3 && p.buckets[b] > 0 ? 'font-semibold text-rose-700' : ''}`}>{p.buckets[b] ? rs(p.buckets[b]) : '—'}</td>)}
                     <td className={`${td} text-right font-semibold`}>{rs(p.total)}</td></tr>
                 ))}
-                <tr className="bg-slate-50 font-bold"><td className={td}>Total</td><td className={`${td} text-right`}>{owed.reduce((s, p) => s + p.cases, 0)}</td>
+                <tr className="bg-slate-50 font-bold"><td className={td}>Total</td><td className={`${td} text-right`}>{age.count}</td>
                   {BUCKETS.map((b) => <td key={b} className={`${td} text-right`}>{rs(owed.reduce((s, p) => s + p.buckets[b], 0))}</td>)}
                   <td className={`${td} text-right`}>{rs(totalOwed)}</td></tr>
               </tbody>

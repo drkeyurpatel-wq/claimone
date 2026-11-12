@@ -36,7 +36,7 @@ const r0 = (n: number) => Math.round(n);
 export interface Ageing {
   total: number; count: number; over90: number;
   byCategory: { category: Category; total: number; buckets: Record<Bucket, number> }[];
-  byPayer: { name: string; total: number; over90: number; count: number }[];
+  byPayer: { id: string | null; name: string; total: number; over90: number; count: number; buckets: Record<Bucket, number> }[];
 }
 
 /** Open money only: bills with a balance still due (over-received and settled bills are left out). */
@@ -44,13 +44,13 @@ export function ageing(bills: OpenBill[], payers: Map<string, PayerInfo>): Agein
   const open = bills.filter((b) => b.status !== 'closed' && b.balance > 1);
   const cat = new Map<Category, { total: number; buckets: Record<Bucket, number> }>();
   for (const c of CATEGORIES) cat.set(c, { total: 0, buckets: Object.fromEntries(BUCKETS.map((k) => [k, 0])) as Record<Bucket, number> });
-  const payer = new Map<string, { total: number; over90: number; count: number }>();
+  const payer = new Map<string, { id: string | null; total: number; over90: number; count: number; buckets: Record<Bucket, number> }>();
   for (const b of open) {
     const c = cat.get(categoryOf(b, payers))!;
     c.total += b.balance; c.buckets[bucketOf(b.age_days)] += b.balance;
     const name = payers.get(b.payer_id ?? '')?.name ?? b.debtor_name;
-    const p = payer.get(name) ?? { total: 0, over90: 0, count: 0 };
-    p.total += b.balance; p.count++; if (b.age_days > 90) p.over90 += b.balance;
+    const p = payer.get(name) ?? { id: payers.has(b.payer_id ?? '') ? b.payer_id! : null, total: 0, over90: 0, count: 0, buckets: Object.fromEntries(BUCKETS.map((k) => [k, 0])) as Record<Bucket, number> };
+    p.total += b.balance; p.count++; p.buckets[bucketOf(b.age_days)] += b.balance; if (b.age_days > 90) p.over90 += b.balance;
     payer.set(name, p);
   }
   return {
@@ -61,7 +61,8 @@ export function ageing(bills: OpenBill[], payers: Map<string, PayerInfo>): Agein
       const c = cat.get(category)!;
       return { category, total: r0(c.total), buckets: Object.fromEntries(BUCKETS.map((k) => [k, r0(c.buckets[k])])) as Record<Bucket, number> };
     }).filter((c) => c.total > 0),
-    byPayer: [...payer].map(([name, v]) => ({ name, total: r0(v.total), over90: r0(v.over90), count: v.count }))
+    byPayer: [...payer].map(([name, v]) => ({ id: v.id, name, total: r0(v.total), over90: r0(v.over90), count: v.count,
+      buckets: Object.fromEntries(BUCKETS.map((k) => [k, r0(v.buckets[k])])) as Record<Bucket, number> }))
       .sort((a, b) => b.total - a.total),
   };
 }

@@ -69,7 +69,7 @@ export default function Payers() {
 
   return (
     <div>
-      <PageHeader title="Payer performance" sub="How each insurer, TPA and scheme treats our claims — all your centres" icon={Building2} />
+      <PageHeader title="Payer routes" sub="How claims reach each insurer, TPA and scheme, with their record to date — all your centres" icon={Building2} />
       <div className="flex flex-wrap items-center gap-3 px-6 pt-4">
         <div className="relative"><Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search payers" className="w-56 rounded-lg border border-slate-200 py-1.5 pl-8 pr-3 text-xs" /></div>
