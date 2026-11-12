@@ -362,6 +362,54 @@ export function byReminder(a: LedgerRow, b: LedgerRow): number {
   return a.next.done ? t(b) - t(a) : t(a) - t(b);
 }
 
+/** What the payer still owes on an open file: the unpaid balance, else the approval, else the claim. */
+export function owedOn(r: LedgerRow): number {
+  const { c, money: m } = r.j;
+  if (r.next.done) return 0;
+  if (m && m.allocated > 0) return Math.max(0, m.balance);
+  if (['claim_approved', 'claim_partial', 'settlement_pending'].includes(c.status)) return Number(c.approved_amount ?? 0);
+  if (['claim_submitted', 'claim_under_review', 'claim_query'].includes(c.status)) return Number(c.claimed_amount ?? 0);
+  return 0;
+}
+
+// ─── Sorting by a column ─────────────────────────────────────────────
+export type SortKey = ViewKey;
+export interface Sort { key: SortKey; dir: 'asc' | 'desc' }
+/** The direction the first click gives: names A→Z, dates newest first, money largest first. */
+export const firstDir = (key: SortKey): Sort['dir'] => (key === 'patient' ? 'asc' : 'desc');
+
+const when = (d: string | null | undefined) => {
+  if (!d) return null;
+  const t = new Date(d.length === 10 ? `${d}T12:00:00+05:30` : d).getTime();
+  return Number.isFinite(t) ? t : null;
+};
+/** What a column sorts on: patient name; the date pre-auth was sent, of discharge, the claim was sent;
+ *  payment by the amount still due (in the Archive, where nothing is due, by the amount received). */
+export function sortValue(r: LedgerRow, key: SortKey, archive = false): string | number | null {
+  const { c, money: m } = r.j;
+  switch (key) {
+    case 'patient': return (c.patient_name ?? '').trim().toLowerCase() || null;
+    case 'preauth': return when(c.preauth_submitted_at);
+    case 'disch': return when(c.discharged_at ?? c.discharge_date);
+    case 'claim': return when(c.submitted_at);
+    case 'pay': {
+      const v = archive ? Number(m?.allocated ?? c.settled_amount ?? 0) : owedOn(r);
+      return v > 0 ? v : null;
+    }
+  }
+}
+/** Rows in column order; rows with nothing in that column go last either way, ties keep the reminder order. */
+export function sortRows(rows: LedgerRow[], sort: Sort | null, archive = false): LedgerRow[] {
+  const base = [...rows].sort(byReminder);
+  if (!sort) return base;
+  const sign = sort.dir === 'asc' ? 1 : -1;
+  return base.map((r, i) => ({ r, i, v: sortValue(r, sort.key, archive) })).sort((a, b) => {
+    if (a.v == null || b.v == null) return a.v == null ? (b.v == null ? a.i - b.i : 1) : -1;
+    const d = typeof a.v === 'string' ? a.v.localeCompare(b.v as string) : a.v - (b.v as number);
+    return d ? d * sign : a.i - b.i;
+  }).map((x) => x.r);
+}
+
 // ─── Excel download ─────────────────────────────────────────────────
 const esc = (v: unknown) => {
   let s = v == null ? '' : String(v);

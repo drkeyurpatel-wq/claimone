@@ -3,6 +3,7 @@
  * Pure, so it is tested without a database.
  */
 import type { LedgerRow } from './ledger';
+import { owedOn } from './ledger';
 import type { LeakageRow } from '@/lib/claims/types';
 import { DISALLOWANCE_CATEGORIES } from '@/lib/engine/settlement';
 
@@ -17,15 +18,7 @@ export const BUCKETS = ['0–30 days', '31–60 days', '61–90 days', 'Over 90 
 export type Bucket = (typeof BUCKETS)[number];
 export const bucketOf = (days: number): Bucket => (days <= 30 ? BUCKETS[0] : days <= 60 ? BUCKETS[1] : days <= 90 ? BUCKETS[2] : BUCKETS[3]);
 
-/** What the payer still owes on an open file: the unpaid balance, else the approval, else the claim. */
-export function owedOn(r: LedgerRow): number {
-  const { c, money: m } = r.j;
-  if (r.next.done) return 0;
-  if (m && m.allocated > 0) return Math.max(0, m.balance);
-  if (['claim_approved', 'claim_partial', 'settlement_pending'].includes(c.status)) return Number(c.approved_amount ?? 0);
-  if (['claim_submitted', 'claim_under_review', 'claim_query'].includes(c.status)) return Number(c.claimed_amount ?? 0);
-  return 0;
-}
+export { owedOn };
 
 export interface PayerOwed { payer: string; total: number; cases: number; buckets: Record<Bucket, number> }
 

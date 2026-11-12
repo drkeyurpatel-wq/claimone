@@ -5,10 +5,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Search, UserPlus, Download, Plus, Archive, SlidersHorizontal, X } from 'lucide-react';
+import { Loader2, Search, UserPlus, Download, Plus, Archive, SlidersHorizontal, X, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { fetchArchive, fetchJourneys, type Journey } from '@/lib/rcm/api';
-import { VIEW_COLUMNS, FILTERS, PAY_STATES, byReminder, doctorKey, doctorLabel, inFilter, inPayState, inBank, ledgerRow, rowPayerGroup, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow, type PayState } from '@/lib/rcm/ledger';
+import { VIEW_COLUMNS, FILTERS, PAY_STATES, firstDir, sortRows, doctorKey, doctorLabel, inFilter, inPayState, inBank, ledgerRow, rowPayerGroup, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow, type PayState, type Sort, type SortKey } from '@/lib/rcm/ledger';
 import { PAYER_GROUPS, type PayerGroup } from '@/lib/rcm/payer';
 import { CellEditor } from '@/components/ledger/CellEditor';
 import { AddPatient } from '@/components/ledger/AddPatient';
@@ -19,6 +19,8 @@ import { NoCentre, useToast } from '@/components/ui';
 const DOT: Record<string, string> = { ours: 'bg-amber-500', theirs: 'bg-sky-500', alert: 'bg-rose-500', warn: 'bg-amber-400' };
 const TINT: Record<string, string> = { ours: 'bg-amber-50', theirs: '', alert: 'bg-rose-50', warn: 'bg-amber-50/60' };
 const INK: Record<Cell['state'], string> = { done: 'text-slate-900', ours: 'font-semibold text-amber-900', theirs: 'text-sky-900', open: 'text-slate-400', blank: 'text-slate-300', na: 'text-slate-400' };
+
+const SORT_HINT: Record<SortKey, string> = { patient: 'patient name', preauth: 'date pre-auth was sent', disch: 'discharge date', claim: 'date the claim was sent', pay: 'amount (due on Master, received in the Archive)' };
 
 type Nav = { row: number; col: number };
 function CellView({ cell, onOpen, nav, strong }: { cell: Cell; onOpen: () => void; nav?: Nav; strong?: boolean }) {
@@ -96,6 +98,9 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
   const [edit, setEdit] = useState<{ id: string; col: ColKey } | null>(null);
   const [adding, setAdding] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sort, setSort] = useState<Sort | null>(null);
+  // first click: the column's natural order; second: the reverse; third: back to the reminder order
+  const sortBy = (key: SortKey) => setSort((s) => (s?.key !== key ? { key, dir: firstDir(key) } : s.dir === firstDir(key) ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : null));
   const [fresh, setFresh] = useState<string | null>(null);
   const asked = params.get('show');
   // Closed files now live in the Archive
@@ -131,13 +136,12 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
   const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, narrowed.filter((r) => inFilter(r, f.key)).length])), [narrowed]);
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return narrowed
+    return sortRows(narrowed
       .filter((r) => (s ? true : inFilter(r, filter)))
       .filter((r) => !s || [r.j.c.patient_name, r.j.c.admission_ref, r.j.c.patient_uhid, r.j.c.clm_payers?.name, r.j.c.treating_doctor_name, r.j.c.tpa_claim_number, r.j.c.tpa_preauth_number,
         r.j.c.bill_no, r.j.c.case_source === 'sheet' ? 'old sheet' : r.j.c.case_source === 'pmjay' ? 'pmjay sheet' : 'entered in claimone']
-        .some((v) => v?.toLowerCase().includes(s)))
-      .sort(byReminder);
-  }, [narrowed, filter, q]);
+        .some((v) => v?.toLowerCase().includes(s))), sort, archive);
+  }, [narrowed, filter, q, sort, archive]);
   const editing = edit ? rows.find((r) => r.j.c.id === edit.id) ?? null : null;
   const table = useRef<HTMLTableElement>(null);
   // after a cell's form closes, the cursor goes back to that cell
@@ -252,11 +256,24 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
             <colgroup><col className="w-[25%]" /><col className="w-[15%]" /><col className="w-[10%]" /><col className="w-[16%]" /><col className="w-[16%]" /><col className="w-[18%]" /></colgroup>
             <thead className="sticky top-0 z-20 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th scope="col" className="border-b border-slate-200 px-4 py-3">Patient</th>
-                {VIEW_COLUMNS.slice(1).map((col) => (
-                  <th key={col.key} scope="col" className="border-b border-slate-200 px-3.5 py-3">{col.label}</th>
-                ))}
-                <th scope="col" className="border-b border-slate-200 px-3.5 py-3">{archive ? 'Status' : 'Next action'}</th>
+                {VIEW_COLUMNS.map((col, k) => {
+                  const on = sort?.key === col.key;
+                  const Icon = !on ? ChevronsUpDown : sort!.dir === 'asc' ? ArrowUp : ArrowDown;
+                  return (
+                    <th key={col.key} scope="col" aria-sort={on ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className="border-b border-slate-200 p-0">
+                      <button type="button" onClick={() => sortBy(col.key)} title={`Sort by ${SORT_HINT[col.key]}`}
+                        className={`flex min-h-11 w-full items-center gap-1.5 ${k === 0 ? 'px-4' : 'px-3.5'} text-left text-xs font-semibold uppercase tracking-wide hover:bg-slate-100 hover:text-slate-800 ${on ? 'text-teal-700' : ''}`}>
+                        {col.label} <Icon className={`h-3.5 w-3.5 shrink-0 ${on ? '' : 'text-slate-400'}`} />
+                      </button>
+                    </th>
+                  );
+                })}
+                <th scope="col" className="border-b border-slate-200 p-0">
+                  <button type="button" onClick={() => setSort(null)} title="Back to the reminder order: overdue first"
+                    className={`flex min-h-11 w-full items-center gap-1.5 px-3.5 text-left text-xs font-semibold uppercase tracking-wide hover:bg-slate-100 hover:text-slate-800 ${sort ? '' : 'text-teal-700'}`}>
+                    {archive ? 'Status' : 'Next action'} {!sort && <ArrowDown className="h-3.5 w-3.5 shrink-0" />}
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody>

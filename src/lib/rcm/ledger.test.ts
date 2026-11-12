@@ -5,7 +5,7 @@ import { stageOf } from './journey';
 import { nextStep } from './worklist';
 import { cutOf } from './cut';
 import { paymentStep, type Journey } from './api';
-import { ledgerRow, inBank, inFilter, inPayState, isBacklog, rowPayerGroup, byReminder, toCsv, doctorKey, doctorLabel, type ColKey, type LedgerRow } from './ledger';
+import { sortRows, ledgerRow, inBank, inFilter, inPayState, isBacklog, rowPayerGroup, byReminder, toCsv, doctorKey, doctorLabel, type ColKey, type LedgerRow } from './ledger';
 
 const NOW = new Date('2026-10-29T12:00:00+05:30');
 const c = (o: Partial<Claim>) => ({
@@ -376,5 +376,25 @@ describe('Excel download keeps long numbers as text', () => {
     expect(csv).toContain('="00123"');
     expect(csv).toContain(',IPS1262407,');
     expect(csv.split('\r\n')[0]).toContain('Claim no. / PMJAY case ID');
+  });
+});
+
+describe('sorting Master by a column', () => {
+  const a = row(c({ id: 'a', patient_name: 'Zarna Patel', status: 'claim_submitted', preauth_submitted_at: 'x', discharged_at: '2026-10-20T10:00:00+05:30', submitted_at: '2026-10-21T10:00:00+05:30', claimed_amount: 90000 }));
+  const b = row(c({ id: 'b', patient_name: 'amit Shah', status: 'claim_submitted', preauth_submitted_at: 'x', discharged_at: '2026-10-25T10:00:00+05:30', submitted_at: '2026-10-26T10:00:00+05:30', claimed_amount: 40000 }));
+  const n = row(c({ id: 'n', patient_name: 'Mona Dave' })); // new admission: no discharge, nothing due
+  const ids = (rs: LedgerRow[]) => rs.map((r) => r.j.c.id).join('');
+  it('names A to Z, whatever the capitals', () => {
+    expect(ids(sortRows([a, n, b], { key: 'patient', dir: 'asc' }))).toBe('bna');
+    expect(ids(sortRows([a, n, b], { key: 'patient', dir: 'desc' }))).toBe('anb');
+  });
+  it('dates and money both ways, with empty cells last either way', () => {
+    expect(ids(sortRows([a, n, b], { key: 'disch', dir: 'desc' }))).toBe('ban');
+    expect(ids(sortRows([a, n, b], { key: 'disch', dir: 'asc' }))).toBe('abn');
+    expect(ids(sortRows([b, n, a], { key: 'pay', dir: 'desc' }))).toBe('abn');
+    expect(ids(sortRows([b, n, a], { key: 'pay', dir: 'asc' }))).toBe('ban');
+  });
+  it('no column chosen: the reminder order', () => {
+    expect(ids(sortRows([a, n, b], null))).toBe(ids([a, n, b].sort(byReminder)));
   });
 });
