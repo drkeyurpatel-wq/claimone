@@ -223,6 +223,17 @@ describe('old sheet', () => {
     expect(p.cells.patient.tag).toBe('PMJAY sheet');
     expect(p.cells.patient.sub).toMatch(/^Case 2026102910013158 · IPS-1/);
   });
+  it('a PMJAY case has no pre-auth cells and no enhancement: admitted, then discharge', () => {
+    const p = row(c({ claim_type: 'pmjay', status: 'draft', tpa_claim_number: '2026102910013158' }));
+    expect(p.cells.pa_sent).toMatchObject({ state: 'na', text: 'Not applicable', editable: false });
+    expect(p.cells.pa_ok).toMatchObject({ state: 'na', editable: false });
+    expect(p.next.text).toBe('Admission approved — record the discharge');
+    const approved = row(c({ claim_type: 'pmjay', status: 'preauth_approved', approved_amount: 91714 }));
+    expect(approved.cells.pa_ok.sub).toBeUndefined();
+    expect(approved.cells.pa_ok.editable).toBe(false);
+    // other payers keep the enhancement
+    expect(row(c({ status: 'preauth_approved', approved_amount: 91714, preauth_submitted_at: '2026-10-28T10:00:00+05:30' })).cells.pa_ok.sub).toBe('+ Add enhancement');
+  });
 });
 
 describe('Master filters: payer type and payment', () => {

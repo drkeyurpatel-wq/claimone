@@ -55,7 +55,8 @@ export const stageIndex = (k: StageKey) => STAGES.findIndex((s) => s.key === k);
 export function stageStates(c: Claim, current: StageKey): Record<StageKey, 'done' | 'current' | 'todo' | 'skipped'> {
   const at = stageIndex(current);
   // past pre-auth without one sent: not needed (corporate), not taken, or not recorded (old sheet) — never "done"
-  const noPreauth = !c.preauth_submitted_at;
+  // PMJAY has no pre-auth step at all: the admission is approved on TMS with the case ID
+  const noPreauth = !c.preauth_submitted_at || c.claim_type === 'pmjay';
   return Object.fromEntries(STAGES.map((s, i) => [s.key,
     s.key === 'preauth' && noPreauth && i < at ? 'skipped' : i < at ? 'done' : i === at ? (current === 'closed' ? 'done' : 'current') : 'todo',
   ])) as Record<StageKey, 'done' | 'current' | 'todo' | 'skipped'>;
@@ -63,7 +64,7 @@ export function stageStates(c: Claim, current: StageKey): Record<StageKey, 'done
 
 /** How a pre-auth stage that was never sent is described — the same words Master uses. */
 export function noPreauthWord(c: Pick<Claim, 'claim_type' | 'case_source'>): string {
-  if (c.claim_type === 'corporate' || c.claim_type === 'reimbursement') return 'Not needed';
+  if (c.claim_type === 'corporate' || c.claim_type === 'reimbursement' || c.claim_type === 'pmjay') return 'Not needed';
   return c.case_source === 'sheet' || c.case_source === 'pmjay' ? 'Not recorded' : 'Not taken';
 }
 

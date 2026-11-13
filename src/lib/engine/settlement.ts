@@ -9,16 +9,26 @@
  */
 
 export const DISALLOWANCE_CATEGORIES = {
-  room_rent_cap: { label: 'Room rent cap', preventable: true },
-  non_payable: { label: 'Non-payable items', preventable: true },
+  tariff_excess: { label: 'Package rate / tariff difference', preventable: true },
+  multi_procedure: { label: 'Second procedure paid at reduced rate', preventable: false },
+  package_mismatch: { label: 'Package not matching the treatment', preventable: true },
   doc_missing: { label: 'Missing documents', preventable: true },
-  tariff_excess: { label: 'Above agreed tariff', preventable: true },
+  implant_proof: { label: 'Implant / stent bill or sticker missing', preventable: true },
+  non_payable: { label: 'Non-payable items', preventable: true },
+  room_rent_cap: { label: 'Room rent cap', preventable: true },
   query_tat: { label: 'Query not answered in time', preventable: true },
+  late_submission: { label: 'Claim submitted late', preventable: true },
   pre_existing: { label: 'Pre-existing disease', preventable: false },
   policy_exclusion: { label: 'Policy exclusion', preventable: false },
   co_pay: { label: 'Co-pay', preventable: false },
-  other: { label: 'Other', preventable: false },
+  other: { label: 'Other (write the reason)', preventable: false },
+  /** no reason entered yet — never offered in a list */
+  unspecified: { label: 'Reason not entered', preventable: false },
 } as const;
+
+/** The reasons a person can choose (the common ones first; "Other" takes free text). SQL copy: clm_reason_ok(). */
+export const REASON_OPTIONS = (Object.entries(DISALLOWANCE_CATEGORIES) as [keyof typeof DISALLOWANCE_CATEGORIES, { label: string; preventable: boolean }][])
+  .filter(([k]) => k !== 'unspecified');
 
 export type DisallowanceCategory = keyof typeof DISALLOWANCE_CATEGORIES;
 

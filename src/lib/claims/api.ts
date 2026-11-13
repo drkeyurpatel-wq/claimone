@@ -7,8 +7,9 @@
 import { sb } from '@/lib/supabase/browser';
 import type {
   Claim, ClaimStatus, ClaimType, ClaimDocument, ClaimQuery, DocRuleRow, OpenQuery,
-  Payer, TimelineEvent, AgingRow, PayerScorecard, LeakageRow, BotRun,
+  Payer, TimelineEvent, AgingRow, PayerScorecard, LeakageRow, DeductionLine, BotRun,
 } from './types';
+import { allRows } from '@/lib/supabase/pages';
 import type { DisallowanceCategory } from '@/lib/engine/settlement';
 
 const CLAIM_SELECT = '*, clm_payers!clm_claims_payer_id_fkey(id, code, name, type)';
@@ -141,6 +142,14 @@ export async function fetchAging(centreId?: string): Promise<AgingRow[]> {
 export async function fetchPayerScorecard(): Promise<PayerScorecard[]> {
   const { data } = await sb().from('clm_v_payer_scorecard').select('*').order('total_claims', { ascending: false });
   return (data ?? []) as PayerScorecard[];
+}
+
+/** Every deduction the user may see, line by line (all their centres — the report shows centre-wise too). */
+export async function fetchDeductionLines(): Promise<DeductionLine[]> {
+  const { data, error } = await allRows<DeductionLine>((f, t) => sb().from('clm_v_deduction_lines').select('*')
+    .order('on_date', { ascending: false }).order('claim_ref').order('amount').range(f, t));
+  if (error) throw new Error('Could not load deductions');
+  return data.map((r) => ({ ...r, amount: Number(r.amount) }));
 }
 
 export async function fetchLeakage(centreId: string): Promise<LeakageRow[]> {

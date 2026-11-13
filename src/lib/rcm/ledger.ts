@@ -174,18 +174,20 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   const discharged = c.discharged_at ?? c.discharge_date ?? null;
   const preauthSent = !!c.preauth_submitted_at;
   const inClaim = CLAIM_STAGE.has(c.status) || CLOSED.has(c.status);
-  const skippedPreauth = !preauthSent && (corporate || inClaim || !!discharged);
+  // PMJAY: admission is approved on TMS with the case ID — there is no pre-auth to send and no enhancement
+  const pmjayCase = c.claim_type === 'pmjay';
+  const skippedPreauth = pmjayCase || (!preauthSent && (corporate || inClaim || !!discharged));
 
   // pre-auth sent
   const paSent: Cell = skippedPreauth
-    ? { key: 'pa_sent', state: 'na', text: corporate ? 'Not applicable' : c.case_source === 'sheet' || c.case_source === 'pmjay' ? 'Not recorded' : 'Not taken', editable: false }
+    ? { key: 'pa_sent', state: 'na', text: corporate || pmjayCase ? 'Not applicable' : c.case_source === 'sheet' || c.case_source === 'pmjay' ? 'Not recorded' : 'Not taken', editable: false }
     : { key: 'pa_sent', state: mark('pa_sent', preauthSent, false), text: preauthSent ? dd(c.preauth_submitted_at) : '',
         sub: c.tpa_preauth_number ?? undefined, editable: w && col === 'pa_sent' };
 
   // pre-auth decision
   const paAmt = c.preauth_approved_amount ?? (PREAUTH_DONE.has(c.status) ? c.approved_amount : null);
   const paDone = paAmt != null || PREAUTH_DONE.has(c.status);
-  const canEnhance = w && PREAUTH_DONE.has(c.status);
+  const canEnhance = w && !pmjayCase && PREAUTH_DONE.has(c.status);
   const paText = c.status === 'preauth_query' ? 'Query' : c.status === 'preauth_rejected' ? 'Rejected'
     : paDone ? rs(paAmt) || 'Approved' : c.status === 'preauth_pending' ? 'Awaiting' : '';
   const paOk: Cell = skippedPreauth

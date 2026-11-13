@@ -89,6 +89,7 @@ export interface Claim {
   /** Accept / Fight on the insurer's cut (0019). */
   cut_decision?: 'accepted' | 'fought' | null;
   cut_note?: string | null;
+  cut_category?: string | null;
   cut_decided_at?: string | null;
   /** The pre-auth approval, kept apart from the claim approval (0020). */
   preauth_approved_amount?: number | null;
@@ -204,6 +205,17 @@ export interface PayerScorecard {
   total_settled: number | null;
   total_deductions: number | null;
   deduction_pct: number | null;
+}
+
+/** One deduction (clm_v_deduction_lines): the row behind every deductions MIS table. */
+export interface DeductionLine {
+  centre_id: string; centre_name: string; payer_id: string | null; payer_name: string;
+  claim_id: string | null; receivable_id: string | null; adjustment_id: string | null;
+  patient_name: string | null; claim_ref: string | null;
+  doctor_name: string; speciality: string; procedure_code: string; procedure_name: string;
+  kind: 'deduction' | 'rejection' | 'fighting';
+  category: string; reason_text: string | null; is_preventable: boolean;
+  on_date: string; file_date: string | null; amount: number;
 }
 
 export interface LeakageRow {

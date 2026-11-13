@@ -53,7 +53,8 @@ export function actionsFor(step: Step, c: Claim, route: Route): CaseAction[] {
         { id: 'close', label: 'Convert to self-pay & close', to: 'closed', tone: 'neutral', note: { label: 'Remarks', required: false } },
       ];
     case 'in_hospital_approved':
-      return c.status === 'preauth_approved'
+      // PMJAY: no enhancement — the package is approved with the admission
+      return c.status === 'preauth_approved' && c.claim_type !== 'pmjay'
         ? [{ id: 'enhanced', label: 'Enhancement approved', to: 'preauth_enhanced', tone: 'success',
             amount: { field: 'approved_amount', label: 'Revised approved amount (₹)', value: num(c.approved_amount) } }]
         : [];

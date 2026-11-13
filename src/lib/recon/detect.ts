@@ -2,10 +2,10 @@
  * One upload box for every money file: say which kind a spreadsheet is from its headers.
  * bank: a bank statement (credits become receipts, matched to bills)
  * pmjay_cases: the PMJAY desk's case sheet (cases on Master)
- * payments: a settlement letter / PMJAY payment sheet / Bills master (payments onto bills)
+ * payments: a settlement letter / PMJAY payment sheet (old settlement sheet or the TMS claim-paid download) / Bills master (payments onto bills)
  */
 import type { Cell } from './payments';
-import { isPmjaySheet as isPmjayPaySheet } from './payments';
+import { isPmjaySheet as isPmjayPaySheet, isTmsSheet } from './payments';
 import { isPmjaySheet as isPmjayCaseSheet } from '@/lib/rcm/pmjay';
 
 export type FileKind = 'bank' | 'pmjay_cases' | 'payments';
@@ -27,7 +27,7 @@ export function isBankStatement(rows: string[][]): boolean {
 }
 
 export function detectKind(rows: string[][], cells?: Cell[][]): FileKind {
-  if (isPmjayPaySheet(rows)) return 'payments';
+  if (isTmsSheet(rows) || isPmjayPaySheet(rows)) return 'payments';
   if (isPmjayCaseSheet((cells ?? rows) as Cell[][])) return 'pmjay_cases';
   if (isBankStatement(rows)) return 'bank';
   return 'payments';

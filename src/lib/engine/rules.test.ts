@@ -4,7 +4,7 @@ import { describe, test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { TRANSITIONS, isAllowed } from './transitions';
-import { checkSettlement, DISALLOWANCE_CATEGORIES } from './settlement';
+import { checkSettlement, DISALLOWANCE_CATEGORIES, REASON_OPTIONS } from './settlement';
 import { STATUS_CONFIG, type ClaimStatus } from '@/lib/claims/types';
 
 const sql = readFileSync(path.resolve(__dirname, '../../../supabase/migrations/0001_core.sql'), 'utf8');
@@ -67,10 +67,14 @@ describe('settlement maths', () => {
   });
 
   test('categories match the database check constraint and preventable flag', () => {
-    const constraint = sql.split("category     text not null check (category in (")[1].split('))')[0];
+    // the reason list was widened in 0037 (PMJAY reasons, and "unspecified" for a reason not entered yet)
+    const m37 = readFileSync(path.resolve(__dirname, '../../../supabase/migrations/0037_pmjay_tms.sql'), 'utf8');
+    const constraint = m37.split('clm_disallowances_category_check check (category in (')[1].split('))')[0];
     const dbCats = [...constraint.matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
     expect(Object.keys(DISALLOWANCE_CATEGORIES).sort()).toEqual(dbCats);
-    const prevent = sql.split("(category in (")[2].split('))')[0];
+    const okList = m37.split('function clm_reason_ok')[1].split('p_category in (')[1].split('), false)')[0];
+    expect(REASON_OPTIONS.map(([k]) => k).sort()).toEqual([...okList.matchAll(/'(\w+)'/g)].map((m) => m[1]).sort());
+    const prevent = m37.split('function clm_is_preventable')[1].split('p_category in (')[1].split('), false)')[0];
     const dbPrev = [...prevent.matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
     const tsPrev = Object.entries(DISALLOWANCE_CATEGORIES).filter(([, v]) => v.preventable).map(([k]) => k).sort();
     expect(tsPrev).toEqual(dbPrev);

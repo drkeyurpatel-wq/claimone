@@ -17,7 +17,7 @@ import { nextStep, dueText, STATUS_WORDS } from '@/lib/rcm/worklist';
 import { STAGES, noPreauthWord, stageOf, stageStates, type CaseMoney, type StageKey } from '@/lib/rcm/journey';
 import { actionsFor, type CaseAction } from '@/lib/rcm/actions';
 import { routeFor, ROUTE_WORDS } from '@/lib/rcm/payer';
-import { DISALLOWANCE_CATEGORIES } from '@/lib/engine/settlement';
+import { DISALLOWANCE_CATEGORIES, REASON_OPTIONS } from '@/lib/engine/settlement';
 import type { Claim, TimelineEvent } from '@/lib/claims/types';
 import { ReadinessPanel } from '@/components/claim/ReadinessPanel';
 import { NhcxDetails } from '@/components/case/NhcxDetails';
@@ -186,8 +186,9 @@ export default function CasePage() {
       } else if (kind === 'small') {
         await addAdjustment(m.receivable_id, { kind: 'rounding', amount: Math.round(m.balance * 100) / 100, reason_text: 'Small difference closed' });
       } else {
+        if (!why.cat) throw new Error('Pick the deduction reason.');
         if (!why.text.trim()) throw new Error('Write why you are disputing it.');
-        await decideCut(c!.id, 'fight', why.text.trim());
+        await decideCut(c!.id, 'fight', why.text.trim(), why.cat);
       }
       setWhy({ cat: '', text: '' }); flash('Saved'); await reload();
     } catch (e) { setError((e as Error).message); }
@@ -223,7 +224,7 @@ export default function CasePage() {
           {open.id === 'part' && <label className="block text-base font-medium text-slate-800">Reason for the cut *
             <select value={cutWhy} onChange={(e) => setCutWhy(e.target.value)} className={field}>
               <option value="">Choose…</option>
-              {Object.entries(DISALLOWANCE_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              {REASON_OPTIONS.map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select></label>}
           {open.note && <label className="block text-base font-medium text-slate-800">{open.note.label}{open.note.required ? ' *' : ''}
             <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className={`${field} py-2`} /></label>}
@@ -281,7 +282,8 @@ export default function CasePage() {
             {st === 'done' ? 'Done' : st === 'current' ? 'Now' : st === 'skipped' ? noPreauthWord(c) : 'Later'}
           </span>
         </div>
-        <p className="mt-1 text-base text-slate-600">{info.hint}</p>
+        <p className="mt-1 text-base text-slate-600">{c.claim_type === 'pmjay' && shown === 'preauth' ? 'Not needed for PMJAY — the admission is approved on TMS with the case ID.'
+          : c.claim_type === 'pmjay' && shown === 'stay' ? 'Admission approved on TMS. Record the discharge when the patient leaves.' : info.hint}</p>
 
         {shown === 'preauth' && <Facts rows={[
           ['Estimate', money(c.estimated_amount)], ['Sent on', c.preauth_submitted_at ? dateTime(c.preauth_submitted_at) : '—'],
@@ -347,7 +349,7 @@ export default function CasePage() {
               <p className="text-lg font-semibold text-slate-900">Paid {money(m.balance)} less — why?</p>
               <select value={why.cat} onChange={(e) => setWhy((w) => ({ ...w, cat: e.target.value }))} className={field} aria-label="Reason">
                 <option value="">Choose the reason…</option>
-                {Object.entries(DISALLOWANCE_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                {REASON_OPTIONS.map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
               <input value={why.text} onChange={(e) => setWhy((w) => ({ ...w, text: e.target.value }))} placeholder="What the letter says" className={field} />
               <div className="flex flex-wrap gap-2">

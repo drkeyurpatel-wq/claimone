@@ -137,21 +137,23 @@ export async function fetchExceptions(centreId: string): Promise<ExceptionRow[]>
     num(r, ['expected_amount', 'allocated', 'tds', 'deduction', 'balance', 'age_days']) as unknown as ExceptionRow);
 }
 
-export interface ApplyResult { matched: number; created: number; unpaid: number; duplicate: number; skipped: number; invalid: number }
+export interface ApplyResult { matched: number; created: number; unpaid: number; duplicate: number; skipped: number; invalid: number; fixed?: number; disputed?: number }
 
 /** Send lines in chunks so a 2,600-row PMJAY sheet stays inside the database time limit. */
 export async function applyPayments(centre_id: string, file_name: string, lines: PaymentLine[], onProgress?: (done: number) => void): Promise<ApplyResult> {
-  const total: ApplyResult = { matched: 0, created: 0, unpaid: 0, duplicate: 0, skipped: 0, invalid: 0 };
+  const total: ApplyResult = { matched: 0, created: 0, unpaid: 0, duplicate: 0, skipped: 0, invalid: 0, fixed: 0, disputed: 0 };
+  // the TMS claim-paid sheet closes each case in full (clm_apply_pmjay_tms); other files go line by line
+  const format = lines.length > 0 && lines.every((l) => l.format === 'tms') ? 'tms' : undefined;
   for (let i = 0; i < lines.length; i += 250) {
     let r: ApplyResult;
     try {
-      r = await post<ApplyResult>('/api/recon/apply', { centre_id, file_name, lines: lines.slice(i, i + 250) });
+      r = await post<ApplyResult>('/api/recon/apply', { centre_id, file_name, lines: lines.slice(i, i + 250), ...(format ? { format } : {}) });
     } catch (e) {
       // earlier chunks are saved; uploading the same file again finishes the rest without double counting
       throw new Error(`${file_name}: stopped after ${i.toLocaleString('en-IN')} of ${lines.length.toLocaleString('en-IN')} lines `
         + `(${total.matched.toLocaleString('en-IN')} payments saved). ${(e as Error).message} Upload the same file again to finish.`);
     }
-    for (const k of Object.keys(total) as (keyof ApplyResult)[]) total[k] += Number(r[k] ?? 0);
+    for (const k of Object.keys(total) as (keyof ApplyResult)[]) total[k] = Number(total[k] ?? 0) + Number(r[k] ?? 0);
     onProgress?.(Math.min(i + 250, lines.length));
   }
   return total;

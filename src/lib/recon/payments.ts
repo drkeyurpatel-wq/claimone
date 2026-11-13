@@ -27,6 +27,13 @@ export interface PaymentLine {
   payment_date: string | null;
   /** PMJAY: one case ID (letter) can cover several invoices — e.g. dialysis sessions. */
   bills?: BillPart[];
+  /** 'tms': a row of the PMJAY claim-paid sheet from TMS — the case is final and is closed in full. */
+  format?: 'tms';
+  speciality?: string | null;
+  procedure_code?: string | null;
+  procedure_name?: string | null;
+  /** TMS: no other case on the sheet shares this case ID's first 15 digits (safe to match an old ID that lost its last digit). */
+  unique15?: boolean;
 }
 
 export interface BillPart {
@@ -157,6 +164,84 @@ export function parseLetterSheet(rows: string[][], payerName: string | null): { 
   };
 }
 
+const TMS_HEAD = ['Registration ID', 'Claim Initiated Amount', 'Claim Approved Amount', 'Claim Paid Amount'];
+
+export function isTmsSheet(rows: string[][]): boolean {
+  return findHeader(rows, TMS_HEAD) >= 0;
+}
+
+/**
+ * A date cell of the TMS download. Excel hands many of them over as its day number
+ * (46338 = 12 Nov 2026, with the time as a fraction) rather than as a date.
+ */
+export function sheetDate(v: string): string | null {
+  const s = v.trim();
+  if (/^\d{5}(\.\d+)?$/.test(s)) {
+    const days = Math.floor(Number(s));
+    if (days < 20000 || days > 80000) return null;
+    return new Date((days - 25569) * 86_400_000).toISOString().slice(0, 10);
+  }
+  return parseDate(s.slice(0, 10)) ?? parseDate(s);
+}
+
+/** "Urology|Urology" → "Urology"; "SU033A|SU055A" → "SU033A + SU055A". */
+function joinParts(v: string, max = 300): string | null {
+  const parts = [...new Set(v.split('|').map((x) => x.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+  return parts.length ? parts.join(' + ').slice(0, max) : null;
+}
+
+/**
+ * PMJAY claim-paid sheet downloaded from TMS (uploaded every week), one row per case:
+ * Registration ID (= PMJAY case ID) · Program ID (= PMJAY card ID) · Beneficiary Name · Case Type ·
+ * Preauth Initiated Date · Speciality Code · Category Details · Procedure Code · Procedure Details · Hospital Name ·
+ * Preauth Approved Amount · Claim Initiated Amount · Claim Approved Amount · Case Status · Hospital Account Number ·
+ * Hospital PAN Number · Hospital IFSC Number · TDS Amount · Claim Paid Amount · UTR · Payment Date.
+ * Every row is paid and final: claimed − approved is the deduction, approved − TDS is what reached the bank.
+ * A status other than "Payment Accomplished" (e.g. "Claim CRC Insurance Rejected By CRC") is an appeal that was
+ * turned down on a paid case — kept as the deduction's remark.
+ */
+export function parseTms(rows: string[][]): { rows: PaymentLine[]; skipped: number } {
+  const h = findHeader(rows, TMS_HEAD);
+  if (h < 0) throw new Error('This is not the PMJAY claim-paid sheet from TMS (needs Registration ID, Claim Initiated Amount, Claim Approved Amount, Claim Paid Amount).');
+  const H = rows[h].map(norm);
+  const at = (name: string) => H.indexOf(norm(name));
+  const c = {
+    id: at('Registration ID'), name: at('Beneficiary Name'), pre: at('Preauth Initiated Date'), cat: at('Category Details'),
+    code: at('Procedure Code'), proc: at('Procedure Details'), claimed: at('Claim Initiated Amount'), appr: at('Claim Approved Amount'),
+    status: at('Case Status'), tds: at('TDS Amount'), paid: at('Claim Paid Amount'), utr: at('UTR'), pdate: at('Payment Date'),
+  };
+  const get = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
+  const out: PaymentLine[] = [];
+  const seen = new Set<string>();
+  let skipped = 0;
+  for (const r of rows.slice(h + 1)) {
+    const id = get(r, c.id).replace(/\.0+$/, '').replace(/[^A-Za-z0-9]/g, '');
+    const net = round2(parseAmount(get(r, c.paid)) ?? 0);
+    if (!id || net <= 0 || seen.has(id)) { if (r.some((v) => String(v).trim())) skipped++; continue; }
+    seen.add(id);
+    const tds = round2(parseAmount(get(r, c.tds)) ?? 0);
+    const approved = round2(parseAmount(get(r, c.appr)) ?? net + tds);
+    const claimed = Math.max(round2(parseAmount(get(r, c.claimed)) ?? approved), approved);
+    const ded = round2(claimed - approved);
+    const status = get(r, c.status);
+    out.push({
+      source: 'pmjay', format: 'tms', payer_name: 'PMJAY / MA (Gujarat)', tpa_name: null,
+      claim_ref: id, bill_no: null, patient_name: get(r, c.name) || null, ip_no: null, uhid: null, doctor_name: null,
+      bill_date: sheetDate(get(r, c.pre)),
+      claimed_amount: claimed, approved_amount: approved, tds_amount: tds,
+      deduction_amount: ded > 0 ? ded : 0,
+      deduction_reason: ded > 0 && status && !/^payment accomplished$/i.test(status) ? status.slice(0, 300) : null,
+      net_amount: net, utr: get(r, c.utr) || null, payment_date: sheetDate(get(r, c.pdate)),
+      speciality: joinParts(get(r, c.cat), 120), procedure_code: joinParts(get(r, c.code), 120), procedure_name: joinParts(get(r, c.proc)),
+    });
+  }
+  // an old sheet lost the last digit of 16-digit case IDs: that match is only safe when no two cases here share 15 digits
+  const first15 = new Map<string, number>();
+  for (const l of out) if (l.claim_ref!.length === 16) first15.set(l.claim_ref!.slice(0, 15), (first15.get(l.claim_ref!.slice(0, 15)) ?? 0) + 1);
+  for (const l of out) l.unique15 = l.claim_ref!.length === 16 && first15.get(l.claim_ref!.slice(0, 15)) === 1;
+  return { rows: out, skipped };
+}
+
 function claimedOf(total: number | null, discount: number | null, patientPaid: number | null, approved: number | null) {
   if (total == null) return null;
   const c = round2(total - (discount ?? 0) - (patientPaid ?? 0));
@@ -214,6 +299,7 @@ export function parseBillsMaster(rows: string[][]): { rows: PaymentLine[]; skipp
 
 /** Pick the right reader for a spreadsheet. */
 export function parsePaymentSheet(rows: string[][], payerName: string | null = null) {
+  if (isTmsSheet(rows)) return parseTms(rows);
   if (isPmjaySheet(rows)) return parsePmjay(rows);
   if (isBillsMaster(rows)) return parseBillsMaster(rows);
   return parseLetterSheet(rows, payerName);

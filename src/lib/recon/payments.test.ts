@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cellsToRows, cleanLetterLines, isPmjaySheet, parsePaymentSheet, parsePmjay, summarise } from './payments';
+import { cellsToRows, cleanLetterLines, isPmjaySheet, isTmsSheet, parsePaymentSheet, parsePmjay, parseTms, sheetDate, summarise } from './payments';
+import { detectKind } from './detect';
 
 const HEAD = ['S.No.', 'Invoice No.', 'Inv. Date', 'IP No.', 'Reg. No.', 'Patient Name', 'DOA', 'DOD', 'Letter No.', 'Doctor Name',
   'Credit Limit', 'Pending', 'TDS Amount', 'Claim Paid Amount', 'UTR', 'Payment Date'];
@@ -110,4 +111,77 @@ describe('lines read off a letter', () => {
     expect(out[0].deduction_reason).toHaveLength(300);
   });
   it('tolerates non-arrays', () => expect(cleanLetterLines({})).toEqual([]));
+});
+
+describe('PMJAY claim-paid sheet from TMS', () => {
+  const TMS = ['Registration ID', 'Program ID', 'Beneficiary Name', 'Case Type', 'Preauth Initiated Date', 'Speciality Code', 'Category Details',
+    'Procedure Code', 'Procedure Details', 'Hospital Name', 'Preauth Approved Amount', 'Claim Initiated Amount', 'Claim Approved Amount', 'Case Status',
+    'Hospital Account Number', 'Hospital PAN Number', 'Hospital IFSC Number', 'TDS Amount', 'Claim Paid Amount', 'UTR', 'Payment Date'];
+  const row = (id: string, cat: string, code: string, claimed: number, approved: number, status: string, tds: number, paid: number, utr: string) =>
+    [id, 'P1M0ACSL8', 'Test Patient', 'SURGICAL', new Date(Date.UTC(2026, 9, 24, 10, 32, 37)), 'SU|SU', cat, code, 'DJ stenting  including cystoscopy|TURBT',
+      'HEALTH1 SUPER SPECILAITY HOSPITAL ', claimed, claimed, approved, status, '0945694616', 'AAFCH8691E', 'KKBK0002582', tds, paid, utr, new Date(Date.UTC(2026, 10, 11))];
+  const cells = [
+    TMS,
+    row('2026102210025087', 'Urology|Urology', 'SU033A|SU055A', 40040, 40040, 'Payment Accomplished', 801, 39239, 'AXISCN1531069395'),
+    row('2026070610032013', 'Cardio-thoracic & Vascular surgery', 'SV001A', 344865, 254830, 'Claim CRC Insurance Rejected By CRC', 5097, 249733, 'UTIBR72026100600038009'),
+    row('1020867220', 'Cardiology', 'MC011A', 91714, 91714, 'Payment Accomplished', 9171, 82543, 'PUNBQ26205495087'),
+    row('2026040210047037', 'Urology', 'SU041A', 3300, 1650, 'Payment Accomplished', 33, 1617, 'AXISCN1'),
+    row('2026040210047038', 'Urology', 'SU041A', 3300, 3300, 'Payment Accomplished', 66, 3234, 'AXISCN2'),
+    row('2026102210025087', 'Urology', 'SU033A', 40040, 40040, 'Payment Accomplished', 801, 39239, 'AXISCN1531069395'),
+    row('', 'Urology', 'SU033A', 100, 100, 'Payment Accomplished', 2, 98, 'X'),
+  ];
+  const rows = cellsToRows(cells);
+
+  it('is recognised as a payment file, ahead of every other reader', () => {
+    expect(isTmsSheet(rows)).toBe(true);
+    expect(isPmjaySheet(rows)).toBe(false);
+    expect(detectKind(rows, cells)).toBe('payments');
+    expect(parsePaymentSheet(rows).rows[0].format).toBe('tms');
+  });
+
+  it('reads one line per case: case ID as text, claimed, approved, TDS, paid, UTR and dates', () => {
+    const { rows: out, skipped } = parseTms(rows);
+    expect(out).toHaveLength(5);
+    expect(skipped).toBe(2); // the repeated case and the row with no case ID
+    expect(out[0]).toMatchObject({ source: 'pmjay', format: 'tms', claim_ref: '2026102210025087', bill_no: null, patient_name: 'Test Patient',
+      bill_date: '2026-10-24', claimed_amount: 40040, approved_amount: 40040, tds_amount: 801, net_amount: 39239, deduction_amount: 0,
+      deduction_reason: null, utr: 'AXISCN1531069395', payment_date: '2026-11-11' });
+    expect(out[2].claim_ref).toBe('1020867220');
+  });
+
+  it('joins repeated specialities and several procedures', () => {
+    const { rows: out } = parseTms(rows);
+    expect(out[0].speciality).toBe('Urology');
+    expect(out[0].procedure_code).toBe('SU033A + SU055A');
+    expect(out[0].procedure_name).toBe('DJ stenting including cystoscopy + TURBT');
+  });
+
+  it('takes claimed − approved as the deduction and keeps a rejected-appeal status as its remark', () => {
+    const { rows: out } = parseTms(rows);
+    expect(out[1]).toMatchObject({ deduction_amount: 90035, deduction_reason: 'Claim CRC Insurance Rejected By CRC', net_amount: 249733 });
+    expect(out[3]).toMatchObject({ deduction_amount: 1650, deduction_reason: null });
+  });
+
+  it('marks which 16-digit case IDs are safe to match after an old sheet dropped the last digit', () => {
+    const { rows: out } = parseTms(rows);
+    expect(out[0].unique15).toBe(true);
+    expect(out[2].unique15).toBe(false); // 10-digit ID: nothing was lost
+    expect(out[3].unique15).toBe(false); // …7037 and …7038 share 15 digits
+    expect(out[4].unique15).toBe(false);
+  });
+
+  it('reads dates that Excel hands over as day numbers (as the real download does)', () => {
+    expect(sheetDate('46338')).toBe('2026-11-12');
+    expect(sheetDate('46331.6771296296')).toBe('2026-11-05');
+    expect(sheetDate('2026-11-12')).toBe('2026-11-12');
+    expect(sheetDate('12/11/2026')).toBe('2026-11-12');
+    const r = cellsToRows([TMS, ['2026110410056194', 'P1', 'Pt', 'MEDICAL', 46331.6771296296, 'MO', 'Medical Oncology', 'MO024A', 'Chemo', 'H', 15070, 15070, 15070,
+      'Payment Accomplished', '0945694616', 'P', 'I', 301, 14769, 'AXISCN1531192485', 46338]]);
+    expect(parseTms(r).rows[0]).toMatchObject({ bill_date: '2026-11-05', payment_date: '2026-11-12' });
+  });
+
+  it('a 16-digit case ID typed as a number still keeps its first 15 digits', () => {
+    const r = cellsToRows([TMS, [2026102210025087, ...row('x', 'Urology', 'SU033A', 100, 100, 'Payment Accomplished', 2, 98, 'U').slice(1)]]);
+    expect(parseTms(r).rows[0].claim_ref!.slice(0, 15)).toBe('202610221002508');
+  });
 });

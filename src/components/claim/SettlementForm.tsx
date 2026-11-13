@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import { IndianRupee, Plus, Trash2, Loader2 } from 'lucide-react';
 import type { Claim } from '@/lib/claims/types';
-import { checkSettlement, DISALLOWANCE_CATEGORIES, type DisallowanceCategory } from '@/lib/engine/settlement';
+import { checkSettlement, DISALLOWANCE_CATEGORIES, type DisallowanceCategory, REASON_OPTIONS } from '@/lib/engine/settlement';
 import { recordSettlement } from '@/lib/claims/api';
 import { inr, btn } from '@/components/ui';
 
@@ -74,7 +74,7 @@ export function SettlementForm({ claim, onDone, flash }: { claim: Claim; onDone:
           <div key={i} className="mt-2 grid grid-cols-12 gap-2">
             <select className="col-span-4 rounded border border-slate-200 px-2 py-1.5 text-xs" value={it.category}
               onChange={(e) => setItems(items.map((x, j) => j === i ? { ...x, category: e.target.value as DisallowanceCategory } : x))}>
-              {Object.entries(DISALLOWANCE_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              {REASON_OPTIONS.map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
             <input className="col-span-3 rounded border border-slate-200 px-2 py-1.5 text-xs tabular" inputMode="decimal" placeholder="₹" value={it.amount}
               onChange={(e) => setItems(items.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))} />

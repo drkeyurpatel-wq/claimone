@@ -80,11 +80,15 @@ export function nextStep(c: CaseLike, now = new Date()): Step {
       if (corporate && !discharged) {
         return step('admission', 'in_hospital_approved', 'Admitted — raise bill to corporate after discharge', false, null, null, now);
       }
+      // PMJAY: the admission is approved on TMS with the case ID — no pre-auth to send, no enhancement. Next is the discharge.
+      if (pmjay && !discharged) {
+        return step('admission', 'in_hospital_approved', 'Admission approved — record the discharge', false, null, null, now);
+      }
       if (discharged) {
         return step('claims', 'send_claim', corporate ? 'Raise final bill to corporate' : 'Submit final claim', true,
           discharged ?? admitted, corporate ? TARGETS.sendClaim.corporate : govt ? TARGETS.sendClaim.govt : TARGETS.sendClaim.insurer, now);
       }
-      return step('admission', 'send_preauth', pmjay ? 'Submit pre-auth on TMS' : 'Submit pre-authorisation', true, admitted, TARGETS.sendPreauth, now);
+      return step('admission', 'send_preauth', 'Submit pre-authorisation', true, admitted, TARGETS.sendPreauth, now);
     case 'preauth_pending':
       if (after(c.preauth_submitted_at)) return step('admission', 'wait_preauth', `Query replied — awaiting pre-auth decision (${where})`, false,
         replied, govt ? TARGETS.preauthReply.govt : TARGETS.preauthReply.insurer, now);
@@ -97,7 +101,8 @@ export function nextStep(c: CaseLike, now = new Date()): Step {
     case 'preauth_approved':
     case 'preauth_enhanced':
       if (!discharged) {
-        const short = c.estimated_amount != null && c.approved_amount != null && c.estimated_amount > c.approved_amount;
+        const short = !pmjay && c.estimated_amount != null && c.approved_amount != null && c.estimated_amount > c.approved_amount;
+        if (pmjay) return step('admission', 'in_hospital_approved', 'Admission approved — record the discharge', false, null, null, now);
         return step('admission', 'in_hospital_approved',
           short ? 'Approved below estimate — request enhancement if required' : 'Pre-auth approved — patient admitted', false, null, null, now);
       }

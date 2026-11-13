@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, Loader2, Undo2, Plus, Wallet } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { fetchReceivable, addAdjustment, reverse, type ReceivableRow, type AllocationRow, type AdjustmentRow } from '@/lib/recon/api';
-import { DISALLOWANCE_CATEGORIES } from '@/lib/engine/settlement';
+import { DISALLOWANCE_CATEGORIES, REASON_OPTIONS } from '@/lib/engine/settlement';
 import { inr, shortDate, dateTime, useToast, btn } from '@/components/ui';
 
 const KIND: Record<string, string> = { tds: 'TDS', deduction: 'Payer deduction', discount: 'Discount', write_off: 'Write-off', refund_due: 'Refund owed', rounding: 'Rounding', financing_cost: 'Financing cost' };
@@ -110,7 +110,7 @@ export default function ReceivablePage() {
                 <input aria-label="Amount" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="₹" className="rounded border border-slate-200 px-2 py-1.5 text-xs tabular" />
                 {form.kind === 'deduction' ? (
                   <select aria-label="Reason" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="rounded border border-slate-200 px-2 py-1.5 text-xs">
-                    {Object.entries(DISALLOWANCE_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    {REASON_OPTIONS.map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                   </select>
                 ) : <span />}
                 <input aria-label="Note" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}

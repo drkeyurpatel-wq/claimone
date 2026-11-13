@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Download, Search, Loader2 } from 'lucide-react';
 import { addAdjustment, setDisputed, acceptPaidAmount, type ExceptionRow, type Problem } from '@/lib/recon/api';
-import { DISALLOWANCE_CATEGORIES } from '@/lib/engine/settlement';
+import { DISALLOWANCE_CATEGORIES, REASON_OPTIONS } from '@/lib/engine/settlement';
 import { Skeleton, inr, inrShort, shortDate, btn } from '@/components/ui';
 import { csvOf, SMALL_DIFF } from '@/lib/recon/exceptions';
 
@@ -150,7 +150,7 @@ export function CheckList({ rows, canWrite, onChanged, flash }: {
               <label className="text-xs font-semibold text-slate-700">Reason
                 <select value={cat} onChange={(e) => setCat(e.target.value)} className={`${btn.input} mt-1 block min-h-11`}>
                   <option value="">Choose…</option>
-                  {Object.entries(DISALLOWANCE_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  {REASON_OPTIONS.map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
               </label>
               <label className="min-w-[220px] flex-1 text-xs font-semibold text-slate-700">What the letter / portal says

@@ -20,7 +20,7 @@ type Item = {
   id: number; name: string; state: 'reading' | 'ready' | 'error'; kind: FileKind; error?: string; inboxId?: string;
   lines: PaymentLine[]; bank: BankLine[]; cases: PmjayRow[];
 };
-type Result = { pay: ApplyResult | null; cases: PmjayResult | null; bank: { inserted: number; duplicates: number } | null; auto: { matched: number; left: number } };
+type Result = { tms?: boolean; pay: ApplyResult | null; cases: PmjayResult | null; bank: { inserted: number; duplicates: number } | null; auto: { matched: number; left: number } };
 
 const KIND_LABEL: Record<FileKind, string> = { payments: 'Settlement', bank: 'Bank statement', pmjay_cases: 'PMJAY case sheet' };
 const ACCOUNT_KEY = 'claimone.bankAccount';
@@ -45,6 +45,10 @@ function describe(it: Item) {
   if (it.kind === 'bank') return <>{n(it.bank.length)} credits · <b>{inrShort(it.bank.reduce((a, x) => a + x.amount, 0))}</b></>;
   if (it.kind === 'pmjay_cases') return <>{n(it.cases.length)} PMJAY cases · NABH <b>{inrShort(it.cases.reduce((a, x) => a + (x.nabh_amount ?? 0), 0))}</b></>;
   const s = summarise(it.lines);
+  if (it.lines[0]?.format === 'tms') {
+    const cut = it.lines.reduce((a, l) => a + l.deduction_amount, 0);
+    return <>PMJAY sheet from TMS · {n(s.paid)} paid cases · <b>{inrShort(s.paidAmount)}</b>{cut > 0 && <span className="text-slate-500"> · deductions {inrShort(cut)}</span>}</>;
+  }
   return <>{n(s.paid)} payment{s.paid === 1 ? '' : 's'} · <b>{inrShort(s.paidAmount)}</b>{s.unpaid > 0 && <span className="text-slate-500"> · {n(s.unpaid)} not paid yet</span>}</>;
 }
 
@@ -161,7 +165,8 @@ export default function UploadPayments() {
         setSaving(`Saving ${it.name}…`);
         const r = await applyPayments(centreId, it.name, it.lines, (k) => setSaving(`Saving ${it.name}: ${n(k)} of ${n(it.lines.length)}`));
         if (!out.pay) out.pay = r;
-        else for (const k of Object.keys(r) as (keyof ApplyResult)[]) out.pay[k] += r[k];
+        else for (const k of Object.keys(r) as (keyof ApplyResult)[]) out.pay[k] = Number(out.pay[k] ?? 0) + Number(r[k] ?? 0);
+        if (it.lines[0]?.format === 'tms') out.tms = true;
         if (it.inboxId) await markInboxUsed(it.inboxId).catch(() => {});
       }
       for (const it of ready.filter((x) => x.kind === 'bank')) {
@@ -272,6 +277,10 @@ export default function UploadPayments() {
             <p className="flex items-center gap-2 text-lg font-semibold"><CheckCircle2 className="h-5 w-5" /> Saved</p>
             <ul className="mt-1 space-y-0.5">
               {result.pay && <li><b>{n(result.pay.matched)}</b> payments added to bills{result.pay.duplicate > 0 && ` · ${n(result.pay.duplicate)} were already saved`}</li>}
+              {result.pay && result.tms && (result.pay.created > 0 || (result.pay.fixed ?? 0) > 0 || (result.pay.disputed ?? 0) > 0) && <li>
+                {[result.pay.created > 0 ? `${n(result.pay.created)} paid cases were not in ClaimOne and are saved as paid history` : '',
+                  (result.pay.fixed ?? 0) > 0 ? `${n(result.pay.fixed ?? 0)} case IDs corrected (last digit was missing)` : '',
+                  (result.pay.disputed ?? 0) > 0 ? `${n(result.pay.disputed ?? 0)} disputed cases left unchanged` : ''].filter(Boolean).join(' · ')}</li>}
               {result.pay && result.pay.invalid + result.pay.skipped > 0 && <li>{n(result.pay.invalid + result.pay.skipped)} lines had no bill or claim no. and were left out</li>}
               {result.cases && <li><b>{n(result.cases.created)}</b> new PMJAY cases · {n(result.cases.moved)} status steps moved forward · {n(result.cases.paid)} payments recorded</li>}
               {result.cases?.problems.map((p, i) => <li key={i} className="text-amber-900">IP {p.ip}: {p.problem}</li>)}

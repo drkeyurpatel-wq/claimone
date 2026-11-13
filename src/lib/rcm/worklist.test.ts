@@ -10,8 +10,14 @@ describe('next step for a case', () => {
     expect(s).toMatchObject({ desk: 'admission', key: 'send_preauth', ours: true, overdue: false });
     expect(dueText(s, now)).toBe('in 3 h');
   });
-  it('PMJAY pre-auth is filed in TMS', () => {
-    expect(nextStep({ ...base, claim_type: 'pmjay' }, now).label).toBe('Submit pre-auth on TMS');
+  it('PMJAY has no pre-auth or enhancement: an admitted patient only waits for the discharge', () => {
+    const s = nextStep({ ...base, claim_type: 'pmjay' }, now);
+    expect(s).toMatchObject({ key: 'in_hospital_approved', label: 'Admission approved — record the discharge', ours: false, overdue: false });
+    // a PMJAY file that carries an approval below the package is not asked for an enhancement either
+    const a = nextStep({ ...base, claim_type: 'pmjay', status: 'preauth_approved' as const, estimated_amount: 91714, approved_amount: 50000 }, now);
+    expect(a.label).toBe('Admission approved — record the discharge');
+    // once discharged, the claim goes on TMS as before
+    expect(nextStep({ ...base, claim_type: 'pmjay', discharged_at: '2026-10-28T10:00:00+05:30' }, now)).toMatchObject({ key: 'send_claim', ours: true });
   });
   it('pre-auth unanswered after an hour is late for an insurer, not for PMJAY', () => {
     const c = { ...base, status: 'preauth_pending' as const, preauth_submitted_at: '2026-10-28T10:00:00+05:30' };

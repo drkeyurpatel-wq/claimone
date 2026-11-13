@@ -1,5 +1,6 @@
 // Save this week's payment lines: each is matched to its bill (or the bill is
-// created from it) in one database call, clm_apply_payments.
+// created from it) in one database call, clm_apply_payments — or, for the PMJAY
+// claim-paid sheet from TMS, clm_apply_pmjay_tms (each case closed in full).
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireUser, fail, fromDbError, uuid } from '@/lib/api/route';
@@ -17,8 +18,11 @@ const Line = z.object({
     bill_no: z.string().trim().min(1).max(300), bill_date: date, ip_no: str, uhid: str, patient_name: str, doctor_name: str,
     claimed_amount: money.nullable(),
   })).max(60).optional(),
+  // PMJAY claim-paid sheet from TMS
+  format: z.literal('tms').optional(), speciality: str.optional(), procedure_code: str.optional(),
+  procedure_name: z.string().trim().max(300).nullable().optional(), unique15: z.boolean().optional(),
 });
-const Body = z.object({ centre_id: uuid, file_name: z.string().trim().max(300), lines: z.array(z.unknown()).min(1).max(6000) });
+const Body = z.object({ centre_id: uuid, file_name: z.string().trim().max(300), lines: z.array(z.unknown()).min(1).max(6000), format: z.literal('tms').optional() });
 
 export async function POST(req: Request) {
   const auth = await requireUser();
@@ -34,7 +38,9 @@ export async function POST(req: Request) {
     if (l.success) good.push(l.data); else invalid++;
   }
   if (!good.length) return fail(400, 'None of the lines could be read.', { invalid });
-  const { data, error } = await auth.supabase.rpc('clm_apply_payments', { p_centre: b.centre_id, p_file: b.file_name, p_lines: good });
+  // the TMS sheet is final for every case on it: payment, TDS and deduction are closed together
+  const fn = b.format === 'tms' && good.every((l) => l.format === 'tms' && !!l.claim_ref) ? 'clm_apply_pmjay_tms' : 'clm_apply_payments';
+  const { data, error } = await auth.supabase.rpc(fn, { p_centre: b.centre_id, p_file: b.file_name, p_lines: good });
   if (error) return fromDbError(error);
   return NextResponse.json({ ok: true, ...(data as Record<string, unknown>), invalid });
 }

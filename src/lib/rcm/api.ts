@@ -186,6 +186,13 @@ export async function decideCut(claimId: string, decision: 'accept' | 'fight', n
   if (error) throw new Error(error.message);
 }
 
+/** A reason entered later on a deduction that came without one: a booked deduction, or the cut on a patient's file. */
+export async function setDeductionReason(target: { adjustmentId?: string | null; claimId?: string | null }, category: string, text?: string) {
+  const { error } = await sb().rpc('clm_set_deduction_reason', {
+    p_adjustment: target.adjustmentId ?? null, p_claim: target.adjustmentId ? null : target.claimId ?? null, p_category: category, p_text: text?.trim() || null });
+  if (error) throw new Error(error.message);
+}
+
 // ─── Ledger ─────────────────────────────────────────────────────────
 
 /** A payment typed in for one patient (clm_record_case_payment): booked like an uploaded letter line. */

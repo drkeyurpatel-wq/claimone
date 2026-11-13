@@ -15,7 +15,7 @@ import { LETTERS, LETTER_WAIT_DAYS } from '@/lib/rcm/cut';
 import { actionsFor, type CaseAction } from '@/lib/rcm/actions';
 import { routeFor } from '@/lib/rcm/payer';
 import { rs, dd, stepColumn, type ColKey, type LedgerRow } from '@/lib/rcm/ledger';
-import { DISALLOWANCE_CATEGORIES } from '@/lib/engine/settlement';
+import { DISALLOWANCE_CATEGORIES, REASON_OPTIONS } from '@/lib/engine/settlement';
 import { CutPanel } from '@/components/case/CutPanel';
 import { Modal, field, label } from './Modal';
 
@@ -144,7 +144,7 @@ function StatusForm({ r, col, isManager, onClose, onSaved }: {
         {pick.id === 'part' && <label className={label}>Deduction reason *
           <select value={why} onChange={(e) => setWhy(e.target.value)} className={field}>
             <option value="">Select…</option>
-            {Object.entries(DISALLOWANCE_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            {REASON_OPTIONS.map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select></label>}
         {pick.note && <label className={label}>{pick.note.label}{pick.note.required ? ' *' : ''}
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className={`${field} py-2`} /></label>}

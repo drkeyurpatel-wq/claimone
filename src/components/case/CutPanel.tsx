@@ -8,7 +8,7 @@ import type { Claim } from '@/lib/claims/types';
 import type { Cut } from '@/lib/rcm/cut';
 import { CUT_FLOOR } from '@/lib/rcm/cut';
 import { decideCut } from '@/lib/rcm/api';
-import { DISALLOWANCE_CATEGORIES } from '@/lib/engine/settlement';
+import { REASON_OPTIONS } from '@/lib/engine/settlement';
 import { inr, shortDate } from '@/components/ui';
 
 const field = 'mt-1 min-h-12 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100';
@@ -45,7 +45,7 @@ export function CutPanel({ c, cut, reason, shortfall, canWrite, onDone }: {
   c: Claim; cut: Cut;
   /** What the insurer wrote as the reason, if known. */
   reason: string | null;
-  /** Rupees short with no reason booked yet (accepting then needs a reason). */
+  /** Rupees short with no reason booked yet. */
   shortfall: number;
   canWrite: boolean;
   onDone: (msg: string) => void;
@@ -69,8 +69,9 @@ export function CutPanel({ c, cut, reason, shortfall, canWrite, onDone }: {
 
   const go = async (decision: 'accept' | 'fight') => {
     setError('');
+    if (!cat) { setError('Select the deduction reason.'); return; }
     if (decision === 'fight' && !text.trim()) { setError('Enter the grounds for dispute, or select one above.'); return; }
-    if (decision === 'accept' && shortfall > 1 && !cat) { setError('Select the deduction reason.'); return; }
+    if (decision === 'accept' && cat === 'other' && !text.trim()) { setError('Write the deduction reason.'); return; }
     setBusy(true);
     try {
       await decideCut(c.id, decision, text.trim() || undefined, cat || undefined);
@@ -85,6 +86,14 @@ export function CutPanel({ c, cut, reason, shortfall, canWrite, onDone }: {
     catch { setError('Copy failed — please select the text and copy it manually.'); }
   };
 
+  // every deduction carries a reason: one of the common ones, or "Other" with the reason written
+  const reasonBox = (
+    <label className="block text-base font-medium text-slate-800">Deduction reason *
+      <select value={cat} onChange={(e) => setCat(e.target.value)} className={field}>
+        <option value="">Choose…</option>
+        {REASON_OPTIONS.map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+      </select></label>
+  );
   const fighting = cut.state === 'fought';
   const aw = cut.awaited;
   return (
@@ -123,6 +132,7 @@ export function CutPanel({ c, cut, reason, shortfall, canWrite, onDone }: {
 
       {mode === 'fight' && (
         <div className="mt-3 space-y-3 rounded-xl bg-white p-4">
+          {reasonBox}
           <p className="text-base font-semibold text-slate-900">Grounds for dispute</p>
           <div className="flex flex-wrap gap-2">
             {GROUNDS.map((g) => (
@@ -141,12 +151,9 @@ export function CutPanel({ c, cut, reason, shortfall, canWrite, onDone }: {
       {mode === 'accept' && (
         <div className="mt-3 space-y-3 rounded-xl bg-white p-4">
           <p className="text-base font-semibold text-slate-900">Accept a deduction of {inr(cut.amount)}? It cannot be claimed later.</p>
-          {shortfall > 1 && <label className="block text-base font-medium text-slate-800">Deduction reason *
-            <select value={cat} onChange={(e) => setCat(e.target.value)} className={field}>
-              <option value="">Choose…</option>
-              {Object.entries(DISALLOWANCE_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-            </select></label>}
-          <input value={text} onChange={(e) => setText(e.target.value)} className={field} placeholder="Remarks (optional) — e.g. appeal declined" />
+          {reasonBox}
+          <input value={text} onChange={(e) => setText(e.target.value)} className={field}
+            placeholder={cat === 'other' ? 'Write the deduction reason *' : 'Remarks (optional) — e.g. appeal declined'} />
           <div className="flex flex-wrap gap-2">
             <button onClick={() => go('accept')} disabled={busy} className="min-h-12 rounded-xl bg-slate-700 px-5 text-base font-semibold text-white disabled:opacity-50">Confirm & accept</button>
             <button onClick={() => { setMode(null); setError(''); }} className="min-h-12 rounded-xl px-4 text-base text-slate-600">Back</button>
