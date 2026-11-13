@@ -344,8 +344,7 @@ begin
 end $$;
 
 -- ─── Deductions line by line (the same four sources as clm_v_leakage) ─
-drop view if exists clm_v_deduction_lines;
-create view clm_v_deduction_lines with (security_invoker = true) as
+create or replace view clm_v_deduction_lines with (security_invoker = true) as
 with itemised as (
   select d.tenant_id, c.centre_id, c.payer_id, c.id as claim_id, null::uuid as receivable_id, null::uuid as adjustment_id,
          d.kind, d.category, d.reason_text, d.recorded_at as at, d.amount
