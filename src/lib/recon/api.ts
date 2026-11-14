@@ -195,3 +195,19 @@ export async function markInboxUsed(id: string) {
   const { error } = await sb().from('clm_bot_inbox').update({ used_at: new Date().toISOString() }).eq('id', id);
   if (error) throw new Error(error.message);
 }
+
+/** UTRs already on a payment in ClaimOne (upper case) — a bank credit with one of these verifies that payment. */
+export async function fetchPaymentRefs(centreId: string): Promise<Set<string>> {
+  const { data } = await allRows((from, to) => sb().from('clm_receipts').select('id, reference')
+    .eq('centre_id', centreId).eq('source', 'advice').not('reference', 'is', null).order('id').range(from, to));
+  const out = new Set<string>();
+  for (const r of data as { reference: string | null }[]) { const v = (r.reference ?? '').trim().toUpperCase(); if (v) out.add(v); }
+  return out;
+}
+
+/** How many payments are verified by a bank statement (their bank credit has been found). */
+export async function countVerified(centreId: string): Promise<number> {
+  const { count } = await sb().from('clm_receipts').select('id', { count: 'exact', head: true })
+    .eq('centre_id', centreId).eq('source', 'advice').not('bank_receipt_id', 'is', null);
+  return count ?? 0;
+}

@@ -20,6 +20,7 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "read-excel-file": "^5.8.6",
+    "unpdf": "^2.2.0",
     "zod": "^4.4.1",
     "zustand": "^4.5.7"
   },

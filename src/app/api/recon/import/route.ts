@@ -6,6 +6,8 @@ import { z } from 'zod';
 import { requireUser, fail, uuid } from '@/lib/api/route';
 import { payerTokens } from '@/lib/recon/match';
 
+export const maxDuration = 60;
+
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const money = z.number().finite();
 const str = z.string().trim().max(300);
@@ -56,11 +58,18 @@ export async function POST(req: Request) {
   const base = { tenant_id, centre_id: b.centre_id, import_batch_id: batch.id };
 
   if (b.kind === 'bank_statement') {
-    for (const r of b.rows) {
-      const p = findPayer(r.narration);
-      const { error } = await supabase.from('clm_receipts').insert({ ...base, source: 'bank', bank_account: b.bank_account,
-        value_date: r.value_date, amount: r.amount, reference: r.reference, narration: r.narration, payer_id: p?.id ?? null });
-      if (!error) inserted++; else if (error.code === '23505') duplicates++; else return fail(400, error.message, { inserted });
+    const rows = b.rows.map((r) => ({ ...base, source: 'bank', bank_account: b.bank_account,
+      value_date: r.value_date, amount: r.amount, reference: r.reference, narration: r.narration, payer_id: findPayer(r.narration)?.id ?? null }));
+    // many at a time; a batch that holds a credit already saved is redone one by one, so repeats are counted, not refused
+    for (let i = 0; i < rows.length; i += 200) {
+      const part = rows.slice(i, i + 200);
+      const { error } = await supabase.from('clm_receipts').insert(part);
+      if (!error) { inserted += part.length; continue; }
+      if (error.code !== '23505') return fail(400, error.message, { inserted });
+      for (const row of part) {
+        const one = await supabase.from('clm_receipts').insert(row);
+        if (!one.error) inserted++; else if (one.error.code === '23505') duplicates++; else return fail(400, one.error.message, { inserted });
+      }
     }
   } else if (b.kind === 'cashless_tracker') {
     const rows = b.rows.map((r) => {

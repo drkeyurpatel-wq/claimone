@@ -8,9 +8,12 @@ import { Upload, Loader2, CheckCircle2, FileText, X, ClipboardPaste, ArrowRight,
 import { useAuthStore } from '@/lib/store/auth';
 import { parseCsv, parseBankStatement, type BankLine } from '@/lib/recon/parse';
 import { cellsToRows, parsePaymentSheet, summarise, type Cell, type PaymentLine } from '@/lib/recon/payments';
-import { applyPayments, importRows, readLetter, fetchInbox, markInboxUsed, type ApplyResult, type InboxItem } from '@/lib/recon/api';
+import { applyPayments, importRows, readLetter, fetchInbox, markInboxUsed, fetchPaymentRefs, countVerified, type ApplyResult, type InboxItem } from '@/lib/recon/api';
 import { detectKind, type FileKind } from '@/lib/recon/detect';
 import { autoMatch } from '@/lib/recon/auto';
+import { pdfItems } from '@/lib/recon/pdftext';
+import { isKotakStatement, parseKotakStatement, statementCredits, claimCredits } from '@/lib/recon/kotak';
+import { CURRENT_FROM } from '@/lib/rcm/ledger';
 import { countToCheck } from '@/lib/recon/tocheck';
 import { takeSnapshot, outcome, type Snapshot, type Outcome } from '@/lib/recon/pending';
 import { UploadOutcome } from '@/components/pay/UploadOutcome';
@@ -21,8 +24,10 @@ import { NoCentre, inrShort, shortDate } from '@/components/ui';
 type Item = {
   id: number; name: string; state: 'reading' | 'ready' | 'error'; kind: FileKind; error?: string; inboxId?: string;
   lines: PaymentLine[]; bank: BankLine[]; cases: PmjayRow[];
+  /** A statement read from the bank's PDF knows its own account and what was left out. */
+  account?: string; statement?: { period: string; read: number; confirms: number; older: number; olderAmount: number; other: number; otherAmount: number };
 };
-type Result = { tms?: boolean; outcome?: Outcome; pay: ApplyResult | null; cases: PmjayResult | null; bank: { inserted: number; duplicates: number } | null; auto: { matched: number; left: number } };
+type Result = { tms?: boolean; outcome?: Outcome; pay: ApplyResult | null; cases: PmjayResult | null; bank: { inserted: number; duplicates: number; verified: number } | null; auto: { matched: number; left: number } };
 
 const KIND_LABEL: Record<FileKind, string> = { payments: 'Settlement', bank: 'Bank statement', pmjay_cases: 'PMJAY case sheet' };
 const ACCOUNT_KEY = 'claimone.bankAccount';
@@ -44,6 +49,13 @@ let seq = 0;
 
 /** What one ready file holds, in a few words. */
 function describe(it: Item) {
+  if (it.kind === 'bank' && it.statement) {
+    const st = it.statement; const fresh = it.bank.length - st.confirms;
+    return <>{it.account} · {st.period} · {n(st.read)} credits read, every line checked against the balance
+      <span className="mt-1 block"><b>{n(st.confirms)}</b> match a payment already in ClaimOne — these get the blue tick{fresh > 0 && <> · <b>{n(fresh)}</b> more from insurers, TPAs or government with no payment recorded yet</>}</span>
+      {st.older > 0 && <span className="block text-slate-500">{n(st.older)} older insurer credits ({inrShort(st.olderAmount)}) are for bills from before {shortDate(CURRENT_FROM)} that ClaimOne does not hold — not added</span>}
+      {st.other > 0 && <span className="block text-slate-500">{n(st.other)} other credits ({inrShort(st.otherAmount)}) — cash, card, Paytm, transfers, loans — are not claim money and are not added</span>}</>;
+  }
   if (it.kind === 'bank') return <>{n(it.bank.length)} credits · <b>{inrShort(it.bank.reduce((a, x) => a + x.amount, 0))}</b></>;
   if (it.kind === 'pmjay_cases') return <>{n(it.cases.length)} PMJAY cases · NABH <b>{inrShort(it.cases.reduce((a, x) => a + (x.nabh_amount ?? 0), 0))}</b></>;
   const s = summarise(it.lines);
@@ -77,6 +89,20 @@ export default function UploadPayments() {
 
   const update = (id: number, patch: Partial<Item>) => setItems((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch } : x)));
 
+  /** A Kotak statement PDF is read on this device. Returns false when the PDF is something else (a letter). */
+  const readStatement = async (id: number, f: File): Promise<boolean> => {
+    const pieces = await pdfItems(await f.arrayBuffer()).catch(() => []);
+    if (!isKotakStatement(pieces)) return false;
+    const st = parseKotakStatement(pieces);
+    if (!st.ties || !st.account) throw new Error('This bank statement could not be read line by line (the amounts do not add up to the balance). Nothing was added — send this file to support.');
+    const credits = statementCredits(st);
+    const c = claimCredits(credits, await fetchPaymentRefs(centreId!), CURRENT_FROM);
+    if (!c.keep.length) throw new Error(`No money from insurers, TPAs or government payers in this statement (${n(credits.length)} credits read — cash, card, transfers). Nothing to add.`);
+    update(id, { state: 'ready', kind: 'bank', bank: c.keep, account: `Kotak ${st.account}`,
+      statement: { period: st.from && st.to ? `${shortDate(st.from)} – ${shortDate(st.to)}` : '', read: credits.length, confirms: c.confirms, older: c.older, olderAmount: c.olderAmount, other: c.other, otherAmount: c.otherAmount } });
+    return true;
+  };
+
   const addFiles = async (files: FileList | File[]) => {
     setResult(null); setFailMsg('');
     for (const f of Array.from(files)) {
@@ -109,6 +135,8 @@ export default function UploadPayments() {
             if (!r.rows.length) throw new Error('No payments found in this file.');
             update(id, { state: 'ready', kind, lines: r.rows });
           }
+        } else if (/\.pdf$/i.test(f.name) && await readStatement(id, f)) {
+          // a bank statement PDF: read here in the browser, nothing sent to any service
         } else if (/\.pdf$/i.test(f.name) || f.type.startsWith('image/')) {
           const blob = f.type.startsWith('image/') ? await shrinkImage(f) : f;
           const lines = await readLetter({ file: blob, fileName: f.name });
@@ -148,7 +176,7 @@ export default function UploadPayments() {
 
   const ready = items.filter((x) => x.state === 'ready');
   const busy = items.some((x) => x.state === 'reading');
-  const needsAccount = ready.some((x) => x.kind === 'bank');
+  const needsAccount = ready.some((x) => x.kind === 'bank' && !x.account);
 
   const save = async () => {
     if (!centreId || !ready.length) return;
@@ -180,11 +208,14 @@ export default function UploadPayments() {
         const pmjay = hasTms && after ? Object.entries(after.payerNames).filter(([, name]) => /pmjay/i.test(name)).map(([id]) => id) : [];
         if (after) out.outcome = outcome(before, after, new Date(), pmjay);
       }
-      for (const it of ready.filter((x) => x.kind === 'bank')) {
+      const bankFiles = ready.filter((x) => x.kind === 'bank');
+      const verifiedBefore = bankFiles.length ? await countVerified(centreId) : 0;
+      for (const it of bankFiles) {
         setSaving(`Saving ${it.name}…`);
-        const r = await importRows({ kind: 'bank_statement', centre_id: centreId, file_name: it.name, bank_account: account.trim(), rows: it.bank });
-        out.bank = { inserted: (out.bank?.inserted ?? 0) + r.inserted, duplicates: (out.bank?.duplicates ?? 0) + r.duplicates };
+        const r = await importRows({ kind: 'bank_statement', centre_id: centreId, file_name: it.name, bank_account: it.account ?? account.trim(), rows: it.bank });
+        out.bank = { inserted: (out.bank?.inserted ?? 0) + r.inserted, duplicates: (out.bank?.duplicates ?? 0) + r.duplicates, verified: 0 };
       }
+      if (out.bank) out.bank.verified = Math.max(0, (await countVerified(centreId)) - verifiedBefore);
       if (needsAccount) { try { localStorage.setItem(ACCOUNT_KEY, account.trim()); } catch { /* private window */ } }
       setSaving('Matching bank money to bills…');
       out.auto = await autoMatch(centreId);
@@ -298,6 +329,7 @@ export default function UploadPayments() {
               {result.cases && <li><b>{n(result.cases.created)}</b> new PMJAY cases · {n(result.cases.moved)} status steps moved forward · {n(result.cases.paid)} payments recorded</li>}
               {result.cases?.problems.map((p, i) => <li key={i} className="text-amber-900">IP {p.ip}: {p.problem}</li>)}
               {result.bank && <li><b>{n(result.bank.inserted)}</b> bank credits added{result.bank.duplicates > 0 && ` · ${n(result.bank.duplicates)} were already there`}</li>}
+              {result.bank && result.bank.verified > 0 && <li><b>{n(result.bank.verified)}</b> payments are now verified in the bank statement — blue tick on Master and Archive</li>}
               {result.auto.matched > 0 && <li><b>{n(result.auto.matched)}</b> bank credits matched to bills automatically</li>}
               {result.auto.left > 0 && <li className="text-amber-900">{n(result.auto.left)} bank credits with no patient known — see To check</li>}
             </ul>
