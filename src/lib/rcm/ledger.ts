@@ -29,6 +29,8 @@ export interface Cell {
   editable: boolean;
   /** A small label on the cell (e.g. where the row came from). */
   tag?: string;
+  /** Payment matched to a credit in an uploaded bank statement: Master shows a blue tick. */
+  verified?: boolean;
   /** Already the whole stage (not a sent + decided pair): Master shows it as it is. */
   whole?: boolean;
 }
@@ -157,7 +159,7 @@ export function mergePay(paid: Cell, cut: Cell): Cell {
   return {
     key: decide ? 'cut' : paid.editable ? 'paid' : cut.editable ? 'cut' : 'paid',
     state: decide ? 'ours' : paid.state === 'blank' && cut.state === 'done' && !cutPart ? 'blank' : paid.state,
-    text, sub: sub || undefined, tone: cut.tone ?? paid.tone, editable: paid.editable || cut.editable,
+    text, sub: sub || undefined, tone: cut.tone ?? paid.tone, editable: paid.editable || cut.editable, verified: paid.verified,
   };
 }
 
@@ -241,10 +243,11 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
       // short: what is still due first, then how it came; TDS and the bank match are in the cell's form and the download
       : got > 0 ? [moreDue ? (cut.awaited ? `${rs(m!.balance)} awaited` : `${rs(m!.balance)} due`) : '',
           m && (m.parts ?? 0) > 1 ? `${m.parts} payments` : '',
-          // the bank line is a second check: it speaks only when a bank statement for that day was uploaded
-          m && m.banked != null ? (m.banked >= got - 1 ? 'In bank ✓' : m.banked > 0 ? `${rs(m.banked)} in bank` : m.bankChecked ? 'Not in bank statement' : '') : '']
+          // a payment with a UTR is in the bank; a bank statement uploaded later only verifies it (the blue tick)
+          m && Math.max(m.withUtr ?? 0, m.banked ?? 0) >= got - 1 ? 'In bank' : m && Math.max(m.withUtr ?? 0, m.banked ?? 0) > 0 ? `${rs(Math.max(m.withUtr ?? 0, m.banked ?? 0))} in bank` : m && m.withUtr != null ? 'UTR not entered' : '']
           .filter(Boolean).join(' · ') || (m && m.tds ? `TDS ${rs(m.tds)}` : undefined) : undefined),
     tone: excess ? 'alert' : undefined,
+    verified: got > 0 && !!m && m.banked != null && m.banked >= got - 1,
     editable: w && APPROVED.has(c.status) && c.status !== 'settled' && (got === 0 || moreDue || excess > 0) };
 
   // cut
@@ -359,7 +362,7 @@ export function inPayState(r: LedgerRow, s: PayState): boolean {
   }
 }
 
-/** Money received and seen in the bank (null: nothing received yet). */
+/** Money received and verified against an uploaded bank statement (the blue tick). */
 export function inBank(r: LedgerRow): boolean {
   const m = r.j.money;
   return !!m && m.allocated > 0 && m.banked != null && m.banked >= m.allocated - 1;
@@ -437,7 +440,7 @@ const ymd = (d: string | null | undefined) => (d ? new Date(d.length === 10 ? `$
 
 export function toCsv(rows: LedgerRow[]): string {
   const head = ['Source', 'Admission date', 'Patient', 'IP number', 'UHID', 'Doctor', 'Payer', 'Pre-auth submitted', 'Pre-auth number', 'Pre-auth approved',
-    'Discharge date', 'Claim submitted', 'Claim no. / PMJAY case ID', 'Claimed', 'Approved', 'Received', 'TDS', 'Outstanding', 'Deduction', 'Deduction status', 'In bank', 'Days since discharge', 'Next action', 'Due'];
+    'Discharge date', 'Claim submitted', 'Claim no. / PMJAY case ID', 'Claimed', 'Approved', 'Received', 'TDS', 'Outstanding', 'Deduction', 'Deduction status', 'Verified in bank statement', 'Days since discharge', 'Next action', 'Due'];
   const lines = rows.map(({ j: { c, money: m }, cut, next, cells, age }) => [
     SOURCE_LABEL[c.case_source ?? 'manual'] ?? '', ymd(c.admitted_at ?? c.admission_date), c.patient_name, c.admission_ref, c.patient_uhid, c.treating_doctor_name, c.clm_payers?.name ?? c.sponsor_name,
     ymd(c.preauth_submitted_at), c.tpa_preauth_number, n(c.preauth_approved_amount), ymd(c.discharged_at ?? c.discharge_date),

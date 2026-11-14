@@ -28,8 +28,8 @@ export interface CaseMoney {
   parts?: number;
   /** Date of the latest payment (IST day, yyyy-mm-dd). */
   last_paid?: string | null;
-  /** An uploaded bank statement covers the day of the latest payment — only then can a payment be called missing from the bank. */
-  bankChecked?: boolean;
+  /** Of the money received, how much came with a UTR (0038). A payment with a UTR is in the bank; `banked` is the later statement check. */
+  withUtr?: number;
 }
 
 const PAYMENT_STEPS = new Set(['wait_payment']);

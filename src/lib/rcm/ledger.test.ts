@@ -186,15 +186,17 @@ describe('ageing, bank and letters', () => {
   });
   it('settlement cell says whether the money is in the bank', () => {
     const base = { status: 'claim_approved' as const, submitted_at: 'x', claimed_amount: 50000, approved_amount: 50000, discharged_at: 'x' };
-    // paid as per the letter / PMJAY sheet, and no bank statement uploaded for that day: nothing is said about the bank
-    const noStatement = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 0 }));
-    expect(noStatement.cells.paid.sub).toBe('TDS ₹1,000');
-    expect(noStatement.cells.paid.text).toBe('₹49,000');
-    // a statement covering that day was uploaded and shows no such credit: now it is worth saying
-    const notYet = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 0, bankChecked: true }));
-    expect(notYet.cells.paid.sub).toBe('Not in bank statement');
-    const inBank = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 49000 }));
-    expect(inBank.cells.paid.sub).toBe('In bank ✓');
+    // paid with a UTR (letter / PMJAY sheet): it is in the bank — no statement needed to say so
+    const withUtr = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 0, withUtr: 49000 }));
+    expect(withUtr.cells.paid).toMatchObject({ text: '₹49,000', sub: 'In bank', verified: false });
+    // the bank statement uploaded later shows the credit: the blue tick
+    const verified = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 49000, withUtr: 49000 }));
+    expect(verified.cells.paid).toMatchObject({ sub: 'In bank', verified: true });
+    expect(verified.view.pay.verified).toBe(true);
+    // a payment typed without a UTR is the only one that asks for something
+    const typed = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 0, withUtr: 0 }));
+    expect(typed.cells.paid.sub).toBe('UTR not entered');
+    expect(JSON.stringify([withUtr, verified, typed].map((r) => r.cells.paid))).not.toMatch(/not in bank/i);
   });
   it('a letter sent shows on the deduction cell', () => {
     const r = row(c({ status: 'claim_approved', submitted_at: 'x', claimed_amount: 52000, approved_amount: 50000, discharged_at: 'x',
@@ -342,7 +344,7 @@ describe('Master view: one cell per stage', () => {
   it('payment: received, and a short payment waiting for Accept / Dispute takes the cell', () => {
     const paid = row(c({ status: 'settled', submitted_at: 'x', discharged_at: 'x', claimed_amount: 50000, approved_amount: 50000, settled_amount: 50000 }),
       money({ allocated: 50000, balance: 0, banked: 50000 })).view.pay;
-    expect(paid).toMatchObject({ text: '₹50,000', sub: 'In bank ✓', state: 'done' });
+    expect(paid).toMatchObject({ text: '₹50,000', sub: 'In bank', state: 'done' });
     const short = row(c({ status: 'claim_approved', submitted_at: 'x', discharged_at: 'x', claimed_amount: 50000, approved_amount: 50000 }),
       money({ allocated: 45000, balance: 5000 })).view.pay;
     expect(short).toMatchObject({ key: 'cut', state: 'ours', text: '₹45,000', tone: 'alert' });

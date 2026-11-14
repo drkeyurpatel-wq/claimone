@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Search, UserPlus, Download, Plus, Archive, SlidersHorizontal, X, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
+import { Loader2, Search, UserPlus, Download, Plus, Archive, SlidersHorizontal, X, ArrowUp, ArrowDown, ChevronsUpDown, BadgeCheck } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { fetchArchive, fetchJourneys, type Journey } from '@/lib/rcm/api';
 import { VIEW_COLUMNS, FILTERS, PAY_STATES, firstDir, sortRows, doctorKey, doctorLabel, inFilter, inPayState, inBank, ledgerRow, rowPayerGroup, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow, type PayState, type Sort, type SortKey } from '@/lib/rcm/ledger';
@@ -35,6 +35,7 @@ function CellView({ cell, onOpen, nav, strong }: { cell: Cell; onOpen: () => voi
         {mark && <span className={`h-2 w-2 shrink-0 rounded-full ${DOT[mark]}`} />}
         {empty && cell.editable && cell.state !== 'ours' && <Plus className="h-3.5 w-3.5 shrink-0" />}
         <span className="truncate" title={text}>{text}</span>
+        {cell.verified && <span title="Verified in the bank statement" className="shrink-0"><BadgeCheck className="h-4 w-4 text-sky-600" aria-label="Verified in the bank statement" /></span>}
         {cell.tag && <span className="shrink-0 rounded bg-violet-100 px-1.5 text-[11px] font-semibold leading-4 text-violet-800" title={cell.tag === 'Old sheet' ? 'Brought over from the old Excel sheet' : 'Loaded from the PMJAY sheet'}>{cell.tag}</span>}
       </span>
       {cell.sub && <span className="mt-0.5 block truncate text-[13px] leading-4 text-slate-500" title={cell.sub}>{cell.sub}</span>}
@@ -199,11 +200,11 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
                   <option value="">All doctors</option>
                   {doctors.map((d) => <option key={d} value={d}>{doctorLabel(d)}</option>)}
                 </select></label>
-              {archive && <label className="block text-sm font-medium text-slate-600">Bank statement check
+              {archive && <label className="block text-sm font-medium text-slate-600">Bank statement
                 <select value={bank} onChange={(e) => setBank(e.target.value as '' | 'in' | 'not')} className={`mt-1 min-h-11 w-full rounded-lg border px-3 text-[15px] font-medium ${bank ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-300 bg-white text-slate-800'}`}>
                   <option value="">All</option>
-                  <option value="in">Matched to bank statement</option>
-                  <option value="not">Not matched yet</option>
+                  <option value="in">Verified (blue tick)</option>
+                  <option value="not">Not verified yet</option>
                 </select></label>}
               <div className="flex justify-between pt-1">
                 <button type="button" disabled={!active} onClick={() => { setPtype(''); setPay(''); setDoc(''); setBank(''); }} className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-slate-600 disabled:opacity-40"><X className="h-4 w-4" /> Clear</button>

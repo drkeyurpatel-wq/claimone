@@ -60,7 +60,7 @@ export default function ToCheck() {
     const csv = '﻿' + rows.map((r) => r.map((v) => (/^\d{11,}$/.test(v) ? `="${v}"` : /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join(',')).join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `Not in bank ${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })}.csv`;
+    a.download = `UTR not found in bank statement ${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })}.csv`;
     a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
 
@@ -100,7 +100,7 @@ export default function ToCheck() {
       )}
 
       {!loading && bank.length > 0 && (
-        <Section icon={Clock} title="Letter says paid — not in bank" sub={`The bank statement covers these dates but shows no credit with this UTR, ${NOT_IN_BANK_DAYS}+ days on. Check with the bank or the payer.`}
+        <Section icon={Clock} title="Paid with UTR — not yet found in the bank statement" sub={`The bank statement covers these dates but shows no credit with this UTR, ${NOT_IN_BANK_DAYS}+ days on. Check with the bank or the payer.`}
           count={bank.length} amount={bank.reduce((a, r) => a + r.amount, 0)}>
           <div className="flex justify-end px-4 pt-3">
             <button onClick={downloadBank} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"><Download className="h-4 w-4" /> Download list</button>

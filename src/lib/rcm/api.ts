@@ -111,21 +111,15 @@ export async function fetchCaseMoney(centreId: string): Promise<Map<string, Case
   const [{ data, error }, banked] = await Promise.all([
     allRows((from, to) => sb().from('clm_v_receivable_balance').select(MONEY_SELECT)
       .eq('centre_id', centreId).not('claim_id', 'is', null).neq('debtor_type', 'patient').order('id').range(from, to)),
-    allRows((from, to) => sb().from('clm_v_case_banked').select('claim_id, banked, parts').eq('centre_id', centreId).order('claim_id').range(from, to)),
+    allRows((from, to) => sb().from('clm_v_case_banked').select('claim_id, banked, parts, with_utr').eq('centre_id', centreId).order('claim_id').range(from, to)),
   ]);
-  // The days the uploaded bank statements cover. A payment (from a letter or the PMJAY sheet, with its UTR) is real
-  // whether or not a statement was uploaded; only inside these days can it be called missing from the bank.
-  const edge = async (asc: boolean) => (await sb().from('clm_receipts').select('value_date').eq('centre_id', centreId).eq('source', 'bank')
-    .order('value_date', { ascending: asc }).limit(1).maybeSingle()).data?.value_date as string | undefined;
-  const [bankFrom, bankTo] = await Promise.all([edge(true), edge(false)]);
   // a failed read must not show every case as unpaid
   if (error || banked.error) throw new Error('Could not load payments');
-  const inBank = new Map(((banked.data ?? []) as { claim_id: string; banked: number; parts: number }[]).map((b) => [b.claim_id, b]));
+  const inBank = new Map(((banked.data ?? []) as { claim_id: string; banked: number; parts: number; with_utr: number }[]).map((b) => [b.claim_id, b]));
   return new Map(((data ?? []) as Record<string, unknown>[]).map((r) => {
     const m = toMoney(r);
     const b = inBank.get(m.claim_id);
-    const bankChecked = !!bankFrom && !!bankTo && !!m.last_paid && m.last_paid >= bankFrom && m.last_paid <= bankTo;
-    return [m.claim_id, { ...m, banked: Number(b?.banked ?? 0), parts: Number(b?.parts ?? 0), bankChecked }];
+    return [m.claim_id, { ...m, banked: Number(b?.banked ?? 0), parts: Number(b?.parts ?? 0), withUtr: Number(b?.with_utr ?? 0) }];
   }));
 }
 
