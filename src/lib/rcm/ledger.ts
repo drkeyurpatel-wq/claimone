@@ -241,7 +241,8 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
       // short: what is still due first, then how it came; TDS and the bank match are in the cell's form and the download
       : got > 0 ? [moreDue ? (cut.awaited ? `${rs(m!.balance)} awaited` : `${rs(m!.balance)} due`) : '',
           m && (m.parts ?? 0) > 1 ? `${m.parts} payments` : '',
-          m && m.banked != null ? (m.banked >= got - 1 ? 'In bank ✓' : m.banked > 0 ? `${rs(m.banked)} in bank` : 'Not in bank') : '']
+          // the bank line is a second check: it speaks only when a bank statement for that day was uploaded
+          m && m.banked != null ? (m.banked >= got - 1 ? 'In bank ✓' : m.banked > 0 ? `${rs(m.banked)} in bank` : m.bankChecked ? 'Not in bank statement' : '') : '']
           .filter(Boolean).join(' · ') || (m && m.tds ? `TDS ${rs(m.tds)}` : undefined) : undefined),
     tone: excess ? 'alert' : undefined,
     editable: w && APPROVED.has(c.status) && c.status !== 'settled' && (got === 0 || moreDue || excess > 0) };

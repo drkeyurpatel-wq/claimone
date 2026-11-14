@@ -186,8 +186,13 @@ describe('ageing, bank and letters', () => {
   });
   it('settlement cell says whether the money is in the bank', () => {
     const base = { status: 'claim_approved' as const, submitted_at: 'x', claimed_amount: 50000, approved_amount: 50000, discharged_at: 'x' };
-    const notYet = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 0 }));
-    expect(notYet.cells.paid.sub).toBe('Not in bank');
+    // paid as per the letter / PMJAY sheet, and no bank statement uploaded for that day: nothing is said about the bank
+    const noStatement = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 0 }));
+    expect(noStatement.cells.paid.sub).toBe('TDS ₹1,000');
+    expect(noStatement.cells.paid.text).toBe('₹49,000');
+    // a statement covering that day was uploaded and shows no such credit: now it is worth saying
+    const notYet = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 0, bankChecked: true }));
+    expect(notYet.cells.paid.sub).toBe('Not in bank statement');
     const inBank = row(c(base), money({ allocated: 49000, tds: 1000, balance: 0, banked: 49000 }));
     expect(inBank.cells.paid.sub).toBe('In bank ✓');
   });

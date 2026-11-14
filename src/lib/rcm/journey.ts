@@ -28,6 +28,8 @@ export interface CaseMoney {
   parts?: number;
   /** Date of the latest payment (IST day, yyyy-mm-dd). */
   last_paid?: string | null;
+  /** An uploaded bank statement covers the day of the latest payment — only then can a payment be called missing from the bank. */
+  bankChecked?: boolean;
 }
 
 const PAYMENT_STEPS = new Set(['wait_payment']);

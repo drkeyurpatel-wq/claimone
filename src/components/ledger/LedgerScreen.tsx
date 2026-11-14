@@ -199,11 +199,11 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
                   <option value="">All doctors</option>
                   {doctors.map((d) => <option key={d} value={d}>{doctorLabel(d)}</option>)}
                 </select></label>
-              {archive && <label className="block text-sm font-medium text-slate-600">Bank
+              {archive && <label className="block text-sm font-medium text-slate-600">Bank statement check
                 <select value={bank} onChange={(e) => setBank(e.target.value as '' | 'in' | 'not')} className={`mt-1 min-h-11 w-full rounded-lg border px-3 text-[15px] font-medium ${bank ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-300 bg-white text-slate-800'}`}>
                   <option value="">All</option>
-                  <option value="in">In bank ✓</option>
-                  <option value="not">Not in bank yet</option>
+                  <option value="in">Matched to bank statement</option>
+                  <option value="not">Not matched yet</option>
                 </select></label>}
               <div className="flex justify-between pt-1">
                 <button type="button" disabled={!active} onClick={() => { setPtype(''); setPay(''); setDoc(''); setBank(''); }} className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-slate-600 disabled:opacity-40"><X className="h-4 w-4" /> Clear</button>
