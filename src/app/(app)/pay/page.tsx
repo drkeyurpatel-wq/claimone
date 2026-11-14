@@ -12,7 +12,8 @@ import { applyPayments, importRows, readLetter, fetchInbox, markInboxUsed, type 
 import { detectKind, type FileKind } from '@/lib/recon/detect';
 import { autoMatch } from '@/lib/recon/auto';
 import { countToCheck } from '@/lib/recon/tocheck';
-import { pmjayPending, tmsOutcome, type PmjayPending, type TmsOutcome } from '@/lib/recon/pending';
+import { takeSnapshot, outcome, type Snapshot, type Outcome } from '@/lib/recon/pending';
+import { UploadOutcome } from '@/components/pay/UploadOutcome';
 import { parsePmjay, type PmjayRow } from '@/lib/rcm/pmjay';
 import { importPmjay, type PmjayResult } from '@/lib/rcm/api';
 import { NoCentre, inrShort, shortDate } from '@/components/ui';
@@ -21,7 +22,7 @@ type Item = {
   id: number; name: string; state: 'reading' | 'ready' | 'error'; kind: FileKind; error?: string; inboxId?: string;
   lines: PaymentLine[]; bank: BankLine[]; cases: PmjayRow[];
 };
-type Result = { tms?: boolean; outcome?: TmsOutcome; pay: ApplyResult | null; cases: PmjayResult | null; bank: { inserted: number; duplicates: number } | null; auto: { matched: number; left: number } };
+type Result = { tms?: boolean; outcome?: Outcome; pay: ApplyResult | null; cases: PmjayResult | null; bank: { inserted: number; duplicates: number } | null; auto: { matched: number; left: number } };
 
 const KIND_LABEL: Record<FileKind, string> = { payments: 'Settlement', bank: 'Bank statement', pmjay_cases: 'PMJAY case sheet' };
 const ACCOUNT_KEY = 'claimone.bankAccount';
@@ -162,9 +163,9 @@ export default function UploadPayments() {
         out.cases = out.cases ? { created: out.cases.created + r.created, updated: out.cases.updated + r.updated, moved: out.cases.moved + r.moved,
           paid: out.cases.paid + r.paid, skipped: out.cases.skipped + r.skipped, problems: [...out.cases.problems, ...r.problems] } : r;
       }
-      // the PMJAY sheet from TMS: note what is pending before it goes in, so the result can say what it cleared
+      // note what is pending before the payments go in, so the result can say what they cleared and what is left
       const hasTms = ready.some((x) => x.kind === 'payments' && x.lines[0]?.format === 'tms');
-      const before: PmjayPending | null = hasTms ? await pmjayPending(centreId).catch(() => null) : null;
+      const before: Snapshot | null = ready.some((x) => x.kind === 'payments' || x.kind === 'pmjay_cases') ? await takeSnapshot(centreId).catch(() => null) : null;
       for (const it of ready.filter((x) => x.kind === 'payments')) {
         setSaving(`Saving ${it.name}…`);
         const r = await applyPayments(centreId, it.name, it.lines, (k) => setSaving(`Saving ${it.name}: ${n(k)} of ${n(it.lines.length)}`));
@@ -174,8 +175,10 @@ export default function UploadPayments() {
         if (it.inboxId) await markInboxUsed(it.inboxId).catch(() => {});
       }
       if (before) {
-        const after = await pmjayPending(centreId).catch(() => null);
-        if (after) out.outcome = tmsOutcome(before, after);
+        const after = await takeSnapshot(centreId).catch(() => null);
+        // a repeat upload changes nothing: still report on the payer of the file (PMJAY for the TMS sheet)
+        const pmjay = hasTms && after ? Object.entries(after.payerNames).filter(([, name]) => /pmjay/i.test(name)).map(([id]) => id) : [];
+        if (after) out.outcome = outcome(before, after, new Date(), pmjay);
       }
       for (const it of ready.filter((x) => x.kind === 'bank')) {
         setSaving(`Saving ${it.name}…`);
@@ -283,16 +286,10 @@ export default function UploadPayments() {
         {result && (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-base text-emerald-900">
             <p className="flex items-center gap-2 text-lg font-semibold"><CheckCircle2 className="h-5 w-5" /> Saved</p>
-            <ul className="mt-1 space-y-0.5">
-              {result.outcome && <>
-                <li className="text-lg"><b>PMJAY bills pending: {n(result.outcome.billsBefore)} → {n(result.outcome.billsAfter)}</b> · {inrShort(result.outcome.amountBefore)} → {inrShort(result.outcome.amountAfter)}</li>
-                {result.outcome.archived > 0 && <li><b>{n(result.outcome.archived)}</b> Master files paid and moved to Archive</li>}
-                <li><b>Still to come from PMJAY: {inrShort(result.outcome.pendingAmount)}</b> on {n(result.outcome.pendingFiles)} files — {n(result.outcome.billsAfter)} pending bills ({inrShort(result.outcome.amountAfter)})
-                  {result.outcome.waiting > 0 && <> + {n(result.outcome.waiting)} claims submitted, not paid yet ({inrShort(result.outcome.waitingAmount)})</>}
-                  {' · '}<Link href="/master" className="font-semibold underline">Open Master</Link>{' · '}<Link href="/claims/mis" className="font-semibold underline">Money owed</Link></li>
-              </>}
-              {result.pay && !result.outcome && <li><b>{n(result.pay.matched)}</b> payments added to bills{result.pay.duplicate > 0 && ` · ${n(result.pay.duplicate)} were already saved`}</li>}
-              {result.pay && result.tms && <li className="text-sm text-emerald-800">
+            {result.outcome && <UploadOutcome o={result.outcome} />}
+            <ul className={result.outcome ? 'mt-2 space-y-0.5 text-sm text-emerald-800' : 'mt-1 space-y-0.5'}>
+              {result.pay && !result.tms && <li><b>{n(result.pay.matched)}</b> payments added to bills{result.pay.duplicate > 0 && ` · ${n(result.pay.duplicate)} were already saved`}</li>}
+              {result.pay && result.tms && <li>
                 {[`${n(result.pay.matched)} payments added`, result.pay.duplicate > 0 ? `${n(result.pay.duplicate)} already saved` : '',
                   result.pay.created > 0 ? `${n(result.pay.created)} older paid cases kept as history` : '',
                   (result.pay.fixed ?? 0) > 0 ? `${n(result.pay.fixed ?? 0)} case IDs corrected` : '',
