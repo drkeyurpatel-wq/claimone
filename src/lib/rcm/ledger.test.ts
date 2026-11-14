@@ -225,8 +225,11 @@ describe('old sheet', () => {
   });
   it('a PMJAY case has no pre-auth cells and no enhancement: admitted, then discharge', () => {
     const p = row(c({ claim_type: 'pmjay', status: 'draft', tpa_claim_number: '2026102910013158' }));
-    expect(p.cells.pa_sent).toMatchObject({ state: 'na', text: 'Not applicable', editable: false });
+    expect(p.cells.pa_sent).toMatchObject({ state: 'done', text: 'Admission approved', editable: false });
+    expect(p.view.preauth).toMatchObject({ state: 'done', text: 'Admission approved', editable: false });
     expect(p.cells.pa_ok).toMatchObject({ state: 'na', editable: false });
+    // no case ID yet: the cell is simply empty
+    expect(row(c({ claim_type: 'pmjay', status: 'draft', tpa_claim_number: null })).view.preauth).toMatchObject({ state: 'na', text: '' });
     expect(p.next.text).toBe('Admission approved — record the discharge');
     const approved = row(c({ claim_type: 'pmjay', status: 'preauth_approved', approved_amount: 91714 }));
     expect(approved.cells.pa_ok.sub).toBeUndefined();

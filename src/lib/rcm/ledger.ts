@@ -29,6 +29,8 @@ export interface Cell {
   editable: boolean;
   /** A small label on the cell (e.g. where the row came from). */
   tag?: string;
+  /** Already the whole stage (not a sent + decided pair): Master shows it as it is. */
+  whole?: boolean;
 }
 
 /** Where a row came from: brought over from the old Excel sheet, the eCW import, or entered in ClaimOne. */
@@ -125,7 +127,7 @@ const daysSince = (d: string | null | undefined, now: Date) =>
 
 /** Sent + decided → one cell: what stands now, with when it went (and how long it has waited). */
 export function mergeStage(sent: Cell, dec: Cell, sentAt: string | null | undefined, now: Date, claim: boolean): Cell {
-  if (sent.state === 'na') return sent;
+  if (sent.state === 'na' || sent.whole) return sent;
   const editable = sent.editable || dec.editable;
   const key = dec.editable ? dec.key : sent.key;
   const when = sent.text && sent.text !== 'Submitted' ? `Sent ${sent.text}` : 'Sent';
@@ -179,8 +181,15 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   const skippedPreauth = pmjayCase || (!preauthSent && (corporate || inClaim || !!discharged));
 
   // pre-auth sent
-  const paSent: Cell = skippedPreauth
-    ? { key: 'pa_sent', state: 'na', text: corporate || pmjayCase ? 'Not applicable' : c.case_source === 'sheet' || c.case_source === 'pmjay' ? 'Not recorded' : 'Not taken', editable: false }
+  // PMJAY's pre-auth cell says what stands in its place: the admission approved on TMS (the case ID is the proof).
+  // Until the case ID is entered the cell stays empty — nothing to do there.
+  const admitted = c.admitted_at ?? c.admission_date ?? null;
+  const paSent: Cell = pmjayCase
+    ? (c.tpa_claim_number
+        ? { key: 'pa_sent', state: 'done', whole: true, text: 'Admission approved', sub: admitted ? `Admitted ${dd(admitted)}` : undefined, editable: false }
+        : { key: 'pa_sent', state: 'na', text: '', editable: false })
+    : skippedPreauth
+    ? { key: 'pa_sent', state: 'na', text: corporate ? 'Not applicable' : c.case_source === 'sheet' || c.case_source === 'pmjay' ? 'Not recorded' : 'Not taken', editable: false }
     : { key: 'pa_sent', state: mark('pa_sent', preauthSent, false), text: preauthSent ? dd(c.preauth_submitted_at) : '',
         sub: c.tpa_preauth_number ?? undefined, editable: w && col === 'pa_sent' };
 
