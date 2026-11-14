@@ -9,7 +9,7 @@ import { Loader2, Search, ChevronRight, UserPlus } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { fetchJourneys, type Journey } from '@/lib/rcm/api';
 import { isOldCase } from '@/lib/rcm/ledger';
-import { STAGES, WAITING, WORKSPACE_STAGE, stageStates, type StageKey } from '@/lib/rcm/journey';
+import { STAGES, WAITING, stageStates, type StageKey } from '@/lib/rcm/journey';
 import { byUrgency, dueText } from '@/lib/rcm/worklist';
 import { StageDots } from '@/components/case/StageTracker';
 import { NoCentre, inrShort } from '@/components/ui';
@@ -47,11 +47,10 @@ function Patients() {
   const router = useRouter();
   const params = useSearchParams();
   const centreId = useAuthStore((s) => s.activeCentreId);
-  const workspace = useAuthStore((s) => s.staff?.workspace);
   const [all, setAll] = useState<Journey[] | null>(null);
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
-  const stage = (params.get('stage') as StageKey | 'all' | null) ?? ((workspace && WORKSPACE_STAGE[workspace]) || 'all');
+  const stage = (params.get('stage') as StageKey | 'all' | null) ?? 'all'; // no desks for now: everyone starts on all open files
 
   const current = useRef(centreId);
   current.current = centreId;

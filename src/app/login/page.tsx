@@ -9,13 +9,6 @@ import { sb } from '@/lib/supabase/browser';
 const digits = (s: string) => s.replace(/\D/g, '');
 const loginEmail = (id: string) => (id.includes('@') ? id.trim() : `${digits(id).slice(-10)}@claimone.local`);
 
-const DESKS = [
-  { key: 'admission', label: 'Admission & pre-auth' },
-  { key: 'claims', label: 'Claims & bills' },
-  { key: 'payments', label: 'Payments' },
-  { key: 'admin', label: 'Administrative', hint: 'Reports and Setup open after your manager approves you' },
-] as const;
-
 const input =
   'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100';
 const label = 'mt-4 block text-sm font-semibold text-slate-600';
@@ -28,7 +21,6 @@ function LoginForm() {
   const [pin, setPin] = useState('');
   const [name, setName] = useState('');
   const [pin2, setPin2] = useState('');
-  const [desk, setDesk] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,10 +46,9 @@ function LoginForm() {
     if (digits(id).length !== 10) return setError('Enter your 10-digit mobile number.');
     if (!/^\d{6}$/.test(pin)) return setError('PIN must be 6 digits.');
     if (pin !== pin2) return setError('The two PINs do not match.');
-    if (!desk) return setError('Choose your desk.');
     setBusy(true);
     const { error } = await sb().rpc('clm_self_register', {
-      p_name: name, p_mobile: digits(id), p_pin: pin, p_desk: desk, p_code: code,
+      p_name: name, p_mobile: digits(id), p_pin: pin, p_desk: 'claims', p_code: code, // no desks for now: everyone works on everything
     });
     if (error) { setBusy(false); setError(error.message || 'Could not create your login.'); return; }
     const res = await sb().auth.signInWithPassword({ email: loginEmail(id), password: pin });
@@ -128,16 +119,6 @@ function LoginForm() {
           {pinInput(pin, setPin, 'new-password')}
           <label className={label}>Type the PIN again</label>
           {pinInput(pin2, setPin2, 'new-password')}
-          <label className={label}>Your desk</label>
-          <div className="mt-1 grid gap-2">
-            {DESKS.map((d) => (
-              <button key={d.key} type="button" onClick={() => setDesk(d.key)}
-                className={`rounded-lg border px-3 py-2.5 text-left text-sm font-semibold ${desk === d.key ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-700'}`}>
-                {d.label}
-                {'hint' in d && <span className="block text-xs font-normal text-slate-500">{d.hint}</span>}
-              </button>
-            ))}
-          </div>
           <label className={label}>Team code</label>
           <input type="text" required autoCapitalize="characters" value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())} className={`${input} tracking-widest`} />

@@ -9,7 +9,7 @@ import { useAuthStore } from '@/lib/store/auth';
 import { sb } from '@/lib/supabase/browser';
 
 // Six tabs, no hidden "More" menu. Each tab may have sub-tabs shown along the top of
-// the page. Staff see Master, Payments and Records; managers also see Reports and Setup.
+// the page. No desks for now: everyone sees Master, Payments, Reports and Records; managers also see Setup and Before 1 Nov.
 type Tab = { href: string; label: string; manager?: boolean };
 type Group = { key: string; label: string; icon: LucideIcon; manager?: boolean; tabs: Tab[] };
 
@@ -23,7 +23,7 @@ export const GROUPS: Group[] = [
     ],
   },
   {
-    key: 'reports', label: 'Reports', icon: BarChart3, manager: true,
+    key: 'reports', label: 'Reports', icon: BarChart3,
     tabs: [
       { href: '/overview', label: 'Dashboard' },
       { href: '/claims/mis', label: 'Money owed' },
@@ -36,8 +36,8 @@ export const GROUPS: Group[] = [
       { href: '/patients', label: 'Case files' },
       { href: '/cases/upload', label: 'Import admissions (eCW)' },
       { href: '/cases/pmjay', label: 'Import PMJAY sheet' },
-      { href: '/claims', label: 'All claims', manager: true },
-      { href: '/receivables', label: 'All bills', manager: true },
+      { href: '/claims', label: 'All claims' },
+      { href: '/receivables', label: 'All bills' },
     ],
   },
   {

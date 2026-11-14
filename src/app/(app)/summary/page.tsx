@@ -36,7 +36,6 @@ const td = 'border-b border-slate-100 px-2 py-2 text-[15px] tabular-nums';
 
 export default function SummaryPage() {
   const { activeCentreId: centreId, centres, staff } = useAuthStore();
-  const isManager = staff?.role === 'admin' || staff?.role === 'manager';
   const [all, setAll] = useState<Journey[] | null>(null);
   const [leak, setLeak] = useState<LeakageRow[]>([]);
   const [age, setAge] = useState<Ageing | null>(null);
@@ -46,7 +45,7 @@ export default function SummaryPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!centreId || !isManager) return;
+    if (!centreId) return;
     setAll(null);
     Promise.all([
       fetchJourneys(centreId),
@@ -75,7 +74,7 @@ export default function SummaryPage() {
       if (!st.error) setSettled(((st.data ?? []) as unknown as { net_amount: number; clm_claims: { discharge_date: string | null } }[]).filter(fresh).map((x) => ({ net: Number(x.net_amount) })));
     })
       .catch(() => setError('Could not load the summary. Please refresh.'));
-  }, [centreId, isManager]);
+  }, [centreId]);
 
   const now = useMemo(() => new Date(), []);
   const rows = useMemo(() => (all ?? []).map((j) => ledgerRow(j, false, now)), [all, now]);
@@ -86,7 +85,6 @@ export default function SummaryPage() {
   const months = useMemo(() => disputesByMonth(disputes, 6, now), [disputes, now]);
 
   if (!centreId) return <NoCentre />;
-  if (!isManager) return <div className="py-20 text-center text-base text-slate-500">The weekly summary is for admins and managers. <Link href="/master" className="inline-flex min-h-11 items-center text-teal-700 underline">Back to Master</Link></div>;
   if (error) return <p role="alert" className="m-6 rounded-lg bg-rose-50 p-3 text-base text-rose-800">{error}</p>;
   if (!all || !age) return <div className="flex justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-teal-600" /></div>;
 

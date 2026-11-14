@@ -38,7 +38,7 @@ export default function TeamPage() {
     <div className="mx-auto max-w-4xl px-4 py-8 md:px-6">
       {toastNode}
       <h1 className="text-2xl font-bold text-slate-900">Team</h1>
-      <p className="mt-1 text-base text-slate-600">Staff create their own login with the team code. Approve Administrative staff here, and switch off anyone who has left.</p>
+      <p className="mt-1 text-base text-slate-600">Staff create their own login with the team code. Make someone a manager here, and switch off anyone who has left.</p>
 
       {error && <p role="alert" className="mt-4 rounded-lg bg-rose-50 p-3 text-base text-rose-800">{error}</p>}
       {!team && !error && <div className="mt-6"><Skeleton rows={5} /></div>}
@@ -76,11 +76,11 @@ export default function TeamPage() {
                 <li key={m.user_id} className={`flex flex-wrap items-center justify-between gap-2 px-5 py-3 ${m.is_active ? '' : 'opacity-60'}`}>
                   <span className="min-w-0 text-base">
                     <b>{m.full_name}</b>{me && <span className="text-slate-500"> (you)</span>}
-                    <span className="block text-sm text-slate-500">{mobileOf(m.mobile)} · {ROLE_LABEL[m.role] ?? m.role}{m.workspace ? ` · ${DESK_LABEL[m.workspace] ?? m.workspace}` : ''}{m.is_active ? '' : ' · switched off'}</span>
+                    <span className="block text-sm text-slate-500">{mobileOf(m.mobile)} · {ROLE_LABEL[m.role] ?? m.role}{m.is_active ? '' : ' · switched off'}</span>
                   </span>
                   {!locked && (
                     <span className="flex flex-wrap gap-2">
-                      {m.is_active && m.role === 'desk' && m.workspace === 'admin' && (
+                      {m.is_active && m.role === 'desk' && (
                         <button disabled={!!busy} onClick={() => change(m, { role: 'manager' }, `${m.full_name} approved`)} className={`${btn} bg-teal-50 text-teal-800 hover:bg-teal-100`}>Make manager</button>
                       )}
                       {m.role === 'manager' && (
