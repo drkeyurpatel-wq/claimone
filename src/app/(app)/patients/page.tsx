@@ -9,7 +9,7 @@ import { Loader2, Search, ChevronRight, UserPlus } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { fetchJourneys, type Journey } from '@/lib/rcm/api';
 import { isOldCase } from '@/lib/rcm/ledger';
-import { STAGES, WORKSPACE_STAGE, stageStates, type StageKey } from '@/lib/rcm/journey';
+import { STAGES, WAITING, WORKSPACE_STAGE, stageStates, type StageKey } from '@/lib/rcm/journey';
 import { byUrgency, dueText } from '@/lib/rcm/worklist';
 import { StageDots } from '@/components/case/StageTracker';
 import { NoCentre, inrShort } from '@/components/ui';
@@ -134,8 +134,8 @@ function Patients() {
             <ul className="mt-2 space-y-2">{ours.map((j) => <Row key={j.c.id} j={j} />)}</ul>
           </>}
           {rest.length > 0 && <>
-            <h2 className="mt-8 text-lg font-semibold text-slate-900">{stage === 'closed' ? 'Closed' : `Waiting on insurer (${rest.length})`}</h2>
-            {stage !== 'closed' && <p className="text-sm text-slate-500">Red ones are late — call or email the TPA.</p>}
+            <h2 className="mt-8 text-lg font-semibold text-slate-900">{stage === 'closed' ? 'Closed' : `${WAITING[stage as keyof typeof WAITING] ?? WAITING.all} (${rest.length})`}</h2>
+            {stage !== 'closed' && <p className="text-sm text-slate-500">Red ones are late — call or email the insurer / TPA.</p>}
             <ul className="mt-2 space-y-2">{rest.map((j) => <Row key={j.c.id} j={j} />)}</ul>
           </>}
         </>)}

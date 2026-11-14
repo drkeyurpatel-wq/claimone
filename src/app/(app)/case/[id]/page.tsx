@@ -14,7 +14,7 @@ import { addAdjustment, fetchReceivable } from '@/lib/recon/api';
 import { sb } from '@/lib/supabase/browser';
 import { fetchCase, fetchMoneyFor, fetchNhcxMessages, markNhcxHandled, paymentStep, decideCut, type NhcxMessage } from '@/lib/rcm/api';
 import { nextStep, dueText, STATUS_WORDS } from '@/lib/rcm/worklist';
-import { STAGES, noPreauthWord, stageOf, stageStates, type CaseMoney, type StageKey } from '@/lib/rcm/journey';
+import { STAGES, WAITING, noPreauthWord, stageOf, stageStates, type CaseMoney, type StageKey } from '@/lib/rcm/journey';
 import { actionsFor, type CaseAction } from '@/lib/rcm/actions';
 import { routeFor, ROUTE_WORDS } from '@/lib/rcm/payer';
 import { DISALLOWANCE_CATEGORIES, REASON_OPTIONS } from '@/lib/engine/settlement';
@@ -262,7 +262,7 @@ export default function CasePage() {
         </div>
         {stage !== 'closed' && (
           <div className={`rounded-xl px-4 py-2 text-right ${step.overdue ? 'bg-rose-50 text-rose-800' : step.ours ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-700'}`}>
-            <p className="text-sm">{step.ours ? 'Your turn' : 'Waiting on insurer'}</p>
+            <p className="text-sm">{step.ours ? 'Your turn' : WAITING[stage]}</p>
             <p className="text-base font-semibold">{step.label}</p>
             {due && <p className="text-sm">{step.overdue ? `Late — ${due}` : `Due ${due}`}</p>}
           </div>

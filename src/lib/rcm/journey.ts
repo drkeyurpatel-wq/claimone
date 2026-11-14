@@ -18,6 +18,20 @@ export const STAGES: { key: StageKey; label: string; hint: string }[] = [
   { key: 'closed', label: 'Closed', hint: 'Paid and reconciled.' },
 ];
 
+/**
+ * What a file is waiting for when the next move is not ours — said for the stage it is in, never one phrase for all.
+ * Claim: the insurer has the claim and has not decided. Payment: the claim is approved and the money has not come.
+ */
+export const WAITING: Record<StageKey | 'all', string> = {
+  all: 'Nothing for us to do right now',
+  preauth: 'Pre-auth sent — insurer has not replied yet',
+  stay: 'In hospital — nothing due from us',
+  discharge: 'Nothing due from us',
+  claim: 'Claim submitted — insurer has not approved it yet',
+  payment: 'Claim approved — money not received yet',
+  closed: 'Closed',
+};
+
 /** The money side of a case (its bill on the receivables book). */
 export interface CaseMoney {
   receivable_id: string; claim_id: string; expected_amount: number; billed_amount: number | null; allocated: number; tds: number;
