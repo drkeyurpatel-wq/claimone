@@ -12,6 +12,7 @@ import { applyPayments, importRows, readLetter, fetchInbox, markInboxUsed, type 
 import { detectKind, type FileKind } from '@/lib/recon/detect';
 import { autoMatch } from '@/lib/recon/auto';
 import { countToCheck } from '@/lib/recon/tocheck';
+import { pmjayPending, tmsOutcome, type PmjayPending, type TmsOutcome } from '@/lib/recon/pending';
 import { parsePmjay, type PmjayRow } from '@/lib/rcm/pmjay';
 import { importPmjay, type PmjayResult } from '@/lib/rcm/api';
 import { NoCentre, inrShort, shortDate } from '@/components/ui';
@@ -20,7 +21,7 @@ type Item = {
   id: number; name: string; state: 'reading' | 'ready' | 'error'; kind: FileKind; error?: string; inboxId?: string;
   lines: PaymentLine[]; bank: BankLine[]; cases: PmjayRow[];
 };
-type Result = { tms?: boolean; pay: ApplyResult | null; cases: PmjayResult | null; bank: { inserted: number; duplicates: number } | null; auto: { matched: number; left: number } };
+type Result = { tms?: boolean; outcome?: TmsOutcome; pay: ApplyResult | null; cases: PmjayResult | null; bank: { inserted: number; duplicates: number } | null; auto: { matched: number; left: number } };
 
 const KIND_LABEL: Record<FileKind, string> = { payments: 'Settlement', bank: 'Bank statement', pmjay_cases: 'PMJAY case sheet' };
 const ACCOUNT_KEY = 'claimone.bankAccount';
@@ -161,6 +162,9 @@ export default function UploadPayments() {
         out.cases = out.cases ? { created: out.cases.created + r.created, updated: out.cases.updated + r.updated, moved: out.cases.moved + r.moved,
           paid: out.cases.paid + r.paid, skipped: out.cases.skipped + r.skipped, problems: [...out.cases.problems, ...r.problems] } : r;
       }
+      // the PMJAY sheet from TMS: note what is pending before it goes in, so the result can say what it cleared
+      const hasTms = ready.some((x) => x.kind === 'payments' && x.lines[0]?.format === 'tms');
+      const before: PmjayPending | null = hasTms ? await pmjayPending(centreId).catch(() => null) : null;
       for (const it of ready.filter((x) => x.kind === 'payments')) {
         setSaving(`Saving ${it.name}…`);
         const r = await applyPayments(centreId, it.name, it.lines, (k) => setSaving(`Saving ${it.name}: ${n(k)} of ${n(it.lines.length)}`));
@@ -168,6 +172,10 @@ export default function UploadPayments() {
         else for (const k of Object.keys(r) as (keyof ApplyResult)[]) out.pay[k] = Number(out.pay[k] ?? 0) + Number(r[k] ?? 0);
         if (it.lines[0]?.format === 'tms') out.tms = true;
         if (it.inboxId) await markInboxUsed(it.inboxId).catch(() => {});
+      }
+      if (before) {
+        const after = await pmjayPending(centreId).catch(() => null);
+        if (after) out.outcome = tmsOutcome(before, after);
       }
       for (const it of ready.filter((x) => x.kind === 'bank')) {
         setSaving(`Saving ${it.name}…`);
@@ -276,11 +284,19 @@ export default function UploadPayments() {
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-base text-emerald-900">
             <p className="flex items-center gap-2 text-lg font-semibold"><CheckCircle2 className="h-5 w-5" /> Saved</p>
             <ul className="mt-1 space-y-0.5">
-              {result.pay && <li><b>{n(result.pay.matched)}</b> payments added to bills{result.pay.duplicate > 0 && ` · ${n(result.pay.duplicate)} were already saved`}</li>}
-              {result.pay && result.tms && (result.pay.created > 0 || (result.pay.fixed ?? 0) > 0 || (result.pay.disputed ?? 0) > 0) && <li>
-                {[result.pay.created > 0 ? `${n(result.pay.created)} paid cases were not in ClaimOne and are saved as paid history` : '',
-                  (result.pay.fixed ?? 0) > 0 ? `${n(result.pay.fixed ?? 0)} case IDs corrected (last digit was missing)` : '',
-                  (result.pay.disputed ?? 0) > 0 ? `${n(result.pay.disputed ?? 0)} disputed cases left unchanged` : ''].filter(Boolean).join(' · ')}</li>}
+              {result.outcome && <>
+                <li className="text-lg"><b>PMJAY bills pending: {n(result.outcome.billsBefore)} → {n(result.outcome.billsAfter)}</b> · {inrShort(result.outcome.amountBefore)} → {inrShort(result.outcome.amountAfter)}</li>
+                {result.outcome.archived > 0 && <li><b>{n(result.outcome.archived)}</b> Master files paid and moved to Archive</li>}
+                <li><b>Still to come from PMJAY: {inrShort(result.outcome.pendingAmount)}</b> on {n(result.outcome.pendingFiles)} files — {n(result.outcome.billsAfter)} pending bills ({inrShort(result.outcome.amountAfter)})
+                  {result.outcome.waiting > 0 && <> + {n(result.outcome.waiting)} claims submitted, not paid yet ({inrShort(result.outcome.waitingAmount)})</>}
+                  {' · '}<Link href="/master" className="font-semibold underline">Open Master</Link>{' · '}<Link href="/claims/mis" className="font-semibold underline">Money owed</Link></li>
+              </>}
+              {result.pay && !result.outcome && <li><b>{n(result.pay.matched)}</b> payments added to bills{result.pay.duplicate > 0 && ` · ${n(result.pay.duplicate)} were already saved`}</li>}
+              {result.pay && result.tms && <li className="text-sm text-emerald-800">
+                {[`${n(result.pay.matched)} payments added`, result.pay.duplicate > 0 ? `${n(result.pay.duplicate)} already saved` : '',
+                  result.pay.created > 0 ? `${n(result.pay.created)} older paid cases kept as history` : '',
+                  (result.pay.fixed ?? 0) > 0 ? `${n(result.pay.fixed ?? 0)} case IDs corrected` : '',
+                  (result.pay.disputed ?? 0) > 0 ? `${n(result.pay.disputed ?? 0)} disputed left unchanged` : ''].filter(Boolean).join(' · ')}</li>}
               {result.pay && result.pay.invalid + result.pay.skipped > 0 && <li>{n(result.pay.invalid + result.pay.skipped)} lines had no bill or claim no. and were left out</li>}
               {result.cases && <li><b>{n(result.cases.created)}</b> new PMJAY cases · {n(result.cases.moved)} status steps moved forward · {n(result.cases.paid)} payments recorded</li>}
               {result.cases?.problems.map((p, i) => <li key={i} className="text-amber-900">IP {p.ip}: {p.problem}</li>)}
