@@ -3,12 +3,12 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { ShieldCheck, BarChart3, LogOut, Wallet, Users, KeyRound, Table2, Settings } from 'lucide-react';
+import { ShieldCheck, BarChart3, LogOut, Wallet, Users, KeyRound, Table2, Settings, History } from 'lucide-react';
 import type { Session } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/store/auth';
 import { sb } from '@/lib/supabase/browser';
 
-// Five tabs, no hidden "More" menu. Each tab may have sub-tabs shown along the top of
+// Six tabs, no hidden "More" menu. Each tab may have sub-tabs shown along the top of
 // the page. Staff see Master, Payments and Records; managers also see Reports and Setup.
 type Tab = { href: string; label: string; manager?: boolean };
 type Group = { key: string; label: string; icon: LucideIcon; manager?: boolean; tabs: Tab[] };
@@ -30,6 +30,8 @@ export const GROUPS: Group[] = [
       { href: '/claims/leakage', label: 'Deductions' },
     ],
   },
+  // everything discharged before 1 Nov 2026 lives here and nowhere else
+  { key: 'old', label: 'Before 1 Nov', icon: History, tabs: [{ href: '/before', label: 'Summary' }, { href: '/before/pending', label: 'Pending files' }, { href: '/before/settled', label: 'Settled files' }] },
   {
     key: 'records', label: 'Records', icon: Users,
     tabs: [

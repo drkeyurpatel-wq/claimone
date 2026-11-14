@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { Loader2, Search, UserPlus, Download, Plus, Archive, SlidersHorizontal, X, ArrowUp, ArrowDown, ChevronsUpDown, BadgeCheck } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { fetchArchive, fetchJourneys, type Journey } from '@/lib/rcm/api';
-import { VIEW_COLUMNS, FILTERS, PAY_STATES, firstDir, sortRows, doctorKey, doctorLabel, inFilter, inPayState, inBank, ledgerRow, rowPayerGroup, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow, type PayState, type Sort, type SortKey } from '@/lib/rcm/ledger';
+import { VIEW_COLUMNS, FILTERS, PAY_STATES, isOld, firstDir, sortRows, doctorKey, doctorLabel, inFilter, inPayState, inBank, ledgerRow, rowPayerGroup, toCsv, type Age, type Cell, type ColKey, type Filter, type LedgerRow, type PayState, type Sort, type SortKey } from '@/lib/rcm/ledger';
 import { PAYER_GROUPS, type PayerGroup } from '@/lib/rcm/payer';
 import { CellEditor } from '@/components/ledger/CellEditor';
 import { AddPatient } from '@/components/ledger/AddPatient';
@@ -80,7 +80,8 @@ function moveFocus(e: React.KeyboardEvent) {
 }
 
 /** Master (active files) and the Archive (settled and closed files) share one screen. */
-export function LedgerScreen({ archive = false, source }: { archive?: boolean; source?: (centreId: string) => Promise<Journey[]> }) {
+/** `old`: the files discharged before 1 Nov (their own tab). Master and Archive hold only files from 1 Nov. */
+export function LedgerScreen({ archive = false, old = false, source }: { archive?: boolean; old?: boolean; source?: (centreId: string) => Promise<Journey[]> }) {
   const router = useRouter();
   const params = useSearchParams();
   const { activeCentreId: centreId, tenantId, staff, centres } = useAuthStore();
@@ -106,7 +107,7 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
   const asked = params.get('show');
   // Closed files now live in the Archive
   useEffect(() => { if (!archive && asked === 'closed') router.replace('/archive'); }, [archive, asked, router]);
-  const filter = (archive ? 'closed' : FILTERS.some((f) => f.key === asked && f.key !== 'closed') ? asked : 'open') as Filter;
+  const filter = (archive ? 'closed' : old ? 'backlog' : FILTERS.some((f) => f.key === asked && f.key !== 'closed' && f.key !== 'backlog') ? asked : 'open') as Filter;
 
   // the centre being shown: a slow answer for a centre the user has left is dropped
   const current = useRef(centreId);
@@ -124,7 +125,7 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
   // demo patients made while building ClaimOne stay out of the team's view
   // Master holds the files still being worked; the Archive the ones paid and closed (no cut pending or disputed)
   const rows = useMemo(() => (all ?? []).filter((j) => !/^DEMO/i.test(j.c.admission_ref ?? '')).map((j) => ledgerRow(j, canWrite))
-    .filter((r) => r.next.done === archive), [all, canWrite, archive]);
+    .filter((r) => r.next.done === archive && isOld(r) === old), [all, canWrite, archive, old]);
   // payer type and payment narrow everything, including the counts on the status buttons
   const narrowed = useMemo(() => rows.filter((r) => (!ptype || rowPayerGroup(r) === ptype) && (!pay || inPayState(r, pay))
     && (!doc || doctorKey(r.j.c.treating_doctor_name) === doc) && (!bank || inBank(r) === (bank === 'in'))), [rows, ptype, pay, doc, bank]);
@@ -161,7 +162,7 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
     const blob = new Blob([toCsv(shown)], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `ClaimOne ${archive ? 'Archive' : 'Master'} ${centreName ?? ''} ${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })}.csv`;
+    a.download = `ClaimOne ${old ? (archive ? 'Before 1 Nov settled' : 'Before 1 Nov pending') : archive ? 'Archive' : 'Master'} ${centreName ?? ''} ${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
@@ -171,7 +172,7 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
     <div className="px-3 py-4 md:px-5">
       {toastNode}
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-2xl font-bold text-slate-900">{archive ? 'Archive' : 'Master'}{centreName && centres.length > 1 ? ` — ${centreName}` : ''}
+        <h1 className="mr-auto text-2xl font-bold text-slate-900">{old ? (archive ? 'Before 1 Nov — settled files' : 'Before 1 Nov — pending files') : archive ? 'Archive' : 'Master'}{centreName && centres.length > 1 ? ` — ${centreName}` : ''}
           {all && <span className="ml-2 text-base font-medium text-slate-500">{shown.length} case{shown.length === 1 ? '' : 's'}</span>}</h1>
         <label className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -216,14 +217,14 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
         <button type="button" onClick={download} disabled={!shown.length}
           className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-[15px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40">
           <Download className="h-4 w-4" /> Export</button>
-        {canWrite && !archive && <button type="button" onClick={() => setAdding(true)}
+        {canWrite && !archive && !old && <button type="button" onClick={() => setAdding(true)}
           className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-600 px-4 text-[15px] font-semibold text-white hover:bg-teal-700">
           <UserPlus className="h-4 w-4" /> New admission</button>}
       </div>
 
-      {!archive && <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+      {!archive && !old && <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         <div role="tablist" className="flex flex-wrap gap-1.5">
-          {FILTERS.filter((f) => f.key !== 'closed' && (f.key !== 'backlog' || counts.backlog > 0 || filter === 'backlog')).map((f) => (
+          {FILTERS.filter((f) => f.key !== 'closed' && f.key !== 'backlog').map((f) => (
             <button key={f.key} type="button" role="tab" aria-selected={filter === f.key && !q}
               onClick={() => { setQ(''); router.replace(f.key === 'open' ? '/master' : `/master?show=${f.key}`, { scroll: false }); }}
               className={`min-h-10 rounded-lg px-3 text-[15px] font-medium ${filter === f.key && !q
@@ -245,9 +246,10 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
 
       {all && shown.length === 0 && (
         <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-10 text-center">
-          <p className="text-base text-slate-600">{q ? 'No case matches this search.' : archive ? 'No settled files yet.' : all.length === 0 ? 'No cases yet.' : filter === 'open' ? 'All caught up — no open cases.' : filter === 'backlog' ? 'Backlog cleared.' : 'Nothing here right now.'}</p>
-          {q && !archive && <Link href={`/archive?q=${encodeURIComponent(q.trim())}`} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Archive className="h-4 w-4" /> Search settled files in the Archive</Link>}
-          {canWrite && all.length === 0 && <button type="button" onClick={() => setAdding(true)} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white"><UserPlus className="h-4 w-4" /> Add first admission</button>}
+          <p className="text-base text-slate-600">{q ? 'No case matches this search.' : archive ? 'No settled files yet.' : all.length === 0 ? 'No cases yet.' : filter === 'open' ? 'All caught up — no open cases.' : filter === 'backlog' ? 'No pending file from before 1 Nov.' : 'Nothing here right now.'}</p>
+          {q && !archive && !old && <Link href={`/before/pending?q=${encodeURIComponent(q.trim())}`} className="mr-2 mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-teal-700 hover:bg-teal-50">Search files from before 1 Nov</Link>}
+          {q && !archive && <Link href={`${old ? '/before/settled' : '/archive'}?q=${encodeURIComponent(q.trim())}`} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Archive className="h-4 w-4" /> {old ? 'Search settled files from before 1 Nov' : 'Search settled files in the Archive'}</Link>}
+          {canWrite && !old && all.length === 0 && <button type="button" onClick={() => setAdding(true)} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white"><UserPlus className="h-4 w-4" /> Add first admission</button>}
         </div>
       )}
 
@@ -320,7 +322,7 @@ export function LedgerScreen({ archive = false, source }: { archive?: boolean; s
           ))}
         </ul>
       )}
-      {all && shown.length > 0 && filter === 'backlog' && !q && <p className="mt-2 text-sm text-slate-500">Backlog: discharged before 1 Nov 2026.</p>}
+      {all && shown.length > 0 && <p className="mt-2 text-sm text-slate-500">{old ? 'Files discharged before 1 Nov 2026.' : 'Files discharged on or after 1 Nov 2026 (and patients still in hospital). Earlier files are under Before 1 Nov.'}</p>}
 
       {editing && edit && <CellEditor r={editing} col={edit.col} canWrite={canWrite} isManager={isManager} onClose={closeEdit} onSaved={saved} />}
       {adding && <AddPatient tenantId={tenantId} centreId={centreId} doctors={doctors.map(doctorLabel)} onClose={() => setAdding(false)}

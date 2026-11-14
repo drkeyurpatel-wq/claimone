@@ -8,6 +8,7 @@ import { fetchDeductionLines } from '@/lib/claims/api';
 import type { DeductionLine } from '@/lib/claims/types';
 import { disputesByMonth, type DisputeCase } from '@/lib/rcm/summary';
 import { NoCentre } from '@/components/ui';
+import { isOldDate } from '@/lib/rcm/ledger';
 import { DeductionsView } from '@/components/report/DeductionsView';
 
 export default function Deductions() {
@@ -24,10 +25,12 @@ export default function Deductions() {
     try {
       const [l, d] = await Promise.all([
         fetchDeductionLines(),
-        sb().from('clm_claims').select('cut_decision, cut_decided_at, status, claimed_amount, approved_amount, deduction_amount')
+        sb().from('clm_claims').select('cut_decision, cut_decided_at, status, claimed_amount, approved_amount, deduction_amount, discharge_date')
           .eq('centre_id', centreId).not('cut_decision', 'is', null).limit(20000),
       ]);
-      setLines(l); setCases((d.data ?? []) as DisputeCase[]); setError('');
+      // files discharged on or after 1 Nov only; earlier ones are under Before 1 Nov
+      setLines(l.filter((x) => !!x.file_date && !isOldDate(x.file_date)));
+      setCases(((d.data ?? []) as (DisputeCase & { discharge_date: string | null })[]).filter((c) => !isOldDate(c.discharge_date))); setError('');
     } catch { setError('Could not load deductions. Please check the connection and refresh.'); }
   }, [centreId]);
   useEffect(() => { setLines(null); load(); }, [load]);

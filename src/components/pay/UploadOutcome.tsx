@@ -7,13 +7,14 @@ import { inr, inrShort } from '@/components/ui';
 const n = (x: number) => x.toLocaleString('en-IN');
 
 export function UploadOutcome({ o }: { o: Outcome }) {
+  const b = o.before1Nov; const oldMoved = b.filesBefore !== b.filesAfter || Math.abs(b.amountBefore - b.amountAfter) > 1;
   const who = o.changed.length === 1 ? o.changed[0].name : o.changed.length > 1 ? `${o.changed.length} payers` : '';
   const rows: { label: string; note?: string; files: number; amount: number; tone?: string }[] = [
     { label: 'Approved, payment awaited', files: o.awaited.files, amount: o.awaited.amount },
     { label: 'Claim submitted, not paid yet', files: o.submitted.files, amount: o.submitted.amount,
       note: o.chase.files ? `${n(o.chase.files)} of these (${inr(o.chase.amount)}) are over ${CHASE_AFTER_DAYS} days since discharge — follow up` : undefined, tone: o.chase.files ? 'text-rose-700' : undefined },
     { label: 'Deduction disputed', files: o.disputed.files, amount: o.disputed.amount },
-    { label: 'Older bills, unpaid or part-paid', files: o.old.files, amount: o.old.amount },
+    { label: 'Bills not on Master, unpaid or part-paid', files: o.old.files, amount: o.old.amount },
   ].filter((r) => r.files > 0);
 
   return (
@@ -30,13 +31,13 @@ export function UploadOutcome({ o }: { o: Outcome }) {
           {o.archived > 0 && <p className="mt-1 text-base"><b>{n(o.archived)}</b> files paid and moved to Archive</p>}
         </>
       ) : (
-        <p className="text-lg font-semibold">No pending bill changed <span className="font-normal text-slate-600">— every payment in this file was already saved.</span></p>
+        <p className="text-lg font-semibold">{oldMoved ? 'No pending bill from 1 Nov onwards changed' : 'No pending bill changed'}{!oldMoved && <span className="font-normal text-slate-600"> — every payment in this file was already saved.</span>}</p>
       )}
 
       {o.total.files > 0 ? (
         <table className="mt-3 w-full border-collapse text-base">
           <thead><tr className="border-b border-slate-200 text-left text-sm uppercase tracking-wide text-slate-500">
-            <th className="py-1.5 font-semibold">Still pending</th><th className="py-1.5 text-right font-semibold">Files</th><th className="py-1.5 text-right font-semibold">Amount</th></tr></thead>
+            <th className="py-1.5 font-semibold">Still pending — files from 1 Nov</th><th className="py-1.5 text-right font-semibold">Files</th><th className="py-1.5 text-right font-semibold">Amount</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.label} className="border-b border-slate-100 align-top">
@@ -46,7 +47,13 @@ export function UploadOutcome({ o }: { o: Outcome }) {
             <tr className="font-bold"><td className="py-1.5">Total still to come</td><td className="py-1.5 text-right">{n(o.total.files)}</td><td className="py-1.5 text-right">{inr(o.total.amount)}</td></tr>
           </tbody>
         </table>
-      ) : <p className="mt-2 text-base font-semibold text-emerald-800">Nothing pending.</p>}
+      ) : <p className="mt-2 text-base font-semibold text-emerald-800">Nothing pending on files from 1 Nov.</p>}
+
+      {(b.filesBefore > 0 || b.filesAfter > 0) && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-base text-slate-700">
+        <Link href="/before" className="font-semibold text-teal-700 underline">Before 1 Nov</Link>: {oldMoved
+          ? <>{n(b.filesBefore)} → <b>{n(b.filesAfter)}</b> files pending · {inrShort(b.amountBefore)} → <b>{inrShort(b.amountAfter)}</b></>
+          : <>{n(b.filesAfter)} files pending · {inrShort(b.amountAfter)} — not changed by this file</>}
+      </p>}
 
       <p className="mt-3 flex flex-wrap gap-4 text-base">
         <Link href="/master" className="font-semibold text-teal-700 underline">Open Master</Link>

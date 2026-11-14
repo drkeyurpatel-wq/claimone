@@ -10,6 +10,7 @@ import { nextStep, type Step } from './worklist';
 import { CASE_SELECT } from './select';
 import { stageOf, type CaseMoney, type StageKey } from './journey';
 import { cutOf, cutStep, type Cut } from './cut';
+import { dischargeDay } from './ledger';
 
 export { CASE_SELECT };
 
@@ -263,4 +264,12 @@ export async function fetchPayerMaster(): Promise<Payer[]> {
   const { data, error } = await sb().from('clm_payers').select('*').order('name');
   if (error) throw new Error('Could not load the payer list');
   return (data ?? []) as Payer[];
+}
+
+/** Discharge day of every case of a centre (null while in hospital) — tells which side of 1 Nov a bill falls. */
+export async function fetchDischargeDays(centreId: string): Promise<Map<string, string | null>> {
+  const { data, error } = await allRows((from, to) => sb().from('clm_claims').select('id, discharge_date, discharged_at')
+    .eq('centre_id', centreId).order('id').range(from, to));
+  if (error) throw new Error('Could not load cases');
+  return new Map((data as { id: string; discharge_date: string | null; discharged_at: string | null }[]).map((c) => [c.id, dischargeDay(c)]));
 }

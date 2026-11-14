@@ -13,6 +13,7 @@ import { ledgerRow } from '@/lib/rcm/ledger';
 import { deductionGrid, disputesByMonth, stuck, thisWeek, type DisputeCase } from '@/lib/rcm/summary';
 import { BUCKETS, type Ageing } from '@/lib/rcm/overview';
 import { loadOwed } from '@/lib/rcm/reports';
+import { CURRENT_FROM, isOldCase, isOldDate } from '@/lib/rcm/ledger';
 import { BucketBar, BucketLegend } from '@/components/report/kit';
 import type { LeakageRow } from '@/lib/claims/types';
 import { NoCentre } from '@/components/ui';
@@ -51,24 +52,27 @@ export default function SummaryPage() {
       fetchJourneys(centreId),
       fetchLeakage(centreId),
       loadOwed(centreId),
-      sb().from('clm_claims').select('cut_decision, cut_decided_at, status, claimed_amount, approved_amount, deduction_amount')
+      sb().from('clm_claims').select('cut_decision, cut_decided_at, status, claimed_amount, approved_amount, deduction_amount, discharge_date')
         .eq('centre_id', centreId).not('cut_decision', 'is', null).limit(20000),
       // claim approvals in the last 7 days, from the status history (one per file)
       // (cases brought over from the old sheet were not approved this week)
-      sb().from('clm_state_transitions').select('claim_id, clm_claims!inner(centre_id, approved_amount)')
+      sb().from('clm_state_transitions').select('claim_id, clm_claims!inner(centre_id, approved_amount, discharge_date)')
         .in('to_status', ['claim_approved', 'claim_partial']).neq('trigger_source', 'sheet').eq('clm_claims.centre_id', centreId)
         .gte('created_at', new Date(Date.now() - 7 * 86_400_000).toISOString()).limit(5000),
       // settled this week: by the date the money was paid
-      sb().from('clm_settlements').select('net_amount, clm_claims!inner(centre_id)').eq('clm_claims.centre_id', centreId)
+      sb().from('clm_settlements').select('net_amount, clm_claims!inner(centre_id, discharge_date)').eq('clm_claims.centre_id', centreId)
         .gte('payment_date', new Date(Date.now() - 7 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })).limit(5000),
     ]).then(([j, l, ag, d, a, st]) => {
-      setAll(j); setLeak(l); setAge(ag); setDisputes((d.data ?? []) as DisputeCase[]);
+      // the weekly summary is about files discharged on or after 1 Nov; earlier ones are under Before 1 Nov
+      const fresh = (x: { clm_claims?: { discharge_date?: string | null } | null }) => !isOldDate(x.clm_claims?.discharge_date);
+      setAll(j.filter((x) => !isOldCase(x.c))); setLeak(l.filter((x) => String(x.month ?? '') >= CURRENT_FROM.slice(0, 7))); setAge(ag);
+      setDisputes(((d.data ?? []) as (DisputeCase & { discharge_date: string | null })[]).filter((c) => !isOldDate(c.discharge_date)));
       if (!a.error) {
         const one = new Map<string, number>();
-        for (const x of (a.data ?? []) as unknown as { claim_id: string; clm_claims: { approved_amount: number | null } }[]) one.set(x.claim_id, Number(x.clm_claims?.approved_amount ?? 0));
+        for (const x of ((a.data ?? []) as unknown as { claim_id: string; clm_claims: { approved_amount: number | null; discharge_date: string | null } }[]).filter(fresh)) one.set(x.claim_id, Number(x.clm_claims?.approved_amount ?? 0));
         setApprovals([...one.values()].map((amount) => ({ amount })));
       }
-      if (!st.error) setSettled(((st.data ?? []) as { net_amount: number }[]).map((x) => ({ net: Number(x.net_amount) })));
+      if (!st.error) setSettled(((st.data ?? []) as unknown as { net_amount: number; clm_claims: { discharge_date: string | null } }[]).filter(fresh).map((x) => ({ net: Number(x.net_amount) })));
     })
       .catch(() => setError('Could not load the summary. Please refresh.'));
   }, [centreId, isManager]);

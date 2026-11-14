@@ -302,16 +302,28 @@ export const FILTERS: { key: Filter; label: string }[] = [
   { key: 'aged', label: 'Over 30 days' },
   { key: 'cuts', label: 'Deductions & disputes' },
   { key: 'closed', label: 'Closed' },
-  { key: 'backlog', label: 'Backlog' },
+  { key: 'backlog', label: 'Before 1 Nov' },
 ];
 
-/** Files discharged before this day are the Backlog: kept out of the team's everyday views. */
+/**
+ * ClaimOne works on files discharged on or after this day. Everything discharged earlier is "Before 1 Nov": it has its
+ * own tab (summary, pending files, settled files) and is left out of Master, Archive, Dashboard, Money owed, Deductions
+ * and the upload result. One rule everywhere: the discharge date (the bill date for a bill with no case on Master).
+ */
 export const CURRENT_FROM = '2026-11-01';
-export function isBacklog(r: LedgerRow): boolean {
-  const c = r.j.c;
-  const d = c.discharge_date ?? (c.discharged_at ? new Date(c.discharged_at).toLocaleDateString('en-CA', { timeZone: IST }) : null);
-  return !r.next.done && !!d && d.slice(0, 10) < CURRENT_FROM;
+export const OLD_LABEL = 'Before 1 Nov';
+export const isOldDate = (d: string | null | undefined): boolean => !!d && d.slice(0, 10) < CURRENT_FROM;
+/** The day a case was discharged (IST), or null while the patient is in hospital. */
+export function dischargeDay(c: { discharge_date?: string | null; discharged_at?: string | null }): string | null {
+  return c.discharge_date ?? (c.discharged_at ? new Date(c.discharged_at).toLocaleDateString('en-CA', { timeZone: IST }) : null);
 }
+export const isOldCase = (c: { discharge_date?: string | null; discharged_at?: string | null }): boolean => isOldDate(dischargeDay(c));
+/** A bill belongs with its case; a bill with no case on Master goes by its bill date. */
+export const isOldBill = (billDate: string | null | undefined, caseDischarge: string | null | undefined, hasCase: boolean): boolean =>
+  hasCase ? isOldDate(caseDischarge) : isOldDate(billDate);
+export const isOld = (r: LedgerRow): boolean => isOldCase(r.j.c);
+/** A pending file from before 1 Nov. */
+export function isBacklog(r: LedgerRow): boolean { return !r.next.done && isOld(r); }
 
 export function inFilter(r: LedgerRow, f: Filter): boolean {
   if (f === 'backlog') return isBacklog(r);
