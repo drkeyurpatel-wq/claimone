@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Search, ChevronRight, UserPlus } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { fetchJourneys, type Journey } from '@/lib/rcm/api';
+import { isOldCase } from '@/lib/rcm/ledger';
 import { STAGES, WORKSPACE_STAGE, stageStates, type StageKey } from '@/lib/rcm/journey';
 import { byUrgency, dueText } from '@/lib/rcm/worklist';
 import { StageDots } from '@/components/case/StageTracker';
@@ -57,7 +58,7 @@ function Patients() {
   const load = useCallback(async () => {
     if (!centreId) return;
     try {
-      const j = await fetchJourneys(centreId);
+      const j = (await fetchJourneys(centreId)).filter((x) => !isOldCase(x.c)); // files from 1 Nov; older ones are under Before 1 Nov
       if (current.current === centreId) { setAll(j); setError(''); }
     } catch { if (current.current === centreId) setError('Could not load patients. Check the internet and refresh.'); }
   }, [centreId]);

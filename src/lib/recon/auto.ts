@@ -5,6 +5,7 @@
  * Everything else waits on "To check".
  */
 import { proposeMatches, type MatchResult } from './match';
+import { CURRENT_FROM } from '@/lib/rcm/ledger';
 import { confirmMatches, fetchReceipts, fetchReceivables, fetchUnusedAdvice, toOpenReceipt, toOpenReceivable, type ReceiptRow, type ReceivableRow } from './api';
 
 export interface Open { bills: ReceivableRow[]; receipts: ReceiptRow[]; result: MatchResult }
@@ -29,5 +30,6 @@ export async function autoMatch(centreId: string): Promise<{ matched: number; le
   const strong = result.proposals.filter((p) => p.confidence === 'high');
   const saved = strong.length ? (await confirmMatches(strong)).saved : 0;
   const tied = new Set(strong.map((p) => p.receipt_id));
-  return { matched: saved, left: receipts.filter((x) => !tied.has(x.id)).length };
+  // what is left for a person: credits from 1 Nov only (older ones belong to the Before 1 Nov files)
+  return { matched: saved, left: receipts.filter((x) => !tied.has(x.id) && x.value_date >= CURRENT_FROM).length };
 }

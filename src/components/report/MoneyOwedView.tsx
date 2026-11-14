@@ -9,7 +9,7 @@ const pct = (n: number | null | undefined) => (n == null ? '—' : `${n}%`);
 export function MoneyOwedView({ age, score }: { age: Ageing; score: Record<string, PayerScorecard> }) {
   const all = Object.fromEntries(BUCKETS.map((b) => [b, age.byPayer.reduce((s, p) => s + p.buckets[b], 0)])) as Record<string, number>;
   return (
-    <ReportPage title="Money owed" sub="Files discharged on or after 1 Nov 2026: open bills with a balance, by payer and age. Age is days since the bill date. Earlier files are under Before 1 Nov.">
+    <ReportPage title="Money owed" sub="Open bills with a balance, by payer and age. Age is days since the bill date.">
       <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
         {BUCKETS.map((b, i) => (
           <Tile key={b} label={`${b} days`} value={inrShort(all[b])} sub={age.total ? `${Math.round((all[b] / age.total) * 100)}% of owed` : undefined}

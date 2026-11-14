@@ -4,6 +4,7 @@
 // document review and settlement goes through an API route so the server
 // can return a readable reason when the database refuses it.
 
+import { CURRENT_FROM } from '@/lib/rcm/ledger';
 import { sb } from '@/lib/supabase/browser';
 import type {
   Claim, ClaimStatus, ClaimType, ClaimDocument, ClaimQuery, DocRuleRow, OpenQuery,
@@ -32,6 +33,8 @@ async function call<T>(url: string, body: unknown): Promise<T> {
 
 // ─── Dashboard ───────────────────────────────────────────────────────
 
+const CURRENT = `discharge_date.is.null,discharge_date.gte.${CURRENT_FROM}`; // files from 1 Nov, and patients still in hospital
+
 export interface ClaimStats {
   total: number; preauth_pending: number; open_queries: number; under_review: number;
   settlement_pending: number; settled: number; rejected: number;
@@ -43,7 +46,7 @@ export async function fetchClaimStats(centreId: string): Promise<ClaimStats | nu
   const [{ data, error }, { data: ready }] = await Promise.all([
     sb().from('clm_claims')
       .select('status, claimed_amount, settled_amount, estimated_amount, approved_amount')
-      .eq('centre_id', centreId),
+      .eq('centre_id', centreId).or(CURRENT),
     sb().from('clm_v_readiness').select('amount, unmet_count').eq('centre_id', centreId).gt('unmet_count', 0),
   ]);
   if (error) { console.error('fetchClaimStats', error); return null; }
@@ -72,7 +75,7 @@ export async function fetchClaims(centreId: string, f: {
   statuses?: ClaimStatus[]; payer_id?: string; claim_type?: ClaimType; search?: string; limit?: number;
 } = {}): Promise<Claim[]> {
   let q = sb().from('clm_claims').select(CLAIM_SELECT)
-    .eq('centre_id', centreId).order('created_at', { ascending: false }).limit(f.limit ?? 200);
+    .eq('centre_id', centreId).or(CURRENT).order('created_at', { ascending: false }).limit(f.limit ?? 200);
   if (f.statuses?.length) q = q.in('status', f.statuses);
   if (f.payer_id) q = q.eq('payer_id', f.payer_id);
   if (f.claim_type) q = q.eq('claim_type', f.claim_type);

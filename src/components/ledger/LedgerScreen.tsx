@@ -247,7 +247,6 @@ export function LedgerScreen({ archive = false, old = false, source }: { archive
       {all && shown.length === 0 && (
         <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-10 text-center">
           <p className="text-base text-slate-600">{q ? 'No case matches this search.' : archive ? 'No settled files yet.' : all.length === 0 ? 'No cases yet.' : filter === 'open' ? 'All caught up — no open cases.' : filter === 'backlog' ? 'No pending file from before 1 Nov.' : 'Nothing here right now.'}</p>
-          {q && !archive && !old && <Link href={`/before/pending?q=${encodeURIComponent(q.trim())}`} className="mr-2 mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-teal-700 hover:bg-teal-50">Search files from before 1 Nov</Link>}
           {q && !archive && <Link href={`${old ? '/before/settled' : '/archive'}?q=${encodeURIComponent(q.trim())}`} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Archive className="h-4 w-4" /> {old ? 'Search settled files from before 1 Nov' : 'Search settled files in the Archive'}</Link>}
           {canWrite && !old && all.length === 0 && <button type="button" onClick={() => setAdding(true)} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white"><UserPlus className="h-4 w-4" /> Add first admission</button>}
         </div>
@@ -322,7 +321,7 @@ export function LedgerScreen({ archive = false, old = false, source }: { archive
           ))}
         </ul>
       )}
-      {all && shown.length > 0 && <p className="mt-2 text-sm text-slate-500">{old ? 'Files discharged before 1 Nov 2026.' : 'Files discharged on or after 1 Nov 2026 (and patients still in hospital). Earlier files are under Before 1 Nov.'}</p>}
+      {all && shown.length > 0 && old && <p className="mt-2 text-sm text-slate-500">Files discharged before 1 Nov 2026.</p>}
 
       {editing && edit && <CellEditor r={editing} col={edit.col} canWrite={canWrite} isManager={isManager} onClose={closeEdit} onSaved={saved} />}
       {adding && <AddPatient tenantId={tenantId} centreId={centreId} doctors={doctors.map(doctorLabel)} onClose={() => setAdding(false)}

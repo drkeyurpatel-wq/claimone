@@ -1,6 +1,8 @@
 'use client';
 // Receivables: what every insurer, scheme, patient and referrer still owes,
 // net of receipts, TDS, deductions and write-offs.
+import { fetchDischargeDays } from '@/lib/rcm/api';
+import { CURRENT_FROM, isOldBill } from '@/lib/rcm/ledger';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -34,8 +36,10 @@ export default function Receivables() {
   useEffect(() => {
     if (!centreId) return;
     setLoading(true);
-    Promise.all([fetchReceivables(centreId), fetchReceipts(centreId, { unallocatedOnly: true })])
-      .then(([r, rc]) => { setRows(r); setReceipts(rc); setLoading(false); });
+    Promise.all([fetchReceivables(centreId), fetchReceipts(centreId, { unallocatedOnly: true }), fetchDischargeDays(centreId)])
+      // bills of files from 1 Nov; older ones are under Before 1 Nov
+      .then(([r, rc, days]) => { setRows(r.filter((b) => !isOldBill(b.bill_date, days.get(b.claim_id ?? ''), !!b.claim_id && days.has(b.claim_id))));
+        setReceipts(rc.filter((x) => x.value_date >= CURRENT_FROM)); setLoading(false); });
   }, [centreId]);
 
   const isPatient = (r: ReceivableRow) => r.debtor_type === 'patient' || r.debtor_type === 'referrer';

@@ -7,8 +7,8 @@ import Link from 'next/link';
 import { Upload, CheckCircle2, Download, Landmark, FileWarning, Clock } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import type { ExceptionRow } from '@/lib/recon/api';
-import { openMoney, type Open } from '@/lib/recon/auto';
-import { fetchBillsNotOnMaster, fetchNotInBank, NOT_IN_BANK_DAYS, type NotInBank } from '@/lib/recon/tocheck';
+import type { Open } from '@/lib/recon/auto';
+import { moneyToCheck, fetchBillsNotOnMaster, fetchNotInBank, NOT_IN_BANK_DAYS, type NotInBank } from '@/lib/recon/tocheck';
 import { CheckList } from '@/components/pay/CheckList';
 import { UnmatchedMoney } from '@/components/pay/UnmatchedMoney';
 import { NoCentre, Skeleton, inr, inrShort, shortDate, useToast } from '@/components/ui';
@@ -45,7 +45,7 @@ export default function ToCheck() {
 
   const load = useCallback(async () => {
     if (!centreId) return;
-    const [m, b, k] = await Promise.all([openMoney(centreId), fetchBillsNotOnMaster(centreId), fetchNotInBank(centreId)]);
+    const [m, b, k] = await Promise.all([moneyToCheck(centreId), fetchBillsNotOnMaster(centreId), fetchNotInBank(centreId)]);
     setMoney(m); setBills(b); setBank(k);
   }, [centreId]);
   useEffect(() => { load(); }, [load]);

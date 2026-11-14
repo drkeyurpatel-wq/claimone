@@ -30,8 +30,6 @@ export const GROUPS: Group[] = [
       { href: '/claims/leakage', label: 'Deductions' },
     ],
   },
-  // everything discharged before 1 Nov 2026 lives here and nowhere else
-  { key: 'old', label: 'Before 1 Nov', icon: History, tabs: [{ href: '/before', label: 'Summary' }, { href: '/before/pending', label: 'Pending files' }, { href: '/before/settled', label: 'Settled files' }] },
   {
     key: 'records', label: 'Records', icon: Users,
     tabs: [
@@ -52,6 +50,9 @@ export const GROUPS: Group[] = [
       { href: '/claims/bot', label: 'Portal bot' },
     ],
   },
+  // Everything discharged before 1 Nov 2026 lives here and nowhere else: no other screen shows or counts it.
+  // Last in the row and for managers only — opened only when someone wants the old files.
+  { key: 'old', label: 'Before 1 Nov', icon: History, manager: true, tabs: [{ href: '/before', label: 'Summary' }, { href: '/before/pending', label: 'Pending files' }, { href: '/before/settled', label: 'Settled files' }] },
 ];
 
 // Screens opened from a list light up the tab of that list.

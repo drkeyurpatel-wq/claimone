@@ -25,7 +25,7 @@ export function DashboardView({ d }: { d: DashboardData }) {
   ];
   const href = ['/patients?stage=preauth', '/patients?stage=discharge', '/patients?stage=payment'];
   return (
-    <ReportPage title="Dashboard" sub="Files discharged on or after 1 Nov 2026 — insurance, PMJAY, government schemes, companies and patient dues. Earlier files are under Before 1 Nov."
+    <ReportPage title="Dashboard" sub="All credit business at this centre — insurance, PMJAY, government schemes, companies and patient dues."
       actions={<Link href="/summary" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Printer className="h-4 w-4" /> Print weekly summary</Link>}>
       <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Tile label="Money owed" value={inrShort(d.age.total)} sub={`${d.age.count.toLocaleString('en-IN')} bills`} />

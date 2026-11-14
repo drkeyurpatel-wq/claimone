@@ -7,13 +7,20 @@
  */
 import { sb } from '@/lib/supabase/browser';
 import { fetchExceptions, type ExceptionRow } from './api';
-import { openMoney } from './auto';
+import { openMoney, type Open } from './auto';
+import { CURRENT_FROM, isOldBill, isOldDate } from '@/lib/rcm/ledger';
+
+/** Bank money waiting for a person: credits from 1 Nov only (older credits belong to the Before 1 Nov files). */
+export async function moneyToCheck(centreId: string): Promise<Open> {
+  const m = await openMoney(centreId);
+  return { ...m, receipts: m.receipts.filter((r) => r.value_date >= CURRENT_FROM) };
+}
 
 export const NOT_IN_BANK_DAYS = 7;
 
 /** Bills with no patient on Master that are short, unpaid or overpaid. */
 export async function fetchBillsNotOnMaster(centreId: string): Promise<ExceptionRow[]> {
-  return (await fetchExceptions(centreId)).filter((r) => !r.claim_id);
+  return (await fetchExceptions(centreId)).filter((r) => !r.claim_id && !isOldDate(r.bill_date));
 }
 
 export interface NotInBank { id: string; value_date: string; amount: number; reference: string | null; patient: string | null; payer: string | null }
@@ -31,16 +38,17 @@ export async function fetchNotInBank(centreId: string, now = new Date()): Promis
   const until = to < cutoff ? to : cutoff;
   if (until < from) return [];
   const { data, error } = await sb().from('clm_receipts')
-    .select('id, value_date, amount, reference, clm_allocations(reversed_at, clm_receivables(patient_name, debtor_name))')
+    .select('id, value_date, amount, reference, clm_allocations(reversed_at, clm_receivables(patient_name, debtor_name, bill_date, claim_id, clm_claims(discharge_date)))')
     .eq('centre_id', centreId).eq('source', 'advice').is('bank_receipt_id', null)
     .gte('value_date', from).lte('value_date', until).order('value_date').limit(2000);
   if (error) return [];
   type Row = { id: string; value_date: string; amount: number; reference: string | null;
-    clm_allocations: { reversed_at: string | null; clm_receivables: { patient_name: string | null; debtor_name: string | null } | null }[] };
+    clm_allocations: { reversed_at: string | null; clm_receivables: { patient_name: string | null; debtor_name: string | null; bill_date: string | null; clm_claims: { discharge_date: string | null } | null } | null }[] };
   return ((data ?? []) as unknown as Row[])
     .map((r) => {
       const live = r.clm_allocations.find((a) => !a.reversed_at)?.clm_receivables ?? null;
-      return { id: r.id, value_date: r.value_date, amount: Number(r.amount), reference: r.reference, patient: live?.patient_name ?? null, payer: live?.debtor_name ?? null, kept: !!live };
+      return { id: r.id, value_date: r.value_date, amount: Number(r.amount), reference: r.reference, patient: live?.patient_name ?? null, payer: live?.debtor_name ?? null,
+        kept: !!live && !isOldBill(live.bill_date, live.clm_claims?.discharge_date, !!live.clm_claims) };
     })
     .filter((r) => r.kept)
     .map(({ kept: _k, ...r }) => r);
@@ -48,6 +56,6 @@ export async function fetchNotInBank(centreId: string, now = new Date()): Promis
 
 /** How many items wait on To check (for the Upload screen). */
 export async function countToCheck(centreId: string): Promise<number> {
-  const [money, bills, bank] = await Promise.all([openMoney(centreId), fetchBillsNotOnMaster(centreId), fetchNotInBank(centreId)]);
+  const [money, bills, bank] = await Promise.all([moneyToCheck(centreId), fetchBillsNotOnMaster(centreId), fetchNotInBank(centreId)]);
   return money.receipts.length + bills.length + bank.length;
 }
