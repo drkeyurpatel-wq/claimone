@@ -1,0 +1,19 @@
+feature,area,priority,original,clone,notes
+Per-file due time on Master,Track,must,yes,yes,already existed (worklist due clocks)
+High priority tag + filter on Master,Track,must,yes,yes,isHigh(): our move late or due within 4 h; cut waiting for accept/fight
+Top counters Active / Approved / Need attention,Track,must,yes,yes,Dashboard
+Monthly claims donut Approved / In review / Flagged,Track,should,yes,yes,Dashboard; plain SVG prints
+Payments this month Settled / On track / Needs review,Reconcile,should,yes,yes,Dashboard
+Query reply drafted with papers on file vs to get,Resolve,must,yes,yes,template draft free; Draft with AI needs ANTHROPIC_API_KEY
+Pre-auth form autofill printable,Submit,must,yes,yes,IRDAI standard cashless request form from the file
+Missing paper check before sending,Validate,must,yes,yes,existing 16-test engine
+Settlement letter read and deductions flagged,Reconcile,must,yes,yes,existing
+Send pre-auth / claim via NHCX + replies back,Submit,must,yes,yes,existing code; switches on with NHCX_* keys after onboarding
+PMJAY NHCX incentive counter,PMJAY,should,yes,yes,lower of Rs 200 or 10% per claim; shows once claims go via NHCX
+Papers collected on WhatsApp,Capture,should,yes,yes,/api/whatsapp; needs WhatsApp Cloud API keys
+WhatsApp assistant status / due / month / close,Close,could,yes,yes,/api/whatsapp; free text understood with AI key
+Doctor nudge before discharge summary is signed,Document Doctor,should,yes,yes,wa.me message from the file; no cost
+Ask patient for papers on WhatsApp,Capture,should,yes,yes,wa.me message from the file; no cost
+ABHA live KYC / coverage check / biometric,Capture,could,yes,no,needs ABDM M1 + NHCX coverage eligibility after onboarding
+HL7 / FHIR feed from HMIS,Capture,skip,yes,no,eCW will not integrate; wire when Health1 HMIS is live
+ABDM / WASA / Fidelius certifications,Compliance,skip,yes,no,regulatory onboarding

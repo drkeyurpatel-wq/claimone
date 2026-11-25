@@ -21,6 +21,8 @@ Next.js 15 (App Router) · React 19 · Supabase (Postgres + Auth + Storage + Rea
 - No patient data in logs or error messages. PHI columns are tagged in `0005_phi_tags.sql`.
 - Indian number formatting (`toLocaleString('en-IN')`, ₹ L / Cr).
 
+- CareNav parity (25 Nov 2026, `replica/`): High priority = our move late or due within 4 h, or a cut waiting (`worklist.ts` `isHigh`). Query replies: free template draft (`claims/reply.ts`), optional AI rewrite (`/api/ai/draft-reply`, `lib/ai/claude.server.ts`). Pre-auth form: `/case/[id]/preauth-form` (IRDAI standard form). WhatsApp: `/api/whatsapp` signs in as a 'bot' user (WA_BOT_*), files papers by caption IP no. or patient number, staff assistant (`lib/wa/assistant.ts`), close only from settled after a yes (0040). Doctor / patient reminders are wa.me links (`claims/doctor-nudge.ts`).
+
 ## Before every push
 
 `npm test` · `npm run build` · `supabase/tests/run.sh` (plain Postgres; prints ALL DATABASE RULE TESTS PASSED).

@@ -61,6 +61,7 @@ function NextAction({ r }: { r: LedgerRow }) {
   const tone = r.next.done ? 'text-slate-500' : r.next.late ? 'text-rose-800' : r.next.ours ? 'text-slate-900' : 'text-slate-600';
   return (
     <div className={`rounded-md px-2.5 py-1.5 ${r.next.late && !r.next.done ? 'bg-rose-50' : ''} ${tone}`}>
+      {r.next.high && !r.next.done && <span className="mb-1 inline-block rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">High priority</span>}
       <span className={`block text-[15px] leading-5 ${r.next.ours && !r.next.done ? 'font-semibold' : ''}`}>{r.next.text}</span>
       {r.next.due && <span className={`mt-0.5 block text-[13px] leading-4 ${r.next.late ? 'font-semibold' : ''}`}>{r.next.late ? r.next.due : `Due ${r.next.due}`}</span>}
       <AgeChip age={r.age} />

@@ -138,6 +138,17 @@ export function byUrgency<T extends { step: Step }>(a: T, b: T): number {
   return (a.step.dueAt?.getTime() ?? Infinity) - (b.step.dueAt?.getTime() ?? Infinity);
 }
 
+/**
+ * High priority: our move, and it is late or due within 4 hours — or a cut is
+ * waiting for accept / fight. The insurer's late answers are "Follow up", not high.
+ */
+export const HIGH_WITHIN = 4 * HOUR;
+export function isHigh(s: Step, now = new Date(), cutPending = false): boolean {
+  if (cutPending) return true;
+  if (!s.ours || !s.dueAt) return false;
+  return s.overdue || s.dueAt.getTime() - now.getTime() <= HIGH_WITHIN;
+}
+
 /** "2 h late", "in 40 min", "3 days late" */
 export function dueText(s: Step, now = new Date()): string | null {
   if (!s.dueAt) return null;

@@ -2,7 +2,7 @@
 // Query desk: every open payer query across the centre, nearest deadline first.
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { MessageSquare, AlertTriangle, Clock, XCircle, Search, Send, Loader2 } from 'lucide-react';
+import { MessageSquare, AlertTriangle, Clock, XCircle, Search, Send, Loader2, Wand2, Sparkles } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { useClaimsStore } from '@/lib/claims/store';
 import { respondToQuery } from '@/lib/claims/api';
@@ -21,6 +21,21 @@ export default function QueryDesk() {
   const [replying, setReplying] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [drafting, setDrafting] = useState<'' | 'std' | 'ai'>('');
+  const [papers, setPapers] = useState<{ enclosed: string[]; missing: string[] } | null>(null);
+
+  /** Standard draft (free) or the AI rewrite; the desk edits before saving. */
+  const draft = async (id: string, ai: boolean) => {
+    setDrafting(ai ? 'ai' : 'std');
+    try {
+      const r = await fetch('/api/ai/draft-reply', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ queryId: id, ai }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? 'Could not draft the reply');
+      setText(j.text); setPapers({ enclosed: j.enclosed, missing: j.missing });
+      if (j.note) flash(j.note, 'err');
+    } catch (e) { flash((e as Error).message, 'err'); }
+    setDrafting('');
+  };
 
   useEffect(() => { if (centreId) init(centreId).then(loadQueryCentre); }, [centreId, init, loadQueryCentre]);
 
@@ -90,14 +105,26 @@ export default function QueryDesk() {
                 </div>
                 {canWrite && (replying === x.id ? (
                   <div className="mt-3 space-y-2 border-t pt-3">
-                    <textarea autoFocus rows={3} value={text} onChange={(e) => setText(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Reply sent to the payer" />
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" disabled={!!drafting} onClick={() => draft(x.id, false)} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                        {drafting === 'std' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Draft reply</button>
+                      <button type="button" disabled={!!drafting} onClick={() => draft(x.id, true)} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-3 text-sm font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-50">
+                        {drafting === 'ai' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Draft with AI</button>
+                    </div>
+                    {papers && (papers.enclosed.length > 0 || papers.missing.length > 0) && (
+                      <div className="rounded-lg bg-slate-50 p-3 text-sm">
+                        {papers.enclosed.length > 0 && <p className="text-slate-700"><span className="font-semibold text-teal-700">On file, attach:</span> {papers.enclosed.join(' · ')}</p>}
+                        {papers.missing.length > 0 && <p className="mt-1 text-slate-700"><span className="font-semibold text-rose-700">Get before sending:</span> {papers.missing.join(' · ')}</p>}
+                      </div>
+                    )}
+                    <textarea autoFocus rows={10} value={text} onChange={(e) => setText(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Reply sent to the payer" />
                     <div className="flex justify-end gap-2">
                       <button onClick={() => setReplying(null)} className="rounded-lg border px-3 py-1.5 text-xs">Cancel</button>
                       <button disabled={saving || !text.trim()} onClick={() => send(x.id)} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
                         {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Save reply</button>
                     </div>
                   </div>
-                ) : <button onClick={() => { setReplying(x.id); setText(''); }} className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700">Reply</button>)}
+                ) : <button onClick={() => { setReplying(x.id); setText(''); setPapers(null); void draft(x.id, false); }} className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700">Reply</button>)}
               </div>
             );
           })

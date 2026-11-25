@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ageing, bucketOf, collections, deductions, pipeline, turnaround, type OpenBill, type PayerInfo } from './overview';
+import { ageing, bucketOf, collections, deductions, dhisIncentive, headline, monthMix, pipeline, turnaround, type OpenBill, type PayerInfo } from './overview';
 import type { Step } from './worklist';
 
 const payers = new Map<string, PayerInfo>([
@@ -62,5 +62,23 @@ describe('overview', () => {
       { claim_id: 'b', from_status: 'preauth_pending', to_status: 'preauth_query', created_at: '2026-10-01T14:00:00Z' },
     ]);
     expect(t).toEqual({ preauthHours: 3, preauthCount: 2, claimDays: 10, claimCount: 1 });
+  });
+});
+
+describe('headline and month mix', () => {
+  it('counts active, approved and need-attention files', () => {
+    expect(headline([
+      { status: 'claim_approved', high: false }, { status: 'claim_query', high: false },
+      { status: 'preauth_pending', high: true }, { status: 'claim_submitted', high: false },
+    ])).toEqual({ active: 4, approved: 1, attention: 2 });
+  });
+  it('splits the month into approved, in review and flagged', () => {
+    expect(monthMix(['settled', 'claim_submitted', 'claim_rejected', 'claim_partial'])).toEqual({ approved: 2, review: 1, flagged: 1, total: 4 });
+  });
+});
+
+describe('PMJAY NHCX incentive', () => {
+  it('pays the lower of ₹200 and 10% per claim', () => {
+    expect(dhisIncentive([50_000, 1_500])).toEqual({ claims: 2, amount: 350 });
   });
 });

@@ -9,15 +9,18 @@ import { fetchOpenCases } from '@/lib/rcm/api';
 import { fetchDeductionLines } from '@/lib/claims/api';
 import { CURRENT_FROM, isOldBill, isOldCase, isOldDate } from '@/lib/rcm/ledger';
 import { loadOwed } from '@/lib/rcm/reports';
-import { collections, deductions, pipeline, turnaround, type LeakLite, type ReceiptLite, type TransitionLite } from '@/lib/rcm/overview';
+import { collections, deductions, dhisIncentive, headline, monthMix, pipeline, turnaround, type LeakLite, type ReceiptLite, type TransitionLite } from '@/lib/rcm/overview';
 import { NoCentre } from '@/components/ui';
+import { isHigh } from '@/lib/rcm/worklist';
 import { DashboardView, type DashboardData } from '@/components/report/DashboardView';
 
 const since = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
 
 /** Everything on the Dashboard is about files discharged on or after 1 Nov (CURRENT_FROM). */
 async function load(centreId: string): Promise<DashboardData> {
-  const [age, lines, paid, trans, cases] = await Promise.all([
+  const now0 = new Date();
+  const monthStart = new Date(now0.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).toISOString().slice(0, 8) + '01';
+  const [age, lines, paid, trans, cases, month, nhcx] = await Promise.all([
     loadOwed(centreId),
     fetchDeductionLines(),
     // money received, taken bill by bill so that money for an older file is left out
@@ -27,6 +30,13 @@ async function load(centreId: string): Promise<DashboardData> {
     allRows<Record<string, unknown>>((f, t) => sb().from('clm_state_transitions').select('claim_id, from_status, to_status, created_at, clm_claims!inner(centre_id, discharge_date, discharged_at)')
       .eq('clm_claims.centre_id', centreId).gte('created_at', since(180)).order('id').range(f, t)),
     fetchOpenCases(centreId),
+    // files discharged this month (open or closed) for the month's donut
+    allRows<Record<string, unknown>>((f, t) => sb().from('clm_claims').select('id, status')
+      .eq('centre_id', centreId).gte('discharge_date', monthStart < CURRENT_FROM ? CURRENT_FROM : monthStart).order('id').range(f, t)),
+    // PMJAY final claims sent through NHCX this month (DHIS incentive)
+    allRows<Record<string, unknown>>((f, t) => sb().from('clm_nhcx_messages').select('id, summary, clm_claims!inner(claim_type)')
+      .eq('centre_id', centreId).eq('direction', 'out').eq('api_call', 'claim').eq('status', 'sent').eq('clm_claims.claim_type', 'pmjay')
+      .gte('created_at', `${monthStart}T00:00:00+05:30`).order('id').range(f, t)),
   ]);
   if (paid.error) throw new Error('Could not load the dashboard');
   const N = (x: unknown) => Number(x ?? 0);
@@ -38,9 +48,13 @@ async function load(centreId: string): Promise<DashboardData> {
     .map((a) => ({ value_date: a.clm_receipts.value_date, amount: N(a.amount), source: 'paid' }));
   const now = new Date();
   const months = Math.min(6, Math.max(1, (now.getFullYear() - Number(CURRENT_FROM.slice(0, 4))) * 12 + now.getMonth() + 1 - Number(CURRENT_FROM.slice(5, 7)) + 1));
+  const current = cases.filter((x) => !isOldCase(x.c));
   return {
+    dhis: dhisIncentive(((nhcx.data ?? []) as { summary: { amount?: number } | null }[]).map((m) => Number(m.summary?.amount ?? 0))),
+    head: headline(current.map((x) => ({ status: x.c.status, high: isHigh(x.step, now) }))),
+    mix: { ...monthMix(((month.data ?? []) as { status: string }[]).map((r) => r.status)), settled: ((month.data ?? []) as { status: string }[]).filter((r) => r.status === 'settled' || r.status === 'closed').length, label: now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' }) },
     age,
-    pipe: pipeline(cases.filter((x) => !isOldCase(x.c)).map((x) => x.step)),
+    pipe: pipeline(current.map((x) => x.step)),
     ded: { total: ded.total, fighting: ded.fighting },
     coll: collections(receipts, months),
     tat: turnaround(((trans.data ?? []) as unknown as (TransitionLite & { clm_claims: Case })[]).filter((r) => !isOldCase(r.clm_claims))),

@@ -24,6 +24,7 @@ import { NhcxDetails } from '@/components/case/NhcxDetails';
 import { StageTracker } from '@/components/case/StageTracker';
 import { CutPanel } from '@/components/case/CutPanel';
 import { cutOf } from '@/lib/rcm/cut';
+import { nudgeText, waLink } from '@/lib/claims/doctor-nudge';
 import { inr, shortDate, dateTime, useToast } from '@/components/ui';
 
 const TONE: Record<CaseAction['tone'], string> = {
@@ -251,6 +252,13 @@ export default function CasePage() {
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{c.patient_name}</h1>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {c.claim_type !== 'pmjay' && <Link href={`/case/${c.id}/preauth-form`} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">Print pre-auth form</Link>}
+            {!(c.discharged_at || c.discharge_date) && <a href={waLink(nudgeText({ ...c, payer: c.clm_payers?.name }))} target="_blank" rel="noopener noreferrer"
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">Remind doctor on WhatsApp</a>}
+            {c.patient_phone && <a href={waLink(`Dear ${c.patient_name}, for your insurance claim${c.admission_ref ? ` (IP ${c.admission_ref})` : ''}, please send photos or PDFs of your policy card / e-card, photo ID, and any earlier treatment papers on this WhatsApp, with your IP number in the caption. — Insurance desk`, c.patient_phone)}
+              target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">Ask patient for papers</a>}
+          </div>
           <p className="mt-1 text-base text-slate-600">
             {c.admission_ref ?? 'No IP No.'}{c.patient_uhid ? ` · ${c.patient_uhid}` : ''} · <b>{c.clm_payers?.name}</b>
             <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-sm text-slate-600">{ROUTE_WORDS[route].label}</span>

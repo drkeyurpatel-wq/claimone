@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byUrgency, dueText, nextStep, type CaseLike } from './worklist';
+import { byUrgency, dueText, isHigh, nextStep, type CaseLike } from './worklist';
 
 const now = new Date('2026-10-28T12:00:00+05:30');
 const base: CaseLike = { status: 'draft', claim_type: 'cashless', updated_at: '2026-10-28T08:00:00+05:30', created_at: '2026-10-28T08:00:00+05:30' };
@@ -62,5 +62,22 @@ describe('sorting a desk', () => {
     ].sort(byUrgency);
     expect(list.map((x) => x.step.key)).toEqual(['answer_preauth_query', 'send_preauth', 'wait_preauth', 'wait_preauth']);
     expect(list[2].step.overdue).toBe(true);
+  });
+});
+
+describe('high priority', () => {
+  it('our move due within 4 hours is high', () => {
+    const s = nextStep({ ...base, admitted_at: '2026-10-28T09:00:00+05:30' }, now); // due in 3 h
+    expect(isHigh(s, now)).toBe(true);
+  });
+  it('our move due later is not high; a pending cut always is', () => {
+    const s = nextStep({ ...base, status: 'claim_query', status_changed_at: '2026-10-28T11:00:00+05:30' }, now); // 2 days
+    expect(isHigh(s, now)).toBe(false);
+    expect(isHigh(s, now, true)).toBe(true);
+  });
+  it('waiting on the insurer, even late, is follow-up not high', () => {
+    const s = nextStep({ ...base, status: 'preauth_pending', preauth_submitted_at: '2026-10-28T08:00:00+05:30' }, now);
+    expect(s.overdue).toBe(true);
+    expect(isHigh(s, now)).toBe(false);
   });
 });

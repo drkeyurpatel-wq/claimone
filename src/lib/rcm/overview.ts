@@ -151,3 +151,40 @@ export function turnaround(rows: TransitionLite[]) {
   const one = (x: number | null) => (x == null ? null : Math.round(x * 10) / 10);
   return { preauthHours: one(median(pre)), preauthCount: pre.length, claimDays: one(median(claim)), claimCount: claim.length };
 }
+
+// ─── Headline counters and the month's claims donut ─────────────────
+export type Bucket3 = 'approved' | 'review' | 'flagged';
+const APPROVED_S = new Set(['claim_approved', 'claim_partial', 'settlement_pending', 'settled', 'closed']);
+const FLAGGED_S = new Set(['preauth_query', 'preauth_rejected', 'claim_query', 'claim_rejected', 'written_off']);
+
+/** Approved: the claim is approved or paid. Flagged: a query or a rejection. Everything else is in review. */
+export function bucket3(status: string): Bucket3 {
+  return APPROVED_S.has(status) ? 'approved' : FLAGGED_S.has(status) ? 'flagged' : 'review';
+}
+
+export interface Headline { active: number; approved: number; attention: number }
+/** Active: every open file. Approved: open files with the claim approved, money awaited. Need attention: high priority or flagged. */
+export function headline(open: { status: string; high: boolean }[]): Headline {
+  return {
+    active: open.length,
+    approved: open.filter((c) => bucket3(c.status) === 'approved').length,
+    attention: open.filter((c) => c.high || bucket3(c.status) === 'flagged').length,
+  };
+}
+
+export interface MonthMix { approved: number; review: number; flagged: number; total: number }
+/** Files discharged this month by where they stand. */
+export function monthMix(statuses: string[]): MonthMix {
+  const m: MonthMix = { approved: 0, review: 0, flagged: 0, total: statuses.length };
+  for (const s of statuses) m[bucket3(s)]++;
+  return m;
+}
+
+/**
+ * NHA Digital Health Incentive Scheme: each PMJAY claim filed through NHCX earns
+ * the lower of ₹200 and 10% of the claim. Rates change — check abdm.gov.in.
+ */
+export const DHIS = { perClaim: 200, share: 0.1 };
+export function dhisIncentive(amounts: number[]): { claims: number; amount: number } {
+  return { claims: amounts.length, amount: Math.round(amounts.reduce((s, a) => s + Math.min(DHIS.perClaim, DHIS.share * Math.max(0, a)), 0)) };
+}

@@ -8,7 +8,7 @@ import type { Claim } from '@/lib/claims/types';
 import type { Journey } from './api';
 import type { CaseMoney } from './journey';
 import { cutOf, CUT_FLOOR, LETTERS, type Cut } from './cut';
-import { dueText, type Step } from './worklist';
+import { dueText, isHigh, type Step } from './worklist';
 import { payerGroup, type PayerGroup } from './payer';
 
 export type ColKey = 'patient' | 'pa_sent' | 'pa_ok' | 'disch' | 'cl_sent' | 'cl_ok' | 'paid' | 'cut';
@@ -118,7 +118,7 @@ export interface LedgerRow {
   /** Open files only: days since discharge (or admission while in hospital). */
   age: Age | null;
   /** The reminder: what to do next, or what to chase. */
-  next: { text: string; due: string | null; late: boolean; ours: boolean; done: boolean };
+  next: { text: string; due: string | null; late: boolean; ours: boolean; done: boolean; high?: boolean };
   cut: Cut & { short: boolean; won?: boolean };
   /** The merged cells Master shows; each cell's key is the step its form opens. */
   view: Record<ViewKey, Cell>;
@@ -281,7 +281,7 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
   else {
     const due = dueText(step, now);
     next = { text: step.label, due: due ? (step.overdue && !step.ours ? `Follow up — ${due}` : due) : null,
-      late: step.overdue, ours: step.ours, done: false };
+      late: step.overdue, ours: step.ours, done: false, high: isHigh(step, now, cut.needsDecision) };
   }
 
   const view: Record<ViewKey, Cell> = {
@@ -294,9 +294,10 @@ export function ledgerRow(j: Journey, canWrite: boolean, now = new Date()): Ledg
 }
 
 // ─── Filters ────────────────────────────────────────────────────────
-export type Filter = 'open' | 'mine' | 'chase' | 'aged' | 'cuts' | 'closed' | 'backlog';
+export type Filter = 'open' | 'high' | 'mine' | 'chase' | 'aged' | 'cuts' | 'closed' | 'backlog';
 export const FILTERS: { key: Filter; label: string }[] = [
   { key: 'open', label: 'All open' },
+  { key: 'high', label: 'High priority' },
   { key: 'mine', label: 'Action due' },
   { key: 'chase', label: 'Follow-up overdue' },
   { key: 'aged', label: 'Over 30 days' },
@@ -330,6 +331,7 @@ export function inFilter(r: LedgerRow, f: Filter): boolean {
   if (f !== 'closed' && isBacklog(r)) return false;
   switch (f) {
     case 'open': return !r.next.done;
+    case 'high': return !r.next.done && !!r.next.high;
     case 'mine': return !r.next.done && r.next.ours;
     case 'chase': return !r.next.done && !r.next.ours && r.next.late;
     case 'aged': return !r.next.done && r.age?.from === 'discharge' && r.age.days > 30;
